@@ -233,6 +233,7 @@ const Example = () => {
       isSaving: isUploadingDocument || isUpdatingDocument || isDeletingDocument,
       showAlertBanner: isLoadingDocumentsError,
       showProgressBars: isFetchingDocuments,
+      columnVisibility: { id: false }, // Hide the ID column
     },
   });
 

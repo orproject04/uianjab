@@ -30,6 +30,7 @@ import {
 import { type Document, fakeData} from './makeData';
 import { BiEditAlt } from "react-icons/bi";
 import { AiFillDelete } from "react-icons/ai";
+import UploadZone from '@/components/ui/upload/UploadZone';
 
 const Example = () => {
   const [validationErrors, setValidationErrors] = useState<
@@ -340,6 +341,7 @@ const queryClient = new QueryClient();
 export default function DocumentTable() {
   return (
     <QueryClientProvider client={queryClient}>
+      <UploadZone />
       <Example />
       <Suspense fallback={null}>
         <ReactQueryDevtoolsProduction />
