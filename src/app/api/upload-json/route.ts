@@ -19,20 +19,22 @@ export async function POST(req: NextRequest) {
             for (const item of items) {
                 const jabatan = item['NAMA JABATAN'];
                 const unitKerja = item['UNIT KERJA'];
+                const kualifikasiJabatan = item['KUALIFIKASI JABATAN'];
                 const tugasPokok = item['TUGAS POKOK'];
 
-                if (!jabatan || typeof unitKerja !== 'object') continue;
+                if (!jabatan || typeof unitKerja !== 'object' || typeof kualifikasiJabatan !== 'object') continue;
 
                 // Insert ke tabel anjab
                 const insertAnjab = `
-                    INSERT INTO anjab (nama_jabatan, unit_kerja)
-                    VALUES ($1, $2)
+                    INSERT INTO anjab (nama_jabatan, unit_kerja, kualifikasi_jabatan)
+                    VALUES ($1, $2, $3)
                         RETURNING id
                 `;
 
                 const res = await client.query(insertAnjab, [
                     jabatan,
                     JSON.stringify(unitKerja),
+                    JSON.stringify(kualifikasiJabatan),
                 ]);
 
                 const anjabId = res.rows[0].id;
