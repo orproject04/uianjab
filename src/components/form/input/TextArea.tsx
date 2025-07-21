@@ -12,7 +12,7 @@ interface TextareaProps {
 }
 
 const TextArea: React.FC<TextareaProps> = ({
-  placeholder = "Enter your message", // Default placeholder
+  placeholder = "Melakukan kegiatan yang meliputi pengumpulan, pengklasifikasian, persiapan dan pelaksanaan penyuluhan, pemantauan, pengendalian, pemanfaatan, evaluasi dan pelaporan dan penelaahan untuk menyimpulkan dan menyusun rekomendasi di bidang sistem dan teknologi informasi di lingkungan Sekretariat Jenderal DPD RI berdasarkan prosedur dan ketentuan yang berlaku, agar pekerjaan berjalan dengan baik dan lancar sehingga visi dan misi serta tujuan Sekretariat Jenderal DPD RI tercapai.", // Default placeholder
   rows = 3, // Default number of rows
   value = "", // Default value
   onChange, // Callback for changes

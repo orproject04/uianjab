@@ -12,7 +12,7 @@ const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle }) => {
         className="text-xl font-semibold text-gray-800 dark:text-white/90"
         x-text="pageName"
       >
-        {pageTitle}
+        Edit Dokumen
       </h2>
       <nav>
         <ol className="flex items-center gap-1.5">
