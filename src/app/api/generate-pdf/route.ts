@@ -7,28 +7,57 @@ import Docxtemplater from 'docxtemplater';
 import { v4 as uuidv4 } from 'uuid';
 import { promisify } from 'util';
 
-const libreOfficePath = `"C:\\Program Files\\LibreOffice\\program\\soffice.exe"`;
+const libreOfficePath = `"C:\\Program Files\\LibreOffice\\program\\soffice.exe"`; // path LibreOffice Anda
 const execAsync = promisify(exec);
 
 export async function POST(request: Request) {
     try {
         const data = await request.json();
-        console.log(data.unitKerja);
 
-        // Load template .docx
+        const {
+            nama_jabatan,
+            kode_jabatan,
+            unitKerja = {}, // fallback jika tidak ada
+        } = data;
+
+        // Mapping untuk menghindari undefined di template
+        const {
+            jpt_utama = '',
+            jpt_madya = '',
+            jpt_pratama = '',
+            administrator = '',
+            pengawas = '',
+            pelaksana = '',
+            jabatan_fungsional = '',
+        } = unitKerja;
+
+        const unitKerjaArr = [
+            { key: 'JPT Utama', value: jpt_utama },
+            { key: 'JPT Madya', value: jpt_madya },
+            { key: 'JPT Pratama', value: jpt_pratama },
+            { key: 'Administrator', value: administrator },
+            { key: 'Pengawas', value: pengawas },
+            { key: 'Pelaksana', value: pelaksana },
+            { key: 'Jabatan Fungsional', value: jabatan_fungsional },
+        ];
+
+        // Load template docx
         const templatePath = path.join(process.cwd(), 'src', 'templates', 'template.docx');
         const content = fs.readFileSync(templatePath, 'binary');
         const zip = new PizZip(content);
         const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-        const unitKerjaArr = Object.entries(data.unitKerja).map(([key, value]) => ({ key, value }));
-
         doc.setData({
-            namaJabatan: data.namaJabatan,
-            kodeJabatan: data.kodeJabatan,
-            administrator: data.unitKerja.Administrator,
-            unitKerja: data.unitKerja,
-            unitKerjaArr,
+            nama_jabatan,
+            kode_jabatan,
+            jpt_utama,
+            jpt_madya,
+            jpt_pratama,
+            administrator,
+            pengawas,
+            pelaksana,
+            jabatan_fungsional,
+            unitKerjaArr // if using table or loop in template
         });
 
         try {
