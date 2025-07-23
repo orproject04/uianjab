@@ -5,7 +5,7 @@ import Button from '../button/Button';
 import { Input } from '../input/input';
 import { Plus, X } from 'lucide-react';
 import { FormSection } from '../../form/FormSection';
-import { useFormContext } from '../../form/FormContext';
+import { useFormContext } from '../../../context/FormContext';
 import { FormData, TableRow } from '../../form/FormTypes';
 
 interface TableSectionProps {

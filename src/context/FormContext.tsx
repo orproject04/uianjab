@@ -1,7 +1,6 @@
-'use client';
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { toast } from 'react-hot-toast'; // or your toast library
-import { FormData, TableRow, initialFormData } from '../form/FormTypes';
+import { FormData, TableRow, initialFormData } from '../components/form/FormTypes';
+import { toast } from 'react-hot-toast';
 
 interface FormContextType {
   formData: FormData;
@@ -62,7 +61,7 @@ export const FormProvider: React.FC<FormProviderProps> = ({ children }) => {
 
   const handleCancel = () => {
     setFormData(initialFormData);
-    toast.success('Form telah direset');
+    toast('Form telah direset');
   };
 
   const value: FormContextType = {

@@ -1,8 +1,7 @@
-'use client';
 import React from 'react';
 import Button from '../ui/button/Button';
 import { Save, Undo } from 'lucide-react';
-import { useFormContext } from '../form/FormContext';
+import { useFormContext } from '../../context/FormContext';
 
 export const FormActions: React.FC = () => {
   const { handleSubmit, handleCancel } = useFormContext();

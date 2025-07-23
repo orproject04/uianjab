@@ -4,6 +4,7 @@ export interface TableRow {
 }
 
 export interface FormData {
+  minatKerja: string[];
   namaJabatan: string;
   kodeJabatan: string;
   unitKerja: string;
@@ -23,8 +24,8 @@ export interface FormData {
   kondisiLingkungan: TableRow[];
   risikoBahaya: TableRow[];
   keterampilanKerja: string;
-  bakatKerja: string;
-  temperamenKerja: string;
+  bakatKerja: string[];
+  temperamenKerja: string[];
   upayaFisik: string;
   kondisiFisik: string;
   prestasiDiharapkan: string;
@@ -51,8 +52,9 @@ export const initialFormData: FormData = {
   kondisiLingkungan: [],
   risikoBahaya: [],
   keterampilanKerja: '',
-  bakatKerja: '',
-  temperamenKerja: '',
+  bakatKerja: [],
+  temperamenKerja: [],
+  minatKerja: [],
   upayaFisik: '',
   kondisiFisik: '',
   prestasiDiharapkan: '',

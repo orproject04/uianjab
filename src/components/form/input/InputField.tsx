@@ -3,6 +3,7 @@ import React, { FC } from "react";
 interface InputProps {
   type?: "text" | "number" | "email" | "password" | "date" | "time" | string;
   id?: string;
+  value?: string | number;
   name?: string;
   placeholder?: string;
   defaultValue?: string | number;

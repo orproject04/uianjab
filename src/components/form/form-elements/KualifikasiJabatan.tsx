@@ -5,7 +5,6 @@ import Label from '../Label';
 import Input from '../input/InputField';
 import TextArea from "../input/TextArea";
 import { ChevronDownIcon, EyeCloseIcon, EyeIcon, TimeIcon } from '../../../icons';
-import DatePicker from '@/components/form/date-picker';
 
 export default function KualifikasiJabatan() {
   const [message, setMessage] = useState("");
