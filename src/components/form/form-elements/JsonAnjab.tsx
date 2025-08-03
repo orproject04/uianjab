@@ -11,16 +11,18 @@ export default function JsonAnjab() {
     const [isLoading, setIsLoading] = useState(false);
 
     const showConfirmModal = async (fileNames: string[]): Promise<boolean> => {
-        const htmlList = `<ul class="text-left text-sm">${fileNames.map(f => `<li>📄 ${f}</li>`).join('')}</ul>`;
+        const htmlList = `<ol class="text-left text-sm list-decimal pl-5">
+            ${fileNames.map(f => `<li>📄 ${f}</li>`).join('')}
+        </ol>`;
 
         const result = await MySwal.fire({
             title: 'Konfirmasi Upload',
             html: `
-        <p class="mb-2">Berikut file yang akan diupload:</p>
-        ${htmlList}
-      `,
+                <p class="mb-2">Berikut file yang akan diupload:</p>
+                ${htmlList}
+            `,
             icon: 'question',
-            width: '450px',
+            width: '480px',
             showCancelButton: true,
             confirmButtonText: 'Upload',
             cancelButtonText: 'Batal',
@@ -31,13 +33,16 @@ export default function JsonAnjab() {
         return result.isConfirmed;
     };
 
-    const showResultModal = (success: boolean, message: string) => {
+    const showResultModal = (success: boolean, message: string, detailsHtml: string = '') => {
         Swal.fire({
             title: success ? 'Berhasil' : 'Gagal',
-            text: message,
+            html: `
+                <p>${message}</p>
+                ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ''}
+            `,
             icon: success ? 'success' : 'error',
             confirmButtonColor: success ? '#10B981' : '#EF4444',
-            width: '450px',
+            width: '520px',
         });
     };
 
@@ -48,50 +53,84 @@ export default function JsonAnjab() {
         const validDataList: any[] = [];
         const validFileNames: string[] = [];
 
-        // Validate files
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            if (file.type !== 'application/json') continue;
-
-            try {
-                const content = await file.text();
-                const json = JSON.parse(content);
-
-                if (json.data && json.data['NAMA JABATAN'] && json.data['UNIT KERJA']) {
-                    validDataList.push(json.data);
-                    validFileNames.push(file.name);
+            if (file.name.endsWith('.json') || file.type === 'application/json') {
+                validFileNames.push(file.name);
+                try {
+                    const text = await file.text();
+                    const parsed = JSON.parse(text);
+                    validDataList.push(parsed);
+                } catch (err) {
+                    console.warn(`❌ Gagal parsing JSON: ${file.name}`);
                 }
-            } catch (_) {
-                continue;
             }
         }
 
         if (validDataList.length === 0) {
-            showResultModal(false, 'File JSON tidak valid.');
+            showResultModal(false, 'Tidak ada file JSON valid yang ditemukan.');
             return;
         }
 
-        // Tampilkan modal konfirmasi sebelum upload
         const confirm = await showConfirmModal(validFileNames);
         if (!confirm) return;
 
-        // Upload
         setIsLoading(true);
         try {
             const res = await fetch('/api/upload-json', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items: validDataList }),
+                body: JSON.stringify(validDataList.length === 1 ? validDataList[0] : validDataList),
             });
 
             const result = await res.json();
             if (!res.ok) {
-                // Gagal → tampilkan pesan error dari response
-                showResultModal(false, 'Terjadi kesalahan saat upload');
+                showResultModal(false, result.message || 'Terjadi kesalahan saat upload.');
             } else {
-                // Berhasil → tampilkan pesan sukses
-                showResultModal(true, result.message || 'Upload berhasil');
+                const detailHtml = `
+                    <ol class="text-left text-sm list-decimal pl-5 mt-2 space-y-1">
+                        ${result.results.map((r: any) => {
+                    if (r.status === 'success') {
+                        return `<li>✅ <b>${r.nama_jabatan}</b> (<code>${r.id_jabatan}</code>)</li>`;
+                    } else {
+                        const nama = r.nama_jabatan || 'Gagal terupload';
+                        const alasan = r.reason || 'Alasan tidak diketahui';
+                        return `<li>❌ <b>${nama}</b> (<i>${alasan}</i>)</li>`;
+                    }
+                }).join('')}
+                    </ol>
+                `;
+                showResultModal(true, result.message, detailHtml);
             }
+        } catch (err) {
+            console.error('❌ Gagal kirim:', err);
+            showResultModal(false, 'Gagal mengirim ke server.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleFileUploadWord = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        const confirm = await showConfirmModal(Array.from(files).map(f => f.name));
+        if (!confirm) return;
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
+
+        setIsLoading(true);
+        try {
+            const res = await fetch('/api/upload-doc', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const result = await res.json();
+            showResultModal(res.ok, result.message || (res.ok ? 'Upload berhasil' : 'Gagal'));
         } catch (err) {
             console.error(err);
             showResultModal(false, 'Gagal mengirim ke server.');
@@ -120,6 +159,14 @@ export default function JsonAnjab() {
                     onChange={handleFileUpload}
                     className="hidden"
                 />
+
+                {/*<input*/}
+                {/*    type="file"*/}
+                {/*    accept=".doc,.docx"*/}
+                {/*    multiple*/}
+                {/*    onChange={handleFileUploadWord}*/}
+                {/*    className="hidden"*/}
+                {/*/>*/}
             </label>
         </div>
     );
