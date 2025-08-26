@@ -62,7 +62,7 @@ def extract_block(start_marker, end_marker, lines):
 
 def extract_kualifikasi(lines):
     result = {
-        "pendidikan_formal": "---",
+        "pendidikan_formal": [],
         "pendidikan_dan_pelatihan": {
             "diklat_penjenjangan": [],
             "diklat_teknis": [],
@@ -93,6 +93,9 @@ def extract_kualifikasi(lines):
         if "Pendidikan Formal" in clean_line:
             current = "pendidikan_formal"
             continue
+        elif "Pendidikan dan Pelatihan" in clean_line:
+            current = None
+            continue
         elif "Diklat Penjenjangan" in clean_line:
             current = "diklat_penjenjangan"
             continue
@@ -106,12 +109,13 @@ def extract_kualifikasi(lines):
             current = "pengalaman_kerja"
             continue
 
-        if current == "pendidikan_formal" and result["pendidikan_formal"] == "---":
-            result["pendidikan_formal"] = clean_line
+        if current == "pendidikan_formal":
+            result["pendidikan_formal"].append(clean_line)
         elif current in ["diklat_penjenjangan", "diklat_teknis", "diklat_fungsional"]:
             result["pendidikan_dan_pelatihan"][current].append(clean_line)
         elif current == "pengalaman_kerja":
-            result["pengalaman_kerja"].append(clean_line)
+            no_number = re.sub(r'^\s*\d+[\.\)]\s*', '', clean_line)
+            result["pengalaman_kerja"].append(no_number)
 
     return result
 

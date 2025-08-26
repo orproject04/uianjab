@@ -4,6 +4,7 @@ import Card from "@/components/ui/card/Card";
 import UploadZone from "@/components/ui/upload/UploadZone";
 import React from "react";
 import JsonAnjab from "@/components/form/form-elements/JsonAnjab";
+import WordAnjab from "@/components/form/form-elements/WordAnjab";
 
 export default function TestPage() {
     return (
@@ -14,6 +15,7 @@ export default function TestPage() {
                 </h3>
                 <Card />
                 <JsonAnjab/>
+                <WordAnjab/>
             </div>
         </div>
     );

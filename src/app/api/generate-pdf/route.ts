@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 export async function POST(request: Request) {
     try {
         const data = await request.json();
-        console.log(data.unitKerja);
+        console.log(data);
 
         // Load template .docx
         const templatePath = path.join(process.cwd(), 'src', 'templates', 'template.docx');

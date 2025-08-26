@@ -6,6 +6,7 @@ export default function InformasiJabatanPage() {
   const [namaJabatan, setNamaJabatan] = useState('');
   const [kodeJabatan, setKodeJabatan] = useState('');
   const [unitKerja, setUnitKerja] = useState<Record<string, string>>({}); // atau gunakan type yang lebih spesifik
+  const [kualifikasiJabatan, setKualifikasiJabatan] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
 
   // ⬇️ Ambil data dari API saat halaman load
@@ -14,9 +15,11 @@ export default function InformasiJabatanPage() {
       try {
         const res = await fetch('/api/anjab');
         const data = await res.json();
+        console.log('Data:', data);
         setNamaJabatan(data.nama_jabatan || '');
         setKodeJabatan(data.kode_jabatan || '');
         setUnitKerja(data.unit_kerja || '');
+        setKualifikasiJabatan(data.kualifikasi_jabatan || '');
       } catch (err) {
         console.error('Gagal ambil data:', err);
       }
@@ -36,6 +39,7 @@ export default function InformasiJabatanPage() {
           namaJabatan,
           kodeJabatan,
           unitKerja,
+          kualifikasiJabatan,
           date: new Date().toLocaleDateString(),
         }),
       });
@@ -63,6 +67,32 @@ export default function InformasiJabatanPage() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const renderValue = (value: any) => {
+    if (typeof value === 'string') {
+      return <span>{value}</span>;
+    } else if (Array.isArray(value)) {
+      return (
+          <ul className="list-disc pl-6">
+            {value.map((item, idx) => (
+                <li key={idx}>{item}</li>
+            ))}
+          </ul>
+      );
+    } else if (typeof value === 'object' && value !== null) {
+      return (
+          <ul className="list-disc pl-6">
+            {Object.entries(value).map(([subKey, subValue]) => (
+                <li key={subKey}>
+                  <strong>{subKey}:</strong> {renderValue(subValue)}
+                </li>
+            ))}
+          </ul>
+      );
+    } else {
+      return <span>{String(value)}</span>;
+    }
   };
 
   return (
@@ -125,11 +155,31 @@ export default function InformasiJabatanPage() {
             ))}
           </ul>
         </div>
+
+        <div className="p-4">
+          <h1 className="text-xl font-bold mb-4">Kualifikasi Jabatan</h1>
+          <ul className="list-disc pl-4">
+            {Object.entries(kualifikasiJabatan).map(([key, value]) => (
+                <li key={key}>
+                  <strong>{key}:</strong> {renderValue(value)}
+                </li>
+            ))}
+          </ul>
+        </div>
+
         {/*<p>{unitKerja['Administrator']}</p>*/}
 
         <button onClick={generatePDF} disabled={loading}>
           {loading ? 'Generating...' : 'Generate PDF'}
         </button>
+
+        <div style={{ width: "100%", height: "100vh" }}>
+          <iframe
+              src="/api/preview-anjab"
+              style={{ width: "100%", height: "100%", border: "none" }}
+              title="Preview PDF"
+          />
+        </div>
       </div>
   );
 }
