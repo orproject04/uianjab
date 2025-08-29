@@ -124,7 +124,7 @@ export default function JsonAnjab() {
 
         setIsLoading(true);
         try {
-            const res = await fetch('/api/upload-doc', {
+            const res = await fetch('/api/upload-json', {
                 method: 'POST',
                 body: formData,
             });

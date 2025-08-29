@@ -8,6 +8,11 @@ export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
         const files = formData.getAll('files') as File[];
+        const id_jabatan = formData.get("id_jabatan") as string | null;
+
+        if (!id_jabatan) {
+            return NextResponse.json({ message: "id_jabatan wajib dikirim" }, { status: 400 });
+        }
 
         if (!files.length) {
             return NextResponse.json({ message: 'Tidak ada file yang dikirim' }, { status: 400 });
@@ -62,8 +67,8 @@ export async function POST(req: NextRequest) {
                     continue;
                 }
 
-                const truncatedNama = nama_jabatan.substring(0, 10).replace(/\s+/g, '_').toLowerCase();
-                const id_jabatan = `${truncatedNama}_${Date.now()}`;
+                // const truncatedNama = nama_jabatan.substring(0, 10).replace(/\s+/g, '_').toLowerCase();
+                // const id_jabatan = `${truncatedNama}_${Date.now()}`;
                 const client = await pool.connect();
 
                 try {

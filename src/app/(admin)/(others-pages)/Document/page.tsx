@@ -175,7 +175,7 @@ export default function InformasiJabatanPage() {
 
         <div style={{ width: "100%", height: "100vh" }}>
           <iframe
-              src="/api/preview-anjab"
+              src="/api/anjab/preview-anjab"
               style={{ width: "100%", height: "100%", border: "none" }}
               title="Preview PDF"
           />

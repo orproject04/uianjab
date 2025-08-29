@@ -39,22 +39,103 @@ const navItems: NavItem[] = [
     name: "Anjab",
     icon: <ListIcon />,
     subItems: [
-      { name: "Deputi Persidangan", path: "Anjab/Depsid" },
       {
-        name: "Deputi Administrasi",
-        path: "Anjab/Depmin",
+        name: "Sekretariat Jenderal DPD RI",
+        path: "Anjab/Setjen",
         subItems: [
-          { name: "Umum", path: "Anjab/Depmin/Umum" },
-          { name: "BPSI", path: "Anjab/Depmin/BPSI" },
+          { name: "Inspektorat", path: "Anjab/Setjen/Inspektorat" },
           {
-            name: "OKK",
-            path: "Anjab/Depmin/OKK",
+            name: "Deputi Bidang Administrasi",
+            path: "Anjab/Setjen/Depmin",
             subItems: [
-              { name: "Ortala", path: "Anjab/Depmin/OKK/Ortala" },
-              { name: "PSDM", path: "Anjab/Depmin/OKK/PSDM" },
+              {
+                name: "Biro Organisasi, Keanggotaan, dan Kepegawaian",
+                path: "Anjab/Setjen/Depmin/OKK",
+                subItems: [
+                  {
+                    name: "Bagian Organisasi dan Ketatalaksanaan",
+                    path: "Anjab/Setjen/Depmin/OKK/Ortala",
+                    subItems: [
+                      {
+                        name: "Subbagian Organisasi",
+                        path: "Anjab/Setjen/Depmin/OKK/Ortala/Organisasi",
+                        subItems: [
+                          {
+                            name: "Penelaah Teknis Kebijakan",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Organisasi/PTK",
+                          },
+                          {
+                            name: "Penata Kelola Sistem dan Teknologi Informasi",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Organisasi/PKSTI",
+                          },
+                        ]
+                      },
+                      {
+                        name: "Subbagian Ketatalaksanaan",
+                        path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana",
+                      },
+                      {
+                        name: "Subbagian Fasilitasi Reformasi Birokrasi",
+                        path: "Anjab/Setjen/Depmin/OKK/Ortala/RB",
+                      }
+                    ]
+                  },
+                  {
+                    name: "Bagian Administrasi Keanggotaan dan Kepegawaian",
+                    path: "Anjab/Setjen/Depmin/OKK/AKK",
+                    subItems: [
+                      {
+                        name: "Subbagian Administrasi Keanggotaan",
+                        path: "Anjab/Setjen/Depmin/OKK/AKK/Keanggotaan",
+                      },
+                      {
+                        name: "Subbagian Administrasi Kepegawaian",
+                        path: "Anjab/Setjen/Depmin/OKK/AKK/Kepegawaian",
+                      },
+                      {
+                        name: "Subbagian Kesejahteraan",
+                        path: "Anjab/Setjen/Depmin/OKK/AKK/Kesejahteraan",
+                      }
+                    ]
+                  },
+                  {
+                    name: "Bagian Pengembangan Kapasitas Sumber Daya Manusia",
+                    path: "Anjab/Setjen/Depmin/OKK/PSDM",
+                    subItems: [
+                      {
+                        name: "Subbagian Pengembangan Kapasitas Sumber Daya Manusia",
+                        path: "Anjab/Setjen/Depmin/OKK/PSDM/PKSDM",
+                      },
+                      {
+                        name: "Subbagian Kerjasama",
+                        path: "Anjab/Setjen/Depmin/OKK/PSDM/Kerjasama",
+                      },
+                      {
+                        name: "Subbagian Fasilitasi Jabatan Fungsional",
+                        path: "Anjab/Setjen/Depmin/OKK/PSDM/Jabfung",
+                      }
+                    ]
+                  },
+                  {
+                    name: "Bagian Hukum",
+                    path: "Anjab/Setjen/Depmin/OKK/Hukum",
+                    subItems: [
+                      {
+                        name: "Subbagian Produk Hukum",
+                        path: "Anjab/Setjen/Depmin/OKK/Hukum/Produk",
+                      },
+                      {
+                        name: "Subbagian Penelaahan dan Bantuan Hukum",
+                        path: "Anjab/Setjen/Depmin/OKK/PSDM/Telaahan",
+                      }
+                    ]
+                  },
+                ],
+              },
             ],
           },
-        ],
+          { name: "Deputi Bidang Persidangan", path: "Anjab/Setjen/Depsid" },
+        ]
       },
     ],
   },
@@ -190,7 +271,7 @@ const AppSidebar: React.FC = () => {
                       <div
                           className={`transition-all duration-300 ease-in-out overflow-hidden ${
                               isNestedOpen
-                                  ? "max-h-[500px] opacity-100 scale-y-100"
+                                  ? "max-h-[50000px] opacity-100 scale-y-100"
                                   : "max-h-0 opacity-0 scale-y-95"
                           }`}
                       >
@@ -253,7 +334,7 @@ const AppSidebar: React.FC = () => {
                       <div
                           className={`overflow-hidden transition-all duration-300 ease-in-out ${
                               openSubmenu?.type === menuType && openSubmenu.index === index
-                                  ? "max-h-[1000px] opacity-100 scale-y-100"
+                                  ? "max-h-[50000px] opacity-100 scale-y-100"
                                   : "max-h-0 opacity-0 scale-y-95"
                           }`}
                       >

@@ -7,11 +7,11 @@ import { FileJson, Loader2 } from 'lucide-react';
 
 const MySwal = withReactContent(Swal);
 
-interface WordAnjabProps {
+interface WordAbkProps {
     id: string;
 }
 
-export default function WordAnjab({ id }: WordAnjabProps) {
+export default function WordAbk({ id }: WordAbkProps) {
     const [isLoading, setIsLoading] = useState(false);
 
     const showConfirmModal = async (fileNames: string[]): Promise<boolean> => {
@@ -65,7 +65,7 @@ export default function WordAnjab({ id }: WordAnjabProps) {
 
         setIsLoading(true);
         try {
-            const res = await fetch('/api/anjab/upload-doc', {
+            const res = await fetch('/api/abk/upload-doc', {
                 method: 'POST',
                 body: formData,
             });
@@ -84,7 +84,7 @@ export default function WordAnjab({ id }: WordAnjabProps) {
     return (
         <div className="mx-auto mt-10 p-6 bg-white shadow-lg rounded-2xl border">
             <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800">
-                Unggah Dokumen Analisis Jabatan
+                Unggah Dokumen Analisis Beban Kerja
             </h2>
 
             <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 transition">
@@ -106,3 +106,4 @@ export default function WordAnjab({ id }: WordAnjabProps) {
         </div>
     );
 }
+

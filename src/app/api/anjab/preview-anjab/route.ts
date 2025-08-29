@@ -2,8 +2,6 @@ import pool from "@/lib/db";
 import puppeteer from "puppeteer";
 import {NextRequest} from "next/server";
 
-import libre from "libreoffice-convert";
-
 export async function GET(req: NextRequest) {
 
     const {searchParams} = new URL(req.url);
@@ -218,6 +216,107 @@ export async function GET(req: NextRequest) {
             return Response.json(data, {status: 200});
         }
 
+        function splitPerangkatKeHalaman(data, maxRowsPerPage) {
+            const pages = [];
+            let currentPage = [];
+            let rowCount = 0;
+
+            data.forEach((item, index) => {
+                const perangkatList = item.perangkat_kerja || [];
+                const penggunaanList = item.penggunaan_untuk_tugas || [];
+
+                perangkatList.forEach((perangkat, i) => {
+                    if (rowCount >= maxRowsPerPage) {
+                        pages.push(currentPage);
+                        currentPage = [];
+                        rowCount = 0;
+                    }
+
+                    // cek kalau ini bukan baris pertama item
+                    const firstRow = (i === 0);
+                    // cek apakah halaman baru tapi item yang sama → maka semua baris = continued
+                    const continued = (!firstRow && currentPage.length === 0);
+
+                    currentPage.push({
+                        index,
+                        perangkat,
+                        penggunaan: (firstRow ? penggunaanList : null),
+                        firstRow,
+                        totalRowsInItem: perangkatList.length,
+                        isContinued: continued || (!firstRow && currentPage.length > 0 && currentPage[0].isContinued)
+                    });
+
+                    rowCount++;
+                });
+            });
+
+            if (currentPage.length > 0) {
+                pages.push(currentPage);
+            }
+            return pages;
+        }
+
+        function renderTable(data, maxRowsPerPage = 50) {
+            const pages = splitPerangkatKeHalaman(data, maxRowsPerPage);
+            const seen = new Set();
+
+            return pages.map(page => {
+                const countInPage = {};
+                page.forEach(r => { countInPage[r.index] = (countInPage[r.index] || 0) + 1; });
+
+                const emittedInPage = {};
+
+                const tbody = page.map(r => {
+                    const firstInThisPage = !emittedInPage[r.index];
+                    emittedInPage[r.index] = (emittedInPage[r.index] || 0) + 1;
+
+                    const continuedFromPrevPage = seen.has(r.index);
+
+                    let cells = "";
+
+                    // === KOLOM NO ===
+                    if (continuedFromPrevPage) {
+                        // halaman lanjutan → kosong tapi border luar tetap ada
+                        cells += `<td style="border: none; border-left:1px solid black; border-right:1px solid black;"></td>`;
+                    } else {
+                        if (firstInThisPage) {
+                            cells += `<td style="text-align:center" rowspan="${countInPage[r.index]}">${r.index + 1}.</td>`;
+                        }
+                    }
+
+                    // === KOLOM PERANGKAT KERJA (selalu ada) ===
+                    cells += `<td>${r.perangkat || ""}</td>`;
+
+                    // === KOLOM PENGGUNAAN ===
+                    if (continuedFromPrevPage) {
+                        // halaman lanjutan → kosong tapi border luar tetap ada
+                        cells += `<td style="border: none; border-left:1px solid black; border-right:1px solid black;"></td>`;
+                    } else {
+                        if (firstInThisPage) {
+                            cells += `<td rowspan="${countInPage[r.index]}">${renderTableList(r.penggunaan || [])}</td>`;
+                        }
+                    }
+
+                    return `<tr>${cells}</tr>`;
+                }).join("");
+
+                page.forEach(r => seen.add(r.index));
+
+                return `
+      <table style="margin-left:0; width:99%" class="word-table">
+        <thead>
+          <tr>
+            <th style="width:5%;">NO</th>
+            <th style="width:72%;">PERANGKAT KERJA</th>
+            <th>PENGGUNAAN UNTUK TUGAS</th>
+          </tr>
+        </thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    `;
+            }).join(`<div style="page-break-after:always;"></div>`);
+        }
+
         const renderList = (arr) => {
             if (!arr || arr.length === 0) return "-";
             return `<ul style="margin:0; padding-left:0px; list-style-type: none;">${arr.map(item => `<li>${item}</li>`).join("")}</ul>`;
@@ -315,7 +414,7 @@ export async function GET(req: NextRequest) {
 
                         @page landscape {
                             size: A4 landscape;
-                            margin: 2cm 2.5cm 2.38cm 2.3cm;
+                            margin: 1.2cm 1.2cm 1.2cm 1.2cm;
                         }
 
                         .section.landscape {
@@ -422,7 +521,7 @@ export async function GET(req: NextRequest) {
                             width: 100%;
                             border-collapse: collapse;
                             margin: 6px 0 30px 0;
-                            table-layout: fixed;
+                            table-layout: auto;
                             font-size: 11pt;
                         }
 
@@ -431,7 +530,8 @@ export async function GET(req: NextRequest) {
                             border: 1px solid #000;
                             padding: 6px;
                             vertical-align: top;
-                            word-wrap: break-word;
+                            word-break: normal;  /* fix */
+                            white-space: normal; /* fix */
                         }
 
                         table.word-table th {
@@ -640,9 +740,9 @@ export async function GET(req: NextRequest) {
                         <table style="width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:5%;">NO</th>
-                                <th style="width: 25%">URAIAN TUGAS</th>
-                                <th style="width: 25%">HASIL KERJA</th>
+                                <th style="width: 3%;">NO</th>
+                                <th style="width: 45%">URAIAN TUGAS</th>
+                                <th style="width: 15%">HASIL KERJA</th>
                                 <th>JUMLAH HASIL</th>
                                 <th>WAKTU PENYELESAIAN (JAM)</th>
                                 <th>WAKTU EFEKTIF</th>
@@ -676,10 +776,10 @@ export async function GET(req: NextRequest) {
                     <!-- 7. HASIL KERJA -->
                     <div class="section portrait table-section">
                         <p>7. HASIL KERJA :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>HASIL KERJA</th>
                                 <th style="width:25%;">SATUAN HASIL</th>
                             </tr>
@@ -699,10 +799,10 @@ export async function GET(req: NextRequest) {
                     <!-- 8. BAHAN KERJA -->
                     <div class="section portrait table-section">
                         <p>8. BAHAN KERJA :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>BAHAN KERJA</th>
                                 <th style="width:45%;">PENGGUNAAN DALAM TUGAS</th>
                             </tr>
@@ -722,33 +822,16 @@ export async function GET(req: NextRequest) {
                     <!-- 9. PERANGKAT KERJA -->
                     <div class="section portrait table-section">
                         <p>9. PERANGKAT KERJA :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
-                            <thead>
-                            <tr>
-                                <th style="width:8%;">NO</th>
-                                <th>PERANGKAT KERJA</th>
-                                <th style="width:45%;">PENGGUNAAN UNTUK TUGAS</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            ${data.perangkat_kerja.map((item, index) => `
-                                <tr>
-                                  <td style="text-align: center">${index + 1}.</td>
-                                  <td>${renderTableList(item.perangkat_kerja)}</td>
-                                  <td>${renderTableList(item.penggunaan_untuk_tugas)}</td>
-                                </tr>
-                              `).join("")}
-                            </tbody>
-                        </table>
+                        ${renderTable(data.perangkat_kerja, 25)}
                     </div>
-
+                    
                     <!-- 10. TANGGUNG JAWAB -->
                     <div class="section portrait table-section">
                         <p>10. TANGGUNG JAWAB :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>URAIAN</th>
                             </tr>
                             </thead>
@@ -766,10 +849,10 @@ export async function GET(req: NextRequest) {
                     <!-- 11. WEWENANG -->
                     <div class="section portrait table-section">
                         <p>11. WEWENANG :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>URAIAN</th>
                             </tr>
                             </thead>
@@ -787,10 +870,10 @@ export async function GET(req: NextRequest) {
                     <!-- 12. KORELASI JABATAN -->
                     <div class="section portrait table-section">
                         <p>12. KORELASI JABATAN :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>Jabatan</th>
                                 <th>Unit Kerja/Instansi</th>
                                 <th>Dalam Hal</th>
@@ -812,10 +895,10 @@ export async function GET(req: NextRequest) {
                     <!-- 13. KONDISI LINGKUNGAN KERJA -->
                     <div class="section portrait table-section">
                         <p>13. KONDISI LINGKUNGAN KERJA :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>ASPEK</th>
                                 <th>FAKTOR</th>
                             </tr>
@@ -835,10 +918,10 @@ export async function GET(req: NextRequest) {
                     <!-- 14. RISIKO BAHAYA -->
                     <div class="section portrait table-section">
                         <p>14. RISIKO BAHAYA :</p>
-                        <table style="margin-left: 25px; width: 95%" class="word-table">
+                        <table style="margin-left: 0; width: 99%" class="word-table">
                             <thead>
                             <tr>
-                                <th style="width:8%;">NO</th>
+                                <th style="width:5%;">NO</th>
                                 <th>NAMA RISIKO</th>
                                 <th>PENYEBAB</th>
                             </tr>
@@ -870,8 +953,8 @@ export async function GET(req: NextRequest) {
                                 <td class="custom-padding kv-sep">:</td>
                                 <td class="custom-padding kv-right custom-justify">
                                     ${Array.isArray(data.syarat_jabatan.keterampilan_kerja)
-                ? data.syarat_jabatan.keterampilan_kerja.join(", ")
-                : data.syarat_jabatan.keterampilan_kerja}
+                                            ? data.syarat_jabatan.keterampilan_kerja.join(", ")
+                                            : data.syarat_jabatan.keterampilan_kerja}
                                 </td>
                             </tr>
                             </tr>
@@ -901,8 +984,8 @@ export async function GET(req: NextRequest) {
                                 <td class="custom-padding kv-sep">:</td>
                                 <td class="custom-padding kv-right custom-justify">
                                     ${Array.isArray(data.syarat_jabatan.upaya_fisik)
-                ? data.syarat_jabatan.upaya_fisik.join(", ")
-                : data.syarat_jabatan.upaya_fisik}
+                                            ? data.syarat_jabatan.upaya_fisik.join(", ")
+                                            : data.syarat_jabatan.upaya_fisik}
                                 </td>
                             </tr>
                             <tr>
@@ -1005,25 +1088,15 @@ export async function GET(req: NextRequest) {
             `;
 
 
-            const htmlBuffer = Buffer.from(htmlContent, "utf-8");
+            // Generate PDF pakai Puppeteer
+            const browser = await puppeteer.launch({headless: "new"});
+            const page = await browser.newPage();
+            await page.setContent(htmlContent, {waitUntil: "networkidle0"});
 
-            const extend = ".pdf";
-            let pdfBuffer: Buffer;
+            const pdfBuffer = await page.pdf({format: "A4", printBackground: true});
+            await browser.close();
 
-            try {
-                pdfBuffer = await new Promise((resolve, reject) => {
-                    libre.convert(htmlBuffer, extend, undefined, (err, done) => {
-                        if (err) return reject(err);
-                        resolve(done);
-                    });
-                });
-            } catch (err) {
-                console.error(err);
-                return new Response(JSON.stringify({ error: "Gagal membuat PDF via LibreOffice" }), {
-                    status: 500,
-                    headers: { "Content-Type": "application/json" },
-                });
-            }
+            // Kirim langsung sebagai PDF
 
             return new Response(pdfBuffer, {
                 status: 200,
@@ -1033,8 +1106,8 @@ export async function GET(req: NextRequest) {
                     "Content-Length": pdfBuffer.length.toString(),
                     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
                     "Pragma": "no-cache",
-                    "Expires": "0",
-                },
+                    "Expires": "0"
+                }
             });
         }
 
