@@ -1,5 +1,7 @@
+// src/app/(admin)/(others-pages)/Anjab/[[...slug]]/page.tsx
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
@@ -10,13 +12,28 @@ type Status = "loading" | "ok" | "notfound" | "error";
 export default function InformasiJabatanPage() {
     const params = useParams();
 
-    // Ambil 2 segmen terakhir dari route dan join pakai "-"
-    const rawSlug = Array.isArray((params as any).slug)
-        ? (params as any).slug
-        : [(params as any).slug];
+    // slug bisa undefined (saat /Anjab)
+    const rawSlug = useMemo<string[]>(() => {
+        const s = (params as any)?.slug;
+        if (!s) return [];
+        return Array.isArray(s) ? s : [String(s)];
+    }, [params]);
 
-    const id = useMemo(() => rawSlug.slice(-2).join("-"), [rawSlug]);
-    const encodedId = useMemo(() => encodeURIComponent(id), [id]);
+    // id untuk DB/API = join 2 segmen terakhir pakai "-"
+    const id = useMemo(() => {
+        if (rawSlug.length === 0) return "";
+        if (rawSlug.length === 1) return rawSlug[0];
+        return rawSlug.slice(-2).join("-");
+    }, [rawSlug]);
+
+    const encodedId = useMemo(() => (id ? encodeURIComponent(id) : ""), [id]);
+
+    // href ke halaman edit = FULL PATH (semua segmen, pakai "/")
+    const editHref = useMemo(() => {
+        if (rawSlug.length === 0) return "#";
+        const fullPath = rawSlug.join("/"); // contoh: "A/B/C/D"
+        return `/AnjabEdit/jabatan/${fullPath}`;
+    }, [rawSlug]);
 
     const [status, setStatus] = useState<Status>("loading");
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -25,12 +42,18 @@ export default function InformasiJabatanPage() {
     const didRunRef = useRef(false);
 
     useEffect(() => {
+        if (!id) {
+            setStatus("notfound");
+            setPdfUrl(null);
+            return;
+        }
         setStatus("loading");
         setPdfUrl(null);
         didRunRef.current = false;
-    }, [encodedId]);
+    }, [id, encodedId]);
 
     useEffect(() => {
+        if (!id) return;
         if (didRunRef.current) return;
         didRunRef.current = true;
 
@@ -65,7 +88,16 @@ export default function InformasiJabatanPage() {
             alive = false;
             if (tmpUrl) URL.revokeObjectURL(tmpUrl);
         };
-    }, [encodedId]);
+    }, [id, encodedId]);
+
+    // Empty state untuk /Anjab (tanpa slug)
+    if (!id) {
+        return (
+            <div style={{ padding: 20, textAlign: "center" }}>
+                <p>Silakan pilih jabatan untuk ditampilkan.</p>
+            </div>
+        );
+    }
 
     if (status === "loading") {
         return <p style={{ padding: 20 }}>Loading...</p>;
@@ -93,19 +125,34 @@ export default function InformasiJabatanPage() {
         );
     }
 
-    // status === "ok"
+    // === status === "ok" ===
     return (
-        <div style={{ width: "100%", height: "100vh" }}>
-            {pdfUrl ? (
-                <iframe
-                    src={pdfUrl}
-                    style={{ width: "100%", height: "100%", border: "none" }}
-                    title={`Preview PDF - ${id}`}
-                />
-            ) : (
-                <p style={{ padding: 20 }}>Menyiapkan dokumen…</p>
-            )}
+        <>
+            {/* Bar atas sangat tipis, tidak mempengaruhi tinggi iframe 100vh */}
+            <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end" }}>
+                <Link
+                    href={editHref}
+                    className="rounded bg-blue-600 text-white px-3 py-1.5 hover:bg-blue-700"
+                >
+                    Edit Jabatan
+                </Link>
+            </div>
+
+            {/* KEMBALIKAN seperti semula: iframe full viewport height (100vh) */}
+            <div style={{ width: "100%", height: "100vh" }}>
+                {pdfUrl ? (
+                    <iframe
+                        src={pdfUrl}
+                        style={{ width: "100%", height: "100%", border: "none" }}
+                        title={`Preview PDF - ${id}`}
+                    />
+                ) : (
+                    <p style={{ padding: 20 }}>Menyiapkan dokumen…</p>
+                )}
+            </div>
+
+            {/* Komponen uploader ABK tetap tampil panjang di bawah (tidak berada dalam flex container) */}
             <WordAbk id={id} />
-        </div>
+        </>
     );
 }
