@@ -216,7 +216,8 @@ export async function GET(req: NextRequest) {
             return Response.json(data, {status: 200});
         }
 
-        function splitPerangkatKeHalaman(data, maxRowsPerPage) {
+// === SPLIT: bagi data ke halaman ===
+        function splitPerangkatKeHalaman(data, maxRowsPerPage = 50) {
             const pages = [];
             let currentPage = [];
             let rowCount = 0;
@@ -224,97 +225,105 @@ export async function GET(req: NextRequest) {
             data.forEach((item, index) => {
                 const perangkatList = item.perangkat_kerja || [];
                 const penggunaanList = item.penggunaan_untuk_tugas || [];
+                const total = Math.max(1, perangkatList.length);
 
-                perangkatList.forEach((perangkat, i) => {
+                let i = 0;
+                while (i < total) {
+                    const available = maxRowsPerPage - rowCount;
+
+                    // 🔹 Kalau item tidak muat di slot tersisa → pindah ke halaman baru
+                    if (total - i > available && rowCount > 0) {
+                        pages.push({rows: currentPage, continued: true});
+                        currentPage = [];
+                        rowCount = 0;
+                        continue; // ulangi while di halaman baru
+                    }
+
+                    // 🔹 Ambil baris yang muat
+                    const take = Math.min(available, total - i);
+
+                    for (let j = 0; j < take; j++) {
+                        const isFirst = (i + j === 0);
+                        currentPage.push({
+                            index,
+                            perangkat: perangkatList[i + j] || "",
+                            penggunaan: isFirst ? (penggunaanList || []) : null,
+                            firstRow: isFirst,
+                            totalRowsInItem: total
+                        });
+                        rowCount++;
+                    }
+
+                    i += take;
+
+                    // 🔹 Kalau penuh persis, tutup halaman & reset
                     if (rowCount >= maxRowsPerPage) {
-                        pages.push(currentPage);
+                        pages.push({rows: currentPage, continued: true});
                         currentPage = [];
                         rowCount = 0;
                     }
-
-                    // cek kalau ini bukan baris pertama item
-                    const firstRow = (i === 0);
-                    // cek apakah halaman baru tapi item yang sama → maka semua baris = continued
-                    const continued = (!firstRow && currentPage.length === 0);
-
-                    currentPage.push({
-                        index,
-                        perangkat,
-                        penggunaan: (firstRow ? penggunaanList : null),
-                        firstRow,
-                        totalRowsInItem: perangkatList.length,
-                        isContinued: continued || (!firstRow && currentPage.length > 0 && currentPage[0].isContinued)
-                    });
-
-                    rowCount++;
-                });
+                }
             });
 
+            // 🔹 Tambahkan halaman terakhir (jika ada isinya)
             if (currentPage.length > 0) {
-                pages.push(currentPage);
+                pages.push({rows: currentPage, continued: false});
             }
+
             return pages;
         }
 
         function renderTable(data, maxRowsPerPage = 50) {
             const pages = splitPerangkatKeHalaman(data, maxRowsPerPage);
-            const seen = new Set();
 
-            return pages.map(page => {
+            return pages.map((page, pageIdx) => {
                 const countInPage = {};
-                page.forEach(r => { countInPage[r.index] = (countInPage[r.index] || 0) + 1; });
+                page.rows.forEach(r => {
+                    countInPage[r.index] = (countInPage[r.index] || 0) + 1;
+                });
 
                 const emittedInPage = {};
-
-                const tbody = page.map(r => {
+                const tbody = page.rows.map(r => {
                     const firstInThisPage = !emittedInPage[r.index];
                     emittedInPage[r.index] = (emittedInPage[r.index] || 0) + 1;
-
-                    const continuedFromPrevPage = seen.has(r.index);
 
                     let cells = "";
 
                     // === KOLOM NO ===
-                    if (continuedFromPrevPage) {
-                        // halaman lanjutan → kosong tapi border luar tetap ada
-                        cells += `<td style="border: none; border-left:1px solid black; border-right:1px solid black;"></td>`;
-                    } else {
-                        if (firstInThisPage) {
-                            cells += `<td style="text-align:center" rowspan="${countInPage[r.index]}">${r.index + 1}.</td>`;
-                        }
+                    if (firstInThisPage) {
+                        cells += `<td style="text-align:center" rowspan="${countInPage[r.index]}">${r.index + 1}.</td>`;
                     }
 
-                    // === KOLOM PERANGKAT KERJA (selalu ada) ===
+                    // === KOLOM PERANGKAT ===
                     cells += `<td>${r.perangkat || ""}</td>`;
 
                     // === KOLOM PENGGUNAAN ===
-                    if (continuedFromPrevPage) {
-                        // halaman lanjutan → kosong tapi border luar tetap ada
-                        cells += `<td style="border: none; border-left:1px solid black; border-right:1px solid black;"></td>`;
-                    } else {
-                        if (firstInThisPage) {
-                            cells += `<td rowspan="${countInPage[r.index]}">${renderTableList(r.penggunaan || [])}</td>`;
+                    if (firstInThisPage) {
+                        if (r.penggunaan && r.penggunaan.length > 0) {
+                            cells += `<td rowspan="${countInPage[r.index]}">${renderTableList(r.penggunaan)}</td>`;
+                        } else {
+                            cells += `<td rowspan="${countInPage[r.index]}"></td>`;
                         }
                     }
 
                     return `<tr>${cells}</tr>`;
                 }).join("");
 
-                page.forEach(r => seen.add(r.index));
+                const breakStyle = pageIdx < pages.length - 1 ? 'page-break-after:always;' : '';
 
                 return `
-      <table style="margin-left:0; width:99%" class="word-table">
-        <thead>
-          <tr>
-            <th style="width:5%;">NO</th>
-            <th style="width:72%;">PERANGKAT KERJA</th>
-            <th>PENGGUNAAN UNTUK TUGAS</th>
-          </tr>
-        </thead>
-        <tbody>${tbody}</tbody>
-      </table>
-    `;
-            }).join(`<div style="page-break-after:always;"></div>`);
+        <table style="margin-left:0; width:99%; border-collapse:collapse; ${breakStyle}" class="word-table" border="1">
+          <thead>
+            <tr>
+              <th >NO</th>
+              <th >PERANGKAT KERJA</th>
+              <th>PENGGUNAAN UNTUK TUGAS</th>
+            </tr>
+          </thead>
+          <tbody>${tbody}</tbody>
+        </table>
+        `;
+            }).join('');
         }
 
         const renderList = (arr) => {
@@ -385,7 +394,6 @@ export async function GET(req: NextRequest) {
                 ${item.tahapan
                     .map(t => `<li style="margin-bottom:2px;">${t.tahapan}</li>`)
                     .join("")}
-            </ol>
         `;
             }
 
@@ -530,7 +538,7 @@ export async function GET(req: NextRequest) {
                             border: 1px solid #000;
                             padding: 6px;
                             vertical-align: top;
-                            word-break: normal;  /* fix */
+                            word-break: normal; /* fix */
                             white-space: normal; /* fix */
                         }
 
@@ -822,9 +830,9 @@ export async function GET(req: NextRequest) {
                     <!-- 9. PERANGKAT KERJA -->
                     <div class="section portrait table-section">
                         <p>9. PERANGKAT KERJA :</p>
-                        ${renderTable(data.perangkat_kerja, 25)}
+                        ${renderTable(data.perangkat_kerja, 1000)}
                     </div>
-                    
+
                     <!-- 10. TANGGUNG JAWAB -->
                     <div class="section portrait table-section">
                         <p>10. TANGGUNG JAWAB :</p>
@@ -1087,6 +1095,8 @@ export async function GET(req: NextRequest) {
                 </html>
             `;
 
+            console.log(htmlContent)
+
 
             // Generate PDF pakai Puppeteer
             const browser = await puppeteer.launch({headless: "new"});
@@ -1112,8 +1122,8 @@ export async function GET(req: NextRequest) {
         }
 
         return Response.json(
-            { error: `Format '${output}' tidak didukung. Gunakan 'json' atau 'pdf'.` },
-            { status: 400 }
+            {error: `Format '${output}' tidak didukung. Gunakan 'json' atau 'pdf'.`},
+            {status: 400}
         );
 
     } catch (error) {

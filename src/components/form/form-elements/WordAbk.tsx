@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { FileJson, Loader2 } from 'lucide-react';
@@ -13,18 +13,20 @@ interface WordAbkProps {
 
 export default function WordAbk({ id }: WordAbkProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const clearFileInput = () => {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
 
     const showConfirmModal = async (fileNames: string[]): Promise<boolean> => {
         const htmlList = `<ol class="text-left text-sm list-decimal pl-5">
-            ${fileNames.map(f => `<li>📄 ${f}</li>`).join('')}
-        </ol>`;
+      ${fileNames.map(f => `<li>📄 ${f}</li>`).join('')}
+    </ol>`;
 
         const result = await MySwal.fire({
             title: 'Konfirmasi Upload',
-            html: `
-                <p class="mb-2">Berikut file yang akan diupload:</p>
-                ${htmlList}
-            `,
+            html: `<p class="mb-2">Berikut file yang akan diupload:</p>${htmlList}`,
             icon: 'question',
             width: '480px',
             showCancelButton: true,
@@ -37,16 +39,22 @@ export default function WordAbk({ id }: WordAbkProps) {
         return result.isConfirmed;
     };
 
-    const showResultModal = (success: boolean, message: string, detailsHtml: string = '') => {
-        Swal.fire({
-            title: success ? 'Berhasil' : 'Gagal',
+    const showResultModal = async (success: boolean, message: string, detailsHtml = "") => {
+        await Swal.fire({
+            title: success ? "Berhasil" : "Gagal",
             html: `
-                <p>${message}</p>
-                ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ''}
-            `,
-            icon: success ? 'success' : 'error',
-            confirmButtonColor: success ? '#10B981' : '#EF4444',
-            width: '520px',
+      <p>${message}</p>
+      ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ""}
+    `,
+            icon: success ? "success" : "error",
+            confirmButtonColor: success ? "#10B981" : "#EF4444",
+            width: "520px",
+            // opsional: tetap boleh klik luar / ESC
+            allowOutsideClick: true,
+            allowEscapeKey: true,
+            didClose: () => {
+                if (success) window.location.reload(); // refresh walau ditutup via backdrop/ESC
+            },
         });
     };
 
@@ -54,30 +62,27 @@ export default function WordAbk({ id }: WordAbkProps) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        const confirm = await showConfirmModal(Array.from(files).map(f => f.name));
-        if (!confirm) return;
+        const confirmed = await showConfirmModal(Array.from(files).map(f => f.name));
+        if (!confirmed) {
+            clearFileInput(); // reset saat batal
+            return;
+        }
 
         const formData = new FormData();
-        for (let i = 0; i < files.length; i++) {
-            formData.append('files', files[i]);
-        }
-        formData.append("id_jabatan", id); // kirim id ke API
+        for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
+        formData.append('id_jabatan', id);
 
         setIsLoading(true);
         try {
-            const res = await fetch('/api/abk/upload-doc', {
-                method: 'POST',
-                body: formData,
-            });
-
+            const res = await fetch('/api/abk/docs', { method: 'POST', body: formData });
             const result = await res.json();
-            console.log(result);
-            showResultModal(res.ok, result.message || (res.ok ? 'Upload berhasil' : 'Gagal'));
+            await showResultModal(res.ok, result.message || (res.ok ? 'Upload berhasil' : 'Gagal'));
         } catch (err) {
             console.error(err);
-            showResultModal(false, 'Gagal mengirim ke server.');
+            await showResultModal(false, 'Gagal mengirim ke server.');
         } finally {
             setIsLoading(false);
+            clearFileInput(); // reset setelah selesai (sukses/gagal)
         }
     };
 
@@ -96,6 +101,7 @@ export default function WordAbk({ id }: WordAbkProps) {
                 <p className="text-gray-600 font-medium">Pilih file Word</p>
 
                 <input
+                    ref={fileInputRef}
                     type="file"
                     accept=".doc,.docx"
                     multiple
@@ -106,4 +112,3 @@ export default function WordAbk({ id }: WordAbkProps) {
         </div>
     );
 }
-
