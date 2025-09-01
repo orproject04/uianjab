@@ -100,37 +100,37 @@ export default function UnitKerjaForm({
         <form onSubmit={onSubmit} className="space-y-4 max-w-3xl mx-auto">
             <div>
                 <label className="block text-sm font-medium mb-1">JPT Utama</label>
-                <textarea ref={firstRef} name="jpt_utama" defaultValue={data.jpt_utama ?? ""} rows={2}
+                <input type="text" ref={firstRef} name="jpt_utama" defaultValue={data.jpt_utama ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
             <div>
                 <label className="block text-sm font-medium mb-1">JPT Madya</label>
-                <textarea name="jpt_madya" defaultValue={data.jpt_madya ?? ""} rows={2}
+                <input type="text" name="jpt_madya" defaultValue={data.jpt_madya ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
             <div>
                 <label className="block text-sm font-medium mb-1">JPT Pratama</label>
-                <textarea name="jpt_pratama" defaultValue={data.jpt_pratama ?? ""} rows={2}
+                <input type="text" name="jpt_pratama" defaultValue={data.jpt_pratama ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
             <div>
                 <label className="block text-sm font-medium mb-1">Administrator</label>
-                <textarea name="administrator" defaultValue={data.administrator ?? ""} rows={2}
+                <input type="text" name="administrator" defaultValue={data.administrator ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
             <div>
                 <label className="block text-sm font-medium mb-1">Pengawas</label>
-                <textarea name="pengawas" defaultValue={data.pengawas ?? ""} rows={2}
+                <input type="text" name="pengawas" defaultValue={data.pengawas ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
             <div>
                 <label className="block text-sm font-medium mb-1">Pelaksana</label>
-                <textarea name="pelaksana" defaultValue={data.pelaksana ?? ""} rows={2}
+                <input type="text" name="pelaksana" defaultValue={data.pelaksana ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
             <div>
                 <label className="block text-sm font-medium mb-1">Jabatan Fungsional</label>
-                <textarea name="jabatan_fungsional" defaultValue={data.jabatan_fungsional ?? ""} rows={2}
+                <input type="text" name="jabatan_fungsional" defaultValue={data.jabatan_fungsional ?? ""} rows={2}
                           className="w-full rounded border px-3 py-2" />
             </div>
 

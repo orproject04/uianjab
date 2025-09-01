@@ -134,7 +134,7 @@ export default function InformasiJabatanPage() {
                     href={editHref}
                     className="rounded bg-blue-600 text-white px-3 py-1.5 hover:bg-blue-700"
                 >
-                    Edit Jabatan
+                    Edit Anjab
                 </Link>
             </div>
 

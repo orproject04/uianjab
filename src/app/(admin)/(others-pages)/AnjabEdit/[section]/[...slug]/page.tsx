@@ -29,7 +29,7 @@ export default function EditAnySectionPage() {
             <div className="p-6">
                 <p className="text-red-600">Bagian “{params.section}” tidak dikenali.</p>
                 <Link className="underline text-blue-600" href={`/Anjab/${viewerPath}`}>
-                    Kembali ke Viewer
+                    Lihat PDF
                 </Link>
             </div>
         );
@@ -42,7 +42,7 @@ export default function EditAnySectionPage() {
                     Edit {SECTION_LABELS[params.section] ?? params.section}
                 </h1>
                 <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
-                    Kembali ke Viewer
+                    Lihat PDF
                 </Link>
             </div>
 

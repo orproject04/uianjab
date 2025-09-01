@@ -1,5 +1,8 @@
 import JabatanForm from "./jabatan";
-import UnitKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/unit_kerja";
+import UnitKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/unit-kerja";
+import KualifikasiForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/kualifikasi";
+import TugasPokokForm from "./tugas-pokok";
+import HasilKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/hasil-kerja";
 // import UnitKerjaForm from "./unit-kerja";
 
 // Stub untuk sementara
@@ -14,10 +17,10 @@ function Stub({id}: { id: string; viewerPath: string }) {
 export const SECTION_COMPONENTS = {
     "jabatan": JabatanForm,
     "unit-kerja": UnitKerjaForm,
-    "kualifikasi": Stub,
-    "tugas-pokok": Stub,
-    "tahapan-uraian-tugas": Stub,
-    "hasil-kerja": Stub,
+    "kualifikasi": KualifikasiForm,
+    "tugas-pokok": TugasPokokForm,
+    // "tahapan-uraian-tugas": Stub,
+    "hasil-kerja": HasilKerjaForm,
     "bahan-kerja": Stub,
     "perangkat-kerja": Stub,
     "tanggung-jawab": Stub,
@@ -33,7 +36,7 @@ export const SECTION_LABELS: Record<string, string> = {
     "unit-kerja": "Unit Kerja",
     "kualifikasi": "Kualifikasi Jabatan",
     "tugas-pokok": "Tugas Pokok",
-    "tahapan-uraian-tugas": "Tahapan Uraian Tugas",
+    // "tahapan-uraian-tugas": "Tahapan Uraian Tugas",
     "hasil-kerja": "Hasil Kerja",
     "bahan-kerja": "Bahan Kerja",
     "perangkat-kerja": "Perangkat Kerja",
@@ -50,7 +53,7 @@ export const SECTION_ORDER = [
     "unit-kerja",
     "kualifikasi",
     "tugas-pokok",
-    "tahapan-uraian-tugas",
+    // "tahapan-uraian-tugas",
     "hasil-kerja",
     "bahan-kerja",
     "perangkat-kerja",
