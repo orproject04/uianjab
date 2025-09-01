@@ -132,7 +132,7 @@ export default function EditJabatanSection({
             if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
             await MySwal.fire({ icon: "success", title: "Terhapus", text: `Anjab ${id} telah dihapus.` });
             // Arahkan kembali ke viewer root / daftar
-            window.location.href = `/Anjab`;
+            window.location.href = `/Anjab/${encodeURIComponent(id)}`;
         } catch (e) {
             console.error(e);
             await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });

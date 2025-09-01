@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
-import WordAbk from "@/components/form/form-elements/WordAbk";
+// (Opsional) kalau perlu juga ABK di layar ini, tinggal un-comment import & komponen
+// import WordAbk from "@/components/form/form-elements/WordAbk";
 
 type Status = "loading" | "ok" | "notfound" | "error";
 
@@ -28,7 +29,7 @@ export default function InformasiJabatanPage() {
 
     const encodedId = useMemo(() => (id ? encodeURIComponent(id) : ""), [id]);
 
-    // href ke halaman edit = FULL PATH (semua segmen, pakai "/")
+    // href ke halaman edit = FULL PATH (semua segmen, pakai "/") → **tetap pakai gaya lama**
     const editHref = useMemo(() => {
         if (rawSlug.length === 0) return "#";
         const fullPath = rawSlug.join("/"); // contoh: "A/B/C/D"
@@ -90,11 +91,11 @@ export default function InformasiJabatanPage() {
         };
     }, [id, encodedId]);
 
-    // Empty state untuk /Anjab (tanpa slug)
+    // === Empty state untuk /Anjab (tanpa slug) ===
     if (!id) {
         return (
-            <div style={{ padding: 20, textAlign: "center" }}>
-                <p>Silakan pilih jabatan untuk ditampilkan.</p>
+            <div className="p-8 max-w-xl mx-auto text-center space-y-4">
+                <p className="text-gray-700">Silakan pilih jabatan untuk ditampilkan.</p>
             </div>
         );
     }
@@ -103,24 +104,49 @@ export default function InformasiJabatanPage() {
         return <p style={{ padding: 20 }}>Loading...</p>;
     }
 
-    if (status === "notfound") {
+    if (status === "notfound" || status === "error") {
+        const isNotFound = status === "notfound";
         return (
-            <div style={{ padding: 20, textAlign: "center" }}>
-                <p style={{ padding: 20 }}>
-                    Data tidak ditemukan untuk <b>{id}</b>
-                </p>
-                <WordAnjab id={id} />
-            </div>
-        );
-    }
+            <div className="p-8 max-w-5xl mx-auto space-y-6">
+                <div className="text-center space-y-2">
+                    <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
+                        {isNotFound
+                            ? <>Data tidak ditemukan untuk <b>{id}</b>.</>
+                            : <>Terjadi kesalahan saat memuat data <b>{id}</b>. Coba lagi nanti.</>}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                        Silakan memilih antara <b>mengunggah dokumen Anjab berformat .doc</b> (tidak mendukung .docx)
+                        atau <b>membuat Anjab secara manual</b>.
+                    </p>
+                </div>
 
-    if (status === "error") {
-        return (
-            <div style={{ padding: 20, textAlign: "center" }}>
-                <p style={{ padding: 20, color: "#b91c1c" }}>
-                    Terjadi kesalahan saat memuat data <b>{id}</b>. Coba lagi nanti.
-                </p>
-                <WordAnjab id={id} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Upload Word (.doc saja) */}
+                    <div className="border rounded-lg p-4">
+                        <h3 className="font-medium mb-2 text-center">Upload Dokumen Anjab (.doc)</h3>
+                        <p className="text-sm text-gray-600 mb-3">
+                            Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk ID: <b>{id}</b>. <i>.docx tidak didukung.</i>
+                        </p>
+                        {/* ⬇️ Lewatkan prop acceptExt=".doc" agar hanya .doc yang diterima */}
+                        <WordAnjab id={id} acceptExt=".doc" />
+                    </div>
+
+                    {/* Buat Manual (center tombolnya) */}
+                    <div className="border rounded-lg p-4 flex">
+                        <div className="m-auto text-center space-y-3">
+                            <h3 className="font-medium">Buat Anjab Manual</h3>
+                            <p className="text-sm text-gray-600">
+                                Mulai dari form kosong. ID akan dikunci: <b>{id}</b>.
+                            </p>
+                            <Link
+                                href={`/AnjabCreate/${encodeURIComponent(id)}`}
+                                className="inline-block rounded bg-green-600 text-white px-4 py-2 hover:bg-green-700"
+                            >
+                                + Buat Anjab Manual
+                            </Link>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -129,16 +155,24 @@ export default function InformasiJabatanPage() {
     return (
         <>
             {/* Bar atas sangat tipis, tidak mempengaruhi tinggi iframe 100vh */}
-            <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end" }}>
+            <div
+                style={{
+                    padding: 12,
+                    borderBottom: "1px solid #eee",
+                    display: "flex",
+                    gap: 8,
+                    justifyContent: "flex-end",
+                }}
+            >
                 <Link
-                    href={editHref}
+                    href={editHref} // (pastikan tetap pakai fullPath lama)
                     className="rounded bg-blue-600 text-white px-3 py-1.5 hover:bg-blue-700"
                 >
                     Edit Anjab
                 </Link>
             </div>
 
-            {/* KEMBALIKAN seperti semula: iframe full viewport height (100vh) */}
+            {/* iframe full viewport height (100vh) */}
             <div style={{ width: "100%", height: "100vh" }}>
                 {pdfUrl ? (
                     <iframe

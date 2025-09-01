@@ -9,20 +9,21 @@ const MySwal = withReactContent(Swal);
 
 interface WordAnjabProps {
     id: string;
+    /** Batasi ekstensi yang boleh diunggah. Default ".doc,.docx". */
+    acceptExt?: string;
 }
 
-export default function WordAnjab({ id }: WordAnjabProps) {
+export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabProps) {
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const clearFileInput = () => {
-        // kosongkan nilai supaya memilih file yang sama pun akan memicu onChange
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const showConfirmModal = async (fileNames: string[]): Promise<boolean> => {
         const htmlList = `<ol class="text-left text-sm list-decimal pl-5">
-      ${fileNames.map((f) => `<li>📄 ${f}</li>`).join('')}
+      ${fileNames.map(f => `<li>📄 ${f}</li>`).join('')}
     </ol>`;
 
         const result = await MySwal.fire({
@@ -44,17 +45,16 @@ export default function WordAnjab({ id }: WordAnjabProps) {
         await Swal.fire({
             title: success ? "Berhasil" : "Gagal",
             html: `
-      <p>${message}</p>
-      ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ""}
-    `,
+        <p>${message}</p>
+        ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ""}
+      `,
             icon: success ? "success" : "error",
             confirmButtonColor: success ? "#10B981" : "#EF4444",
             width: "520px",
-            // opsional: tetap boleh klik luar / ESC
             allowOutsideClick: true,
             allowEscapeKey: true,
             didClose: () => {
-                if (success) window.location.reload(); // refresh walau ditutup via backdrop/ESC
+                if (success) window.location.reload();
             },
         });
     };
@@ -63,9 +63,27 @@ export default function WordAnjab({ id }: WordAnjabProps) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        const confirmed = await showConfirmModal(Array.from(files).map((f) => f.name));
+        // ⬇️ Validasi ekstensi sesuai acceptExt
+        const allowed = acceptExt.split(",").map(s => s.trim().toLowerCase());
+        const bad = Array.from(files).filter(f => {
+            const ext = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
+            return !allowed.includes(ext);
+        });
+        if (bad.length) {
+            await MySwal.fire({
+                icon: "error",
+                title: "Ekstensi tidak didukung",
+                html: `<p>File berikut tidak didukung: </p>
+               <ul class="text-left list-disc pl-5">${bad.map(b => `<li>${b.name}</li>`).join("")}</ul>
+               <p class="mt-2">Hanya ${allowed.join(" ")} yang diperbolehkan.</p>`,
+            });
+            clearFileInput();
+            return;
+        }
+
+        const confirmed = await showConfirmModal(Array.from(files).map(f => f.name));
         if (!confirmed) {
-            clearFileInput(); // penting: reset saat batal
+            clearFileInput();
             return;
         }
 
@@ -83,16 +101,12 @@ export default function WordAnjab({ id }: WordAnjabProps) {
             await showResultModal(false, 'Gagal mengirim ke server.');
         } finally {
             setIsLoading(false);
-            clearFileInput(); // juga reset setelah selesai (sukses/gagal)
+            clearFileInput();
         }
     };
 
     return (
-        <div className="mx-auto mt-10 p-6 bg-white shadow-lg rounded-2xl border">
-            <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800">
-                Unggah Dokumen Analisis Jabatan
-            </h2>
-
+        <div className="mx-auto p-4 bg-white rounded-xl border">
             <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 transition">
                 {isLoading ? (
                     <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-2" />
@@ -100,11 +114,11 @@ export default function WordAnjab({ id }: WordAnjabProps) {
                     <FileJson className="w-10 h-10 text-purple-500 mb-2" />
                 )}
                 <p className="text-gray-600 font-medium">Pilih file Word</p>
-
+                <p className="text-xs text-gray-500 mt-1">Hanya {acceptExt} yang diperbolehkan</p>
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".doc,.docx"
+                    accept={acceptExt}
                     multiple
                     onChange={handleFileUploadWord}
                     className="hidden"
