@@ -3,6 +3,14 @@ import UnitKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/unit
 import KualifikasiForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/kualifikasi";
 import TugasPokokForm from "./tugas-pokok";
 import HasilKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/hasil-kerja";
+import BahanKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/bahan-kerja";
+import PerangkatKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/perangkat-kerja";
+import TanggungJawabForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/tanggung_jawab";
+import WewenangForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/wewenang";
+import KorelasiJabatanForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/korelasi-jabatan";
+import KondisiLingkunganKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/kondisi-lingkungan-kerja";
+import RisikoBahayaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/risiko-bahaya";
+import SyaratJabatanForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/syarat-jabatan";
 // import UnitKerjaForm from "./unit-kerja";
 
 // Stub untuk sementara
@@ -21,14 +29,14 @@ export const SECTION_COMPONENTS = {
     "tugas-pokok": TugasPokokForm,
     // "tahapan-uraian-tugas": Stub,
     "hasil-kerja": HasilKerjaForm,
-    "bahan-kerja": Stub,
-    "perangkat-kerja": Stub,
-    "tanggung-jawab": Stub,
-    "wewenang": Stub,
-    "korelasi-jabatan": Stub,
-    "kondisi-lingkungan-kerja": Stub,
-    "risiko-bahaya": Stub,
-    "syarat-jabatan": Stub,
+    "bahan-kerja": BahanKerjaForm,
+    "perangkat-kerja": PerangkatKerjaForm,
+    "tanggung-jawab": TanggungJawabForm,
+    "wewenang": WewenangForm,
+    "korelasi-jabatan": KorelasiJabatanForm,
+    "kondisi-lingkungan-kerja": KondisiLingkunganKerjaForm,
+    "risiko-bahaya": RisikoBahayaForm,
+    "syarat-jabatan": SyaratJabatanForm,
 } as const;
 
 export const SECTION_LABELS: Record<string, string> = {

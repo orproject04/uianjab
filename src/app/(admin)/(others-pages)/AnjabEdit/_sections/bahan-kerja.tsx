@@ -7,11 +7,11 @@ import Link from "next/link";
 
 const MySwal = withReactContent(Swal);
 
-type HasilKerjaRow = {
-    id_hasil: number;
+type BahanKerjaRow = {
+    id_bahan: number;
     id_jabatan: string;
-    hasil_kerja: string[];   // TEXT[] (list mandiri)
-    satuan_hasil: string[];  // TEXT[] (list mandiri)
+    bahan_kerja: string[];             // TEXT[] (list mandiri)
+    penggunaan_dalam_tugas: string[];  // TEXT[] (list mandiri)
 };
 
 function DualList({
@@ -33,7 +33,7 @@ function DualList({
 
     const sync = (nl: string[], nr: string[]) => { setL(nl); setR(nr); onChange(nl, nr); };
 
-    // LEFT ops
+    // LEFT ops (Bahan Kerja)
     const addLeft = (after?: number) => {
         const nl = [...L];
         const idx = typeof after === "number" ? after + 1 : L.length;
@@ -44,7 +44,7 @@ function DualList({
     const removeLeft = (i: number) => sync(L.filter((_, x) => x !== i), R);
     const updateLeft = (i: number, v: string) => { const nl = [...L]; nl[i] = v; sync(nl, R); };
 
-    // RIGHT ops
+    // RIGHT ops (Penggunaan dalam Tugas)
     const addRight = (after?: number) => {
         const nr = [...R];
         const idx = typeof after === "number" ? after + 1 : R.length;
@@ -57,9 +57,9 @@ function DualList({
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* LEFT LIST: Hasil Kerja */}
+            {/* LEFT LIST: Bahan Kerja */}
             <div className="md:col-span-6">
-                <label className="block text-sm font-medium mb-2">Hasil Kerja</label>
+                <label className="block text-sm font-medium mb-2">Bahan Kerja</label>
                 <div className="space-y-2">
                     {L.map((_, i) => (
                         <div key={`L-${i}`} className="flex items-center gap-2">
@@ -68,7 +68,7 @@ function DualList({
                                 type="text"
                                 value={L[i] ?? ""}
                                 onChange={(e) => updateLeft(i, e.target.value)}
-                                placeholder="Hasil Kerja (mis. Laporan Evaluasi)"
+                                placeholder="Bahan Kerja (mis. Data keuangan)"
                                 className="flex-1 rounded border px-3 py-2"
                             />
                             <button
@@ -90,14 +90,14 @@ function DualList({
                         onClick={() => addLeft()}
                         className="rounded px-3 py-2 bg-green-600 text-white hover:bg-green-700"
                     >
-                        + Tambah Hasil Kerja
+                        + Tambah Bahan Kerja
                     </button>
                 </div>
             </div>
 
-            {/* RIGHT LIST: Satuan Hasil */}
+            {/* RIGHT LIST: Penggunaan dalam Tugas */}
             <div className="md:col-span-6">
-                <label className="block text-sm font-medium mb-2">Satuan Hasil</label>
+                <label className="block text-sm font-medium mb-2">Penggunaan dalam Tugas</label>
                 <div className="space-y-2">
                     {R.map((_, i) => (
                         <div key={`R-${i}`} className="flex items-center gap-2">
@@ -106,7 +106,7 @@ function DualList({
                                 type="text"
                                 value={R[i] ?? ""}
                                 onChange={(e) => updateRight(i, e.target.value)}
-                                placeholder="Satuan (mis. dokumen)"
+                                placeholder="Penggunaan (mis. Penyusunan laporan)"
                                 className="flex-1 rounded border px-3 py-2"
                             />
                             <button
@@ -128,7 +128,7 @@ function DualList({
                         onClick={() => addRight()}
                         className="rounded px-3 py-2 bg-green-600 text-white hover:bg-green-700"
                     >
-                        + Tambah Satuan Hasil
+                        + Tambah Penggunaan
                     </button>
                 </div>
             </div>
@@ -136,7 +136,7 @@ function DualList({
     );
 }
 
-export default function HasilKerjaForm({
+export default function BahanKerjaForm({
                                            id,
                                            viewerPath,
                                        }: {
@@ -144,7 +144,7 @@ export default function HasilKerjaForm({
     viewerPath: string;
 }) {
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState<HasilKerjaRow[]>([]);
+    const [rows, setRows] = useState<BahanKerjaRow[]>([]);
     const [saving, setSaving] = useState<number | "new" | null>(null);
 
     useEffect(() => {
@@ -152,13 +152,13 @@ export default function HasilKerjaForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/hasil-kerja`, { cache: "no-store" });
+                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
                 setRows(json);
-            } catch (e) {
-                await MySwal.fire({ icon: "error", title: "Gagal memuat", text: "Tidak bisa memuat Hasil Kerja." });
+            } catch {
+                await MySwal.fire({ icon: "error", title: "Gagal memuat", text: "Tidak bisa memuat Bahan Kerja." });
             } finally {
                 if (alive) setLoading(false);
             }
@@ -169,10 +169,10 @@ export default function HasilKerjaForm({
     function addRow() {
         setRows((prev) => [
             ...prev,
-            { id_hasil: 0, id_jabatan: id, hasil_kerja: [""], satuan_hasil: [] },
+            { id_bahan: 0, id_jabatan: id, bahan_kerja: [""], penggunaan_dalam_tugas: [] },
         ]);
     }
-    function updateLocal(idx: number, patch: Partial<HasilKerjaRow>) {
+    function updateLocal(idx: number, patch: Partial<BahanKerjaRow>) {
         setRows((prev) => {
             const next = [...prev];
             next[idx] = { ...next[idx], ...patch };
@@ -182,23 +182,22 @@ export default function HasilKerjaForm({
 
     async function saveRow(idx: number) {
         const it = rows[idx];
-        // kirim apa adanya (server akan trim & filter empty)
         const payload = {
-            hasil_kerja: it.hasil_kerja ?? [],
-            satuan_hasil: it.satuan_hasil ?? [],
+            bahan_kerja: it.bahan_kerja ?? [],
+            penggunaan_dalam_tugas: it.penggunaan_dalam_tugas ?? [],
         };
 
-        setSaving(it.id_hasil || "new");
+        setSaving(it.id_bahan || "new");
         try {
             let res: Response;
-            if (it.id_hasil > 0) {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/hasil-kerja/${it.id_hasil}`, {
+            if (it.id_bahan > 0) {
+                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja/${it.id_bahan}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/hasil-kerja`, {
+                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -206,8 +205,8 @@ export default function HasilKerjaForm({
             }
             const json = await res.json();
             if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
-            updateLocal(idx, json.data); // id tetap → urutan stabil
-            await MySwal.fire({ icon: "success", title: "Tersimpan", text: "Hasil Kerja disimpan." });
+            updateLocal(idx, json.data);
+            await MySwal.fire({ icon: "success", title: "Tersimpan", text: "Bahan Kerja disimpan." });
         } catch (e) {
             await MySwal.fire({ icon: "error", title: "Gagal menyimpan", text: String(e) });
         } finally {
@@ -219,7 +218,7 @@ export default function HasilKerjaForm({
         const it = rows[idx];
         const ok = await MySwal.fire({
             icon: "warning",
-            title: "Hapus Hasil Kerja?",
+            title: "Hapus Bahan Kerja?",
             text: "Tindakan ini tidak dapat dibatalkan.",
             showCancelButton: true,
             confirmButtonText: "Hapus",
@@ -228,15 +227,15 @@ export default function HasilKerjaForm({
         if (!ok.isConfirmed) return;
 
         try {
-            if (it.id_hasil > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/hasil-kerja/${it.id_hasil}`, {
+            if (it.id_bahan > 0) {
+                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja/${it.id_bahan}`, {
                     method: "DELETE",
                 });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
             }
             setRows((prev) => prev.filter((_, i) => i !== idx));
-            await MySwal.fire({ icon: "success", title: "Terhapus", text: "Hasil Kerja dihapus." });
+            await MySwal.fire({ icon: "success", title: "Terhapus", text: "Bahan Kerja dihapus." });
         } catch (e) {
             await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
         }
@@ -252,7 +251,7 @@ export default function HasilKerjaForm({
                     onClick={addRow}
                     className="rounded px-4 py-2 bg-green-600 text-white hover:bg-green-700"
                 >
-                    + Tambah Item Hasil Kerja
+                    + Tambah Item Bahan Kerja
                 </button>
                 <Link href={`/Anjab/${viewerPath}`} className="rounded border px-4 py-2">
                     Kembali
@@ -260,27 +259,27 @@ export default function HasilKerjaForm({
             </div>
 
             {rows.length === 0 && (
-                <p className="text-gray-600">Belum ada item. Klik “+ Tambah Item Hasil Kerja”.</p>
+                <p className="text-gray-600">Belum ada item. Klik “+ Tambah Item Bahan Kerja”.</p>
             )}
 
             {rows.map((row, idx) => (
-                <div key={(row.id_hasil ?? 0) + "-" + idx} className="rounded border p-4 space-y-3">
+                <div key={(row.id_bahan ?? 0) + "-" + idx} className="rounded border p-4 space-y-3">
                     <h3 className="font-medium text-lg">Item {idx + 1}</h3>
 
                     <DualList
-                        left={row.hasil_kerja ?? []}
-                        right={row.satuan_hasil ?? []}
-                        onChange={(L, R) => updateLocal(idx, { hasil_kerja: L, satuan_hasil: R })}
+                        left={row.bahan_kerja ?? []}
+                        right={row.penggunaan_dalam_tugas ?? []}
+                        onChange={(L, R) => updateLocal(idx, { bahan_kerja: L, penggunaan_dalam_tugas: R })}
                     />
 
                     <div className="flex gap-2 pt-2">
                         <button
                             type="button"
                             onClick={() => saveRow(idx)}
-                            disabled={saving === row.id_hasil || saving === "new"}
+                            disabled={saving === row.id_bahan || saving === "new"}
                             className="rounded px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
                         >
-                            {saving === row.id_hasil || saving === "new" ? "Menyimpan…" : "Simpan"}
+                            {saving === row.id_bahan || saving === "new" ? "Menyimpan…" : "Simpan"}
                         </button>
                         <button
                             type="button"

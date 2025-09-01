@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import WordAbk from "@/components/form/form-elements/WordAbk";
 
 const MySwal = withReactContent(Swal);
 
@@ -26,6 +27,8 @@ export default function EditJabatanSection({
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [data, setData] = useState<Jabatan | null>(null);
+    const [abkNeeded, setAbkNeeded] = useState(false);
+    const [abkExamples, setAbkExamples] = useState<Array<{ id_tugas: number; nomor_tugas: number | null }>>([]);
     const namaRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -34,10 +37,13 @@ export default function EditJabatanSection({
             return;
         }
         let alive = true;
+
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/jabatan`, { cache: "no-store" });
+
+                // Ambil data jabatan
+                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) {
                     await MySwal.fire({ icon: "error", title: "Gagal memuat", text: `Status: ${res.status}` });
@@ -46,6 +52,18 @@ export default function EditJabatanSection({
                 const json = await res.json();
                 setData(json);
                 setTimeout(() => namaRef.current?.focus(), 0);
+
+                // Cek kebutuhan ABK
+                const abkRes = await fetch(`/api/anjab/${encodeURIComponent(id)}/abk`, { cache: "no-store" });
+                if (abkRes.ok) {
+                    const abk = await abkRes.json();
+                    setAbkNeeded(Boolean(abk?.needed));
+                    setAbkExamples(Array.isArray(abk?.examples) ? abk.examples : []);
+                } else {
+                    // abaikan error kecil di checker ini
+                    setAbkNeeded(false);
+                    setAbkExamples([]);
+                }
             } catch (e) {
                 console.error(e);
                 await MySwal.fire({ icon: "error", title: "Error", text: "Gagal memuat data." });
@@ -53,6 +71,7 @@ export default function EditJabatanSection({
                 if (alive) setLoading(false);
             }
         })();
+
         return () => { alive = false; };
     }, [id]);
 
@@ -95,6 +114,31 @@ export default function EditJabatanSection({
         }
     }
 
+    async function onDelete() {
+        const ok = await MySwal.fire({
+            icon: "warning",
+            title: "Hapus Anjab?",
+            html: `<div class="text-left">Menghapus akan <b>menghapus semua data turunan</b> (unit kerja, kualifikasi, tugas pokok, dst) untuk ID <code>${id}</code>. Lanjutkan?</div>`,
+            showCancelButton: true,
+            confirmButtonText: "Hapus",
+            cancelButtonText: "Batal",
+            confirmButtonColor: "#EF4444",
+        });
+        if (!ok.isConfirmed) return;
+
+        try {
+            const res = await fetch(`/api/anjab/${encodeURIComponent(id)}`, { method: "DELETE" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
+            await MySwal.fire({ icon: "success", title: "Terhapus", text: `Anjab ${id} telah dihapus.` });
+            // Arahkan kembali ke viewer root / daftar
+            window.location.href = `/Anjab`;
+        } catch (e) {
+            console.error(e);
+            await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
+        }
+    }
+
     if (!id) {
         return (
             <div className="p-6 text-center">
@@ -108,9 +152,22 @@ export default function EditJabatanSection({
     if (!data) return <div className="p-6 text-red-600">Data tidak ditemukan.</div>;
 
     return (
-        <div className="max-w-3xl mx-auto">
-            {/* Tidak ada header di sini lagi — header & tombol Viewer ditangani oleh page/layout */}
+        <div className="">
+            {/* Header tombol aksi */}
+            <div className="flex items-center justify-end mb-4">
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="rounded px-3 py-1.5 bg-red-600 text-white hover:bg-red-700"
+                        title="Hapus anjab ini"
+                    >
+                        Hapus Anjab
+                    </button>
+                </div>
+            </div>
 
+            {/* Form edit jabatan */}
             <form onSubmit={onSubmit} className="space-y-5">
                 <div>
                     <label className="block text-sm font-medium mb-1">ID Jabatan</label>
@@ -152,6 +209,30 @@ export default function EditJabatanSection({
                     </Link>
                 </div>
             </form>
+
+            {/* Section Upload ABK (kondisional) */}
+            {abkNeeded && (
+                <div className="mt-8 rounded-lg border p-4 bg-yellow-50">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="font-semibold text-yellow-800">Sebagian kolom ABK pada Tugas Pokok belum terisi</h3>
+                            {abkExamples.length > 0 && (
+                                <p className="text-sm text-yellow-700">
+                                    Contoh item belum lengkap:{" "}
+                                    {abkExamples.map((x, i) => `#${x.nomor_tugas ?? x.id_tugas}`).join(", ")}
+                                </p>
+                            )}
+                            <p className="text-sm text-yellow-700 mt-1">
+                                Kamu bisa unggah file ABK (Word) untuk melengkapi otomatis.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mt-4">
+                        <WordAbk id={id} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

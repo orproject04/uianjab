@@ -150,9 +150,6 @@ export default function InformasiJabatanPage() {
                     <p style={{ padding: 20 }}>Menyiapkan dokumen…</p>
                 )}
             </div>
-
-            {/* Komponen uploader ABK tetap tampil panjang di bawah (tidak berada dalam flex container) */}
-            <WordAbk id={id} />
         </>
     );
 }

@@ -97,7 +97,7 @@ export default function UnitKerjaForm({
     if (!data) return <div className="p-6 text-red-600">Data tidak ditemukan.</div>;
 
     return (
-        <form onSubmit={onSubmit} className="space-y-4 max-w-3xl mx-auto">
+        <form onSubmit={onSubmit} className="space-y-6">
             <div>
                 <label className="block text-sm font-medium mb-1">JPT Utama</label>
                 <input type="text" ref={firstRef} name="jpt_utama" defaultValue={data.jpt_utama ?? ""} rows={2}

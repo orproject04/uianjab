@@ -221,7 +221,7 @@ export default function KualifikasiForm({
     if (!data) return <div className="p-6 text-red-600">Data tidak ditemukan.</div>;
 
     return (
-        <form onSubmit={onSubmit} className="space-y-6 max-w-3xl mx-auto">
+        <form onSubmit={onSubmit} className="space-y-6">
             <div ref={firstFocus}>
                 <ArrayInput
                     label="Pendidikan Formal"

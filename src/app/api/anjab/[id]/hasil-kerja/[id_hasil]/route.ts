@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { z } from "zod";
 
-const strArr = z
-    .array(z.union([z.string(), z.number()]).transform((v) => String(v)))
-    .transform((arr) => arr.map((s) => s.trim()));
+// Array cleaner: coerce -> trim -> filter empty
+const cleanStrArr = z
+    .array(z.union([z.string(), z.number()]))
+    .transform(arr =>
+        arr
+            .map(v => String(v).trim())
+            .filter(s => s.length > 0)
+    );
 
 const PatchSchema = z.object({
-    hasil_kerja: strArr.optional(),
-    satuan_hasil: strArr.optional(),
+    hasil_kerja: cleanStrArr.optional(),
+    satuan_hasil: cleanStrArr.optional(),
 });
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; id_hasil: string }> }) {
@@ -26,17 +31,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         if (p.data.hasil_kerja !== undefined) { fields.push(`hasil_kerja=$${fields.length + 1}`); values.push(p.data.hasil_kerja); }
         if (p.data.satuan_hasil !== undefined) { fields.push(`satuan_hasil=$${fields.length + 1}`); values.push(p.data.satuan_hasil); }
 
-        if (!fields.length) return NextResponse.json({ ok: true }); // nothing to update
+        if (!fields.length) return NextResponse.json({ ok: true });
 
         values.push(id, hid);
         const q = `UPDATE hasil_kerja SET ${fields.join(", ")}, updated_at=NOW()
-               WHERE id_jabatan=$${fields.length + 1} AND id_hasil=$${fields.length + 2}`;
+                   WHERE id_jabatan=$${fields.length + 1} AND id_hasil=$${fields.length + 2}`;
         const up = await pool.query(q, values);
         if (!up.rowCount) return NextResponse.json({ error: "Not Found" }, { status: 404 });
 
         const { rows } = await pool.query(
             `SELECT id_hasil, id_jabatan, hasil_kerja, satuan_hasil, created_at, updated_at
-       FROM hasil_kerja WHERE id_jabatan=$1 AND id_hasil=$2`,
+             FROM hasil_kerja WHERE id_jabatan=$1 AND id_hasil=$2`,
             [id, hid]
         );
         return NextResponse.json({ ok: true, data: rows[0] });
