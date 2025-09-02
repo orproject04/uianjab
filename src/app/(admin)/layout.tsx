@@ -1,5 +1,6 @@
 "use client";
 
+import SessionRefreshOnNav from "@/components/auth/SessionRefreshOnNav";
 import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
@@ -31,6 +32,7 @@ export default function AdminLayout({
       >
         {/* Header */}
         <AppHeader />
+        <SessionRefreshOnNav />
         {/* Page Content */}
         <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
       </div>

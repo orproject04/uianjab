@@ -123,7 +123,7 @@ const navItems: NavItem[] = [
                     ]
                   },
                   {
-                    name: "Bagian Pengembangan Kapasitas Sumber Daya Manusia",
+                    name: "Bagian Pengembangan Sumber Daya Manusia",
                     path: "Anjab/Setjen/Depmin/OKK/PSDM",
                     subItems: [
                       {
@@ -163,12 +163,12 @@ const navItems: NavItem[] = [
       },
     ],
   },
-  {
-    name: "Document",
-    icon: <PageIcon />,
-    path: "/Document",
-    subItems: [],
-  },
+  // {
+  //   name: "Document",
+  //   icon: <PageIcon />,
+  //   path: "/Document",
+  //   subItems: [],
+  // },
 ];
 
 const othersItems: NavItem[] = [];

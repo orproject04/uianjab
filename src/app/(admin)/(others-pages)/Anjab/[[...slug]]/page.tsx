@@ -5,13 +5,32 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
-// Jika ingin juga tampilkan ABK di sini, tinggal import & letakkan komponennya
-// import WordAbk from "@/components/form/form-elements/WordAbk";
 
 type Status = "loading" | "ok" | "notfound" | "error";
 
 export default function InformasiJabatanPage() {
     const params = useParams();
+
+    // ---- ambil role user (untuk hide tombol non-admin)
+    const [isAdmin, setIsAdmin] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const r = await fetch("/api/auth/me", { method: "GET", cache: "no-store" });
+                if (!alive) return;
+                if (r.ok) {
+                    const j = await r.json();
+                    setIsAdmin(j?.data?.role === "admin");
+                } else {
+                    setIsAdmin(false);
+                }
+            } catch {
+                if (alive) setIsAdmin(false);
+            }
+        })();
+        return () => { alive = false; };
+    }, []);
 
     // Ambil slug (bisa undefined saat /Anjab)
     const rawSlug = useMemo<string[]>(() => {
@@ -44,7 +63,6 @@ export default function InformasiJabatanPage() {
     // Cek ketersediaan PDF dengan HEAD (ringan & cepat).
     useEffect(() => {
         let alive = true;
-
         async function check() {
             if (!id) {
                 if (alive) setStatus("notfound");
@@ -64,11 +82,8 @@ export default function InformasiJabatanPage() {
                 if (alive) setStatus("error");
             }
         }
-
         check();
-        return () => {
-            alive = false;
-        };
+        return () => { alive = false; };
     }, [id, encodedId]);
 
     // === Tanpa slug/id ===
@@ -84,21 +99,47 @@ export default function InformasiJabatanPage() {
         return <p style={{ padding: 20 }}>Loading...</p>;
     }
 
-    // === NOT FOUND / ERROR → tampilkan pilihan Upload .doc atau Buat manual ===
+    // === NOT FOUND / ERROR
     if (status === "notfound" || status === "error") {
         const isNotFound = status === "notfound";
+
+        // ---- Jika BUKAN admin: ganti pesan & sembunyikan semua aksi
+// ---- Jika BUKAN admin: ganti pesan & center vertikal-horisontal
+        if (!isAdmin) {
+            return (
+                <div className="w-full min-h-[calc(100dvh-200px)] flex items-center justify-center px-6">
+                    <div className="max-w-3xl text-center space-y-3">
+                        <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
+                            {isNotFound ? (
+                                <>
+                                    Data tidak ditemukan untuk <b>{id}</b>.
+                                </>
+                            ) : (
+                                <>
+                                    Terjadi kesalahan saat memuat data <b>{id}</b>. Coba lagi nanti.
+                                </>
+                            )}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                            <b>
+                                Silakan Hubungi Subbagian Organisasi Bagian Organisasi dan Ketatalaksanaan
+                                untuk melihat Dokumen Analisis Jabatan.
+                            </b>
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // ---- Admin: tampilan lama (upload .doc & buat manual)
         return (
             <div className="p-8 max-w-5xl mx-auto space-y-6">
                 <div className="text-center space-y-2">
                     <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
                         {isNotFound ? (
-                            <>
-                                Data tidak ditemukan untuk <b>{id}</b>.
-                            </>
+                            <>Data tidak ditemukan untuk <b>{id}</b>.</>
                         ) : (
-                            <>
-                                Terjadi kesalahan saat memuat data <b>{id}</b>. Coba lagi nanti.
-                            </>
+                            <>Terjadi kesalahan saat memuat data <b>{id}</b>. Coba lagi nanti.</>
                         )}
                     </p>
                     <p className="text-sm text-gray-600">
@@ -114,11 +155,10 @@ export default function InformasiJabatanPage() {
                         <p className="text-sm text-gray-600 mb-3">
                             Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk ID: <b>{id}</b>. <i>.docx tidak didukung.</i>
                         </p>
-                        {/* Terima hanya .doc */}
                         <WordAnjab id={id} acceptExt=".doc" />
                     </div>
 
-                    {/* Buat Manual (center tombolnya) */}
+                    {/* Buat Manual */}
                     <div className="border rounded-lg p-4 flex">
                         <div className="m-auto text-center space-y-3">
                             <h3 className="font-medium">Buat Anjab Manual</h3>
@@ -138,7 +178,7 @@ export default function InformasiJabatanPage() {
         );
     }
 
-    // === OK → tampilkan PDF (iframe) + tombol "Buka di tab baru" & "Edit Anjab" ===
+    // === OK → tampilkan PDF; non-admin tidak melihat tombol Edit
     return (
         <>
             {/* Bar atas tipis */}
@@ -152,7 +192,6 @@ export default function InformasiJabatanPage() {
                     alignItems: "center",
                 }}
             >
-                {/* Fallback tombol untuk device dengan PDF viewer lemah */}
                 <a
                     href={pdfUrl}
                     target="_blank"
@@ -162,15 +201,17 @@ export default function InformasiJabatanPage() {
                     Buka di halaman baru
                 </a>
 
-                <Link
-                    href={editHref}
-                    className="rounded bg-blue-600 text-white px-3 py-1.5 hover:bg-blue-700"
-                >
-                    Edit Anjab
-                </Link>
+                {isAdmin && (
+                    <Link
+                        href={editHref}
+                        className="rounded bg-blue-600 text-white px-3 py-1.5 hover:bg-blue-700"
+                    >
+                        Edit Anjab
+                    </Link>
+                )}
             </div>
 
-            {/* iframe full viewport height (pakai 100dvh agar lebih akurat di iOS) */}
+            {/* iframe full viewport height */}
             <div style={{ width: "100%", height: "100dvh" }}>
                 <iframe
                     src={pdfUrl}
@@ -178,7 +219,6 @@ export default function InformasiJabatanPage() {
                         width: "100%",
                         height: "100%",
                         border: "none",
-                        // Kadang membantu scroll di iOS
                         WebkitOverflowScrolling: "touch",
                     } as React.CSSProperties}
                     title={`Preview PDF - ${id}`}

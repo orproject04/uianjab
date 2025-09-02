@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getAnjabById } from "@/lib/anjab-queries";
+import { getAuthUser, requireRole } from "@/lib/auth-guard";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
@@ -32,18 +33,27 @@ export async function HEAD(_req: NextRequest, ctx: { params: Promise<{ id: strin
     }
 }
 
-export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-    try {
-        const { id } = await ctx.params;
+// export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+//     try {
+//         const { id } = await ctx.params;
+//
+//         // Hapus baris utama; relasi lain akan ikut terhapus karena FOREIGN KEY ON DELETE CASCADE
+//         const del = await pool.query(`DELETE FROM jabatan WHERE id_jabatan = $1`, [id]);
+//         if (!del.rowCount) {
+//             return NextResponse.json({ error: "Not Found" }, { status: 404 });
+//         }
+//         return NextResponse.json({ ok: true });
+//     } catch (e) {
+//         console.error("[anjab][DELETE]", e);
+//         return NextResponse.json({ error: "General Error" }, { status: 500 });
+//     }
+// }
 
-        // Hapus baris utama; relasi lain akan ikut terhapus karena FOREIGN KEY ON DELETE CASCADE
-        const del = await pool.query(`DELETE FROM jabatan WHERE id_jabatan = $1`, [id]);
-        if (!del.rowCount) {
-            return NextResponse.json({ error: "Not Found" }, { status: 404 });
-        }
-        return NextResponse.json({ ok: true });
-    } catch (e) {
-        console.error("[anjab][DELETE]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
-    }
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+    const user = getAuthUser();
+    if (!requireRole(user, ["admin"])) return Response.json({ error: "Forbidden" }, { status: 403 });
+
+    const { id } = await ctx.params;
+    await pool.query(`DELETE FROM jabatan WHERE id_jabatan=$1`, [id]);
+    return Response.json({ ok: true });
 }
