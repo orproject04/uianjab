@@ -73,10 +73,34 @@ const navItems: NavItem[] = [
                       {
                         name: "Subbagian Ketatalaksanaan",
                         path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana",
+                        subItems: [
+                          {
+                            name: "Penelaah Teknis Kebijakan",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana/PTK",
+                          },
+                          {
+                            name: "Pengolah Data dan Informasi",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana/PDI",
+                          },
+                        ]
                       },
                       {
                         name: "Subbagian Fasilitasi Reformasi Birokrasi",
                         path: "Anjab/Setjen/Depmin/OKK/Ortala/RB",
+                        subItems: [
+                          {
+                            name: "Penelaah Teknis Kebijakan",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/RB/PTK",
+                          },
+                          {
+                            name: "Pengolah Data dan Informasi",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/RB/PDI",
+                          },
+                          {
+                            name: "Pengadministrasi Perkantoran",
+                            path: "Anjab/Setjen/Depmin/OKK/Ortala/RB/ADMK",
+                          },
+                        ]
                       }
                     ]
                   },
@@ -396,9 +420,9 @@ const AppSidebar: React.FC = () => {
       <aside
           className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
               isExpanded || isMobileOpen
-                  ? "w-[290px]"
+                  ? "w-[350px]"
                   : isHovered
-                      ? "w-[290px]"
+                      ? "w-[350px]"
                       : "w-[90px]"
           } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
           onMouseEnter={() => !isExpanded && setIsHovered(true)}

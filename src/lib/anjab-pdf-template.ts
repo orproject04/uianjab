@@ -342,11 +342,32 @@ export function buildAnjabHtml(data: any): string {
       </tbody>
     </table>
   </div>
-
-  <!-- 9. PERANGKAT KERJA -->
+  
+   <!-- 9. PERANGKAT KERJA -->
   <div class="section portrait table-section">
     <p>9. PERANGKAT KERJA :</p>
-    ${renderPerangkatTable(data.perangkat_kerja || [], 1000)}
+    <table style="margin-left: 0; width: 99%" class="word-table">
+      <thead>
+        <tr>
+          <th style="width:5%;">NO</th>
+          <th>PERANGKAT KERJA</th>
+          <th>PENGGUNAAN UNTUK TUGAS</th>
+        </tr>
+      </thead>
+      <tbody>
+          ${data.perangkat_kerja
+    .map(
+        (item, index) => `
+                <tr>
+                  <td style="text-align: center">${index + 1}.</td>
+                  <td>${renderTableList(item.perangkat_kerja)}</td>
+                  <td>${renderTableList(item.penggunaan_untuk_tugas)}</td>
+                </tr>
+              `
+    )
+    .join("")}
+      </tbody>
+    </table>
   </div>
 
   <!-- 10. TANGGUNG JAWAB -->
