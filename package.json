@@ -33,6 +33,7 @@
     "bcryptjs": "^3.0.2",
     "docxtemplater": "^3.65.2",
     "flatpickr": "^4.6.13",
+    "gojs": "^3.0.26",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "libreoffice-convert": "^1.6.1",

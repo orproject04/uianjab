@@ -4,20 +4,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
-import {
-  GridIcon,
-  ListIcon,
-  PageIcon,
-  ChevronDownIcon,
-  HorizontaLDots,
-} from "../icons/index";
+import { GridIcon, ListIcon, PageIcon, ChevronDownIcon, HorizontaLDots } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
+
+type APINode = {
+  name: string;
+  path: string;        // contoh: "Anjab/setjen/depmin"
+  subItems?: APINode[];
+};
 
 type SubNavItem = {
   name: string;
   path: string;
-  pro?: boolean;
-  new?: boolean;
   subItems?: SubNavItem[];
 };
 
@@ -28,155 +26,79 @@ type NavItem = {
   subItems?: SubNavItem[];
 };
 
-const navItems: NavItem[] = [
-  {
-    icon: <GridIcon />,
-    name: "Homepage",
-    path: "/",
-    subItems: [],
-  },
-  {
-    name: "Anjab",
-    icon: <ListIcon />,
-    subItems: [
-      {
-        name: "Sekretariat Jenderal DPD RI",
-        path: "Anjab/Setjen",
-        subItems: [
-          { name: "Inspektorat", path: "Anjab/Setjen/Inspektorat" },
-          {
-            name: "Deputi Bidang Administrasi",
-            path: "Anjab/Setjen/Depmin",
-            subItems: [
-              {
-                name: "Biro Organisasi, Keanggotaan, dan Kepegawaian",
-                path: "Anjab/Setjen/Depmin/OKK",
-                subItems: [
-                  {
-                    name: "Bagian Organisasi dan Ketatalaksanaan",
-                    path: "Anjab/Setjen/Depmin/OKK/Ortala",
-                    subItems: [
-                      {
-                        name: "Subbagian Organisasi",
-                        path: "Anjab/Setjen/Depmin/OKK/Ortala/Organisasi",
-                        subItems: [
-                          {
-                            name: "Penelaah Teknis Kebijakan",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Organisasi/PTK",
-                          },
-                          {
-                            name: "Penata Kelola Sistem dan Teknologi Informasi",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Organisasi/PKSTI",
-                          },
-                        ]
-                      },
-                      {
-                        name: "Subbagian Ketatalaksanaan",
-                        path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana",
-                        subItems: [
-                          {
-                            name: "Penelaah Teknis Kebijakan",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana/PTK",
-                          },
-                          {
-                            name: "Pengolah Data dan Informasi",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/Tatalaksana/PDI",
-                          },
-                        ]
-                      },
-                      {
-                        name: "Subbagian Fasilitasi Reformasi Birokrasi",
-                        path: "Anjab/Setjen/Depmin/OKK/Ortala/RB",
-                        subItems: [
-                          {
-                            name: "Penelaah Teknis Kebijakan",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/RB/PTK",
-                          },
-                          {
-                            name: "Pengolah Data dan Informasi",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/RB/PDI",
-                          },
-                          {
-                            name: "Pengadministrasi Perkantoran",
-                            path: "Anjab/Setjen/Depmin/OKK/Ortala/RB/ADMK",
-                          },
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    name: "Bagian Administrasi Keanggotaan dan Kepegawaian",
-                    path: "Anjab/Setjen/Depmin/OKK/AKK",
-                    subItems: [
-                      {
-                        name: "Subbagian Administrasi Keanggotaan",
-                        path: "Anjab/Setjen/Depmin/OKK/AKK/Keanggotaan",
-                      },
-                      {
-                        name: "Subbagian Administrasi Kepegawaian",
-                        path: "Anjab/Setjen/Depmin/OKK/AKK/Kepegawaian",
-                      },
-                      {
-                        name: "Subbagian Kesejahteraan",
-                        path: "Anjab/Setjen/Depmin/OKK/AKK/Kesejahteraan",
-                      }
-                    ]
-                  },
-                  {
-                    name: "Bagian Pengembangan Sumber Daya Manusia",
-                    path: "Anjab/Setjen/Depmin/OKK/PSDM",
-                    subItems: [
-                      {
-                        name: "Subbagian Pengembangan Kapasitas Sumber Daya Manusia",
-                        path: "Anjab/Setjen/Depmin/OKK/PSDM/PKSDM",
-                      },
-                      {
-                        name: "Subbagian Kerjasama",
-                        path: "Anjab/Setjen/Depmin/OKK/PSDM/Kerjasama",
-                      },
-                      {
-                        name: "Subbagian Fasilitasi Jabatan Fungsional",
-                        path: "Anjab/Setjen/Depmin/OKK/PSDM/Jabfung",
-                      }
-                    ]
-                  },
-                  {
-                    name: "Bagian Hukum",
-                    path: "Anjab/Setjen/Depmin/OKK/Hukum",
-                    subItems: [
-                      {
-                        name: "Subbagian Produk Hukum",
-                        path: "Anjab/Setjen/Depmin/OKK/Hukum/Produk",
-                      },
-                      {
-                        name: "Subbagian Penelaahan dan Bantuan Hukum",
-                        path: "Anjab/Setjen/Depmin/OKK/PSDM/Telaahan",
-                      }
-                    ]
-                  },
-                ],
-              },
-            ],
-          },
-          { name: "Deputi Bidang Persidangan", path: "Anjab/Setjen/Depsid" },
-        ]
-      },
-    ],
-  },
-  // {
-  //   name: "Document",
-  //   icon: <PageIcon />,
-  //   path: "/Document",
-  //   subItems: [],
-  // },
-];
-
-const othersItems: NavItem[] = [];
-
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
 
+  // ====== AUTH via /api/me ======
+  const [userRole, setUserRole] = useState<string>("user");
+  const [meLoaded, setMeLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!res.ok) throw new Error("unauthorized");
+        const json = await res.json();
+        if (!cancelled && json?.ok && json?.data) {
+          setUserRole(json.data.role ?? "user");
+        }
+      } catch {
+        // non-admin / belum login dianggap user (menu admin tersembunyi)
+      } finally {
+        if (!cancelled) setMeLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const isAdmin = userRole === "admin";
+
+  // ====== STATE: menu Anjab dari API ======
+  const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
+  const [loadingAnjab, setLoadingAnjab] = useState<boolean>(false);
+  const [anjabError, setAnjabError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingAnjab(true);
+        setAnjabError(null);
+        const res = await fetch("/api/struktur-organisasi?base=Anjab", { cache: "no-store" });
+        if (!res.ok) throw new Error(`Gagal memuat Anjab (${res.status})`);
+        const data: APINode[] | APINode = await res.json();
+        const arr = Array.isArray(data) ? data : [data];
+
+        const mapNode = (n: APINode): SubNavItem => ({
+          name: n.name,
+          path: n.path,
+          subItems: n.subItems?.map(mapNode),
+        });
+
+        const mapped = arr.map(mapNode);
+        if (!cancelled) setAnjabSubs(mapped);
+      } catch (e: any) {
+        if (!cancelled) setAnjabError(e?.message || "Gagal memuat Anjab");
+      } finally {
+        if (!cancelled) setLoadingAnjab(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ====== NAV ITEMS (Struktur Organisasi → hanya admin) ======
+  const baseNav: NavItem[] = [
+    { icon: <GridIcon />, name: "Homepage", path: "/", subItems: [] },
+    { name: "Anjab", icon: <ListIcon />, subItems: anjabSubs },
+  ];
+  const adminOnlyNav: NavItem[] = isAdmin
+      ? [{ name: "Struktur Organisasi", icon: <PageIcon />, path: "/StrukturOrganisasi", subItems: [] }]
+      : [];
+  const navItems: NavItem[] = [...baseNav, ...adminOnlyNav];
+  const othersItems: NavItem[] = [];
+
+  // ====== UI STATE ======
   const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
   const [openNestedSubmenus, setOpenNestedSubmenus] = useState<Record<string, boolean>>({});
 
@@ -185,10 +107,25 @@ const AppSidebar: React.FC = () => {
     setOpenNestedSubmenus({});
   };
 
-  const isActive = useCallback(
-      (path: string) => pathname === path || pathname === `/${path.replace(/^\/+/, "")}`,
+  // ====== ACTIVE HELPERS ======
+  const isExactActive = useCallback(
+      (path?: string) => {
+        if (!path) return false;
+        const norm = `/${String(path).replace(/^\/+/, "")}`;
+        return pathname === norm;
+      },
       [pathname]
   );
+
+  const isDescendantActive = useCallback(
+      (path?: string) => {
+        if (!path) return false;
+        const norm = `/${String(path).replace(/^\/+/, "")}`;
+        return pathname === norm || pathname.startsWith(norm + "/");
+      },
+      [pathname]
+  );
+
   const findItemByPath = (path: string, items: SubNavItem[]): SubNavItem | null => {
     for (const item of items) {
       if (item.path === path) return item;
@@ -200,37 +137,31 @@ const AppSidebar: React.FC = () => {
     return null;
   };
 
-  const collapseNestedChildren = (path: string, items: SubNavItem[]) => {
+  const collapseNestedChildren = (path: string, items: NavItem[]) => {
     const closed: Record<string, boolean> = {};
-
-    const walk = (subItems: SubNavItem[]) => {
-      for (const item of subItems) {
-        closed[item.path] = false;
-        if (item.subItems) {
-          walk(item.subItems);
-        }
+    const walk = (subs: SubNavItem[]) => {
+      for (const it of subs) {
+        closed[it.path] = false;
+        if (it.subItems) walk(it.subItems);
       }
     };
-
-    const parent = findItemByPath(path, items);
-    if (parent?.subItems) {
-      walk(parent.subItems);
+    for (const nav of items) {
+      if (!nav.subItems) continue;
+      const parent = findItemByPath(path, nav.subItems);
+      if (parent?.subItems) walk(parent.subItems);
     }
-
     setOpenNestedSubmenus((prev) => {
       const next = { ...prev };
-      for (const key in closed) {
-        delete next[key];
-      }
+      for (const key in closed) delete next[key];
       return next;
     });
   };
 
   const toggleNestedSubmenu = (path: string) => {
+    if (!path) return;
     setOpenNestedSubmenus((prev) => {
       const next = { ...prev };
-      const isOpen = !!next[path];
-      if (isOpen) {
+      if (next[path]) {
         delete next[path];
         collapseNestedChildren(path, navItems);
       } else {
@@ -240,13 +171,11 @@ const AppSidebar: React.FC = () => {
     });
   };
 
-  const hasActiveSubItem = useCallback((items: SubNavItem[]): boolean => {
-    return items.some((item) => {
-      if (isActive(item.path)) return true;
-      if (item.subItems) return hasActiveSubItem(item.subItems);
-      return false;
-    });
-  }, [pathname]);
+  const hasActiveSubItem = useCallback(
+      (items: SubNavItem[]): boolean =>
+          items.some((item) => isDescendantActive(item.path) || (item.subItems ? hasActiveSubItem(item.subItems) : false)),
+      [pathname]
+  );
 
   const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
     setOpenSubmenu((prevOpen) => {
@@ -260,21 +189,23 @@ const AppSidebar: React.FC = () => {
     });
   };
 
+  // ====== RENDERERS ======
   const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
       <ul className={`mt-2 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
         {subItems.map((subItem) => {
-          const hasSubItems = subItem.subItems?.length;
+          const hasSubItems = !!subItem.subItems?.length;
           const isNestedOpen = openNestedSubmenus[subItem.path];
+          const href = `/${(subItem.path || "").replace(/^\/+/, "")}`;
 
           return (
-              <li key={subItem.name}>
+              <li key={`${subItem.path}-${subItem.name}`}>
                 {hasSubItems ? (
                     <div>
                       <div className="flex items-center">
                         <Link
-                            href={`/${subItem.path}`}
+                            href={href}
                             className={`flex-1 menu-dropdown-item ${
-                                isActive(subItem.path)
+                                isExactActive(subItem.path)
                                     ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
                                     : "menu-dropdown-item-inactive"
                             }`}
@@ -284,19 +215,16 @@ const AppSidebar: React.FC = () => {
                         <button
                             onClick={() => toggleNestedSubmenu(subItem.path)}
                             className="ml-2 p-1 hover:bg-gray-100 rounded"
+                            aria-label="toggle"
                         >
                           <ChevronDownIcon
-                              className={`w-4 h-4 transition-transform duration-300 ${
-                                  isNestedOpen ? "rotate-180" : ""
-                              }`}
+                              className={`w-4 h-4 transition-transform duration-300 ${isNestedOpen ? "rotate-180" : ""}`}
                           />
                         </button>
                       </div>
                       <div
                           className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                              isNestedOpen
-                                  ? "max-h-[50000px] opacity-100 scale-y-100"
-                                  : "max-h-0 opacity-0 scale-y-95"
+                              isNestedOpen ? "max-h-[50000px] opacity-100 scale-y-100" : "max-h-0 opacity-0 scale-y-95"
                           }`}
                       >
                         {renderSubItems(subItem.subItems ?? [], level + 1)}
@@ -304,9 +232,9 @@ const AppSidebar: React.FC = () => {
                     </div>
                 ) : (
                     <Link
-                        href={`/${subItem.path}`}
+                        href={href}
                         className={`menu-dropdown-item ${
-                            isActive(subItem.path)
+                            isExactActive(subItem.path)
                                 ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
                                 : "menu-dropdown-item-inactive"
                         }`}
@@ -320,13 +248,12 @@ const AppSidebar: React.FC = () => {
       </ul>
   );
 
-  const renderMenuItems = (
-      items: NavItem[],
-      menuType: "main" | "others"
-  ) => (
+  const renderMenuItems = (items: NavItem[], menuType: "main" | "others") => (
       <ul className="flex flex-col gap-4">
         {items.map((nav, index) => {
-          const hasChildren = nav.subItems?.length;
+          const isAnjab = nav.name === "Anjab";
+          const hasChildren = isAnjab || !!nav.subItems?.length;
+
           return (
               <li key={nav.name}>
                 {hasChildren ? (
@@ -339,17 +266,17 @@ const AppSidebar: React.FC = () => {
                                   : "menu-item-inactive"
                           } ${!isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"}`}
                       >
-                  <span className="">
-                    {nav.icon}
-                  </span>
+                        <span>{nav.icon}</span>
                         {(isExpanded || isHovered || isMobileOpen) && (
                             <>
-                              <span className="menu-item-text">{nav.name}</span>
+                      <span className="menu-item-text">
+                        {nav.name}
+                        {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
+                        {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
+                      </span>
                               <ChevronDownIcon
                                   className={`ml-auto w-5 h-5 transition-transform duration-300 ${
-                                      openSubmenu?.type === menuType && openSubmenu.index === index
-                                          ? "rotate-180 text-brand-500"
-                                          : ""
+                                      openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-500" : ""
                                   }`}
                               />
                             </>
@@ -362,28 +289,27 @@ const AppSidebar: React.FC = () => {
                                   : "max-h-0 opacity-0 scale-y-95"
                           }`}
                       >
-                        {renderSubItems(nav.subItems!)}
+                        {isAnjab && loadingAnjab && (!nav.subItems || nav.subItems.length === 0) ? (
+                            <div className="ml-9 mt-2 text-xs text-gray-400">Memuat…</div>
+                        ) : (
+                            nav.subItems && renderSubItems(nav.subItems)
+                        )}
                       </div>
                     </>
                 ) : (
                     <Link
-                        href={nav.path!}
+                        href={nav.path || "/"}
                         onClick={() => {
-                          if (nav.name !== "Anjab") {
-                            resetAllSubmenus();
-                            console.log(nav.path);
-                          }
+                          if (nav.name !== "Anjab") resetAllSubmenus();
                         }}
                         className={`menu-item group ${
-                            isActive(nav.path!)
+                            isExactActive(nav.path)
                                 ? "menu-item-active bg-purple-100 text-purple-700 font-semibold"
                                 : "menu-item-inactive"
                         }`}
                     >
                       <span>{nav.icon}</span>
-                      {(isExpanded || isHovered || isMobileOpen) && (
-                          <span className="menu-item-text">{nav.name}</span>
-                      )}
+                      {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
                     </Link>
                 )}
               </li>
@@ -392,10 +318,12 @@ const AppSidebar: React.FC = () => {
       </ul>
   );
 
+  // ====== AUTO-EXPAND sesuai URL aktif ======
   useEffect(() => {
     const expandNested = (items: SubNavItem[]) => {
       items.forEach((item) => {
-        if (pathname.startsWith(`/${item.path}`)) {
+        const href = `/${(item.path || "").replace(/^\/+/, "")}`;
+        if (pathname.startsWith(href)) {
           setOpenNestedSubmenus((prev) => ({ ...prev, [item.path]: true }));
         }
         if (item.subItems) expandNested(item.subItems);
@@ -406,58 +334,43 @@ const AppSidebar: React.FC = () => {
       const items = menuType === "main" ? navItems : othersItems;
       items.forEach((nav, index) => {
         if (nav.subItems?.length) {
-          const hasActive = hasActiveSubItem(nav.subItems);
-          if (hasActive) {
+          const active = (arr: SubNavItem[]): boolean =>
+              arr.some((i) => {
+                const href = `/${(i.path || "").replace(/^\/+/, "")}`;
+                return pathname.startsWith(href) || (i.subItems ? active(i.subItems) : false);
+              });
+
+          if (active(nav.subItems)) {
             setOpenSubmenu({ type: menuType as "main" | "others", index });
             expandNested(nav.subItems);
           }
         }
       });
     });
-  }, [pathname, hasActiveSubItem]);
+  }, [pathname, anjabSubs]);
+
+  // Opsional: sembunyikan sementara sampai /api/me selesai (biar tidak flicker)
+  if (!meLoaded) {
+    return null; // atau skeleton sidebar
+  }
 
   return (
       <aside
           className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
-              isExpanded || isMobileOpen
-                  ? "w-[350px]"
-                  : isHovered
-                      ? "w-[350px]"
-                      : "w-[90px]"
+              isExpanded || isMobileOpen ? "w-[350px]" : isHovered ? "w-[350px]" : "w-[90px]"
           } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
           onMouseEnter={() => !isExpanded && setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
       >
-        <div
-            className={`py-8 flex ${
-                !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-            }`}
-        >
+        <div className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
           <Link href="/">
             {isExpanded || isHovered || isMobileOpen ? (
                 <>
-                  <Image
-                      className="dark:hidden"
-                      src="/images/logo/full-logo.svg"
-                      alt="Logo"
-                      width={150}
-                      height={40}
-                  />
-                  <Image
-                      className="hidden dark:block"
-                      src="/images/logo/full-logo-white.svg"
-                      alt="Logo"
-                      width={150}
-                      height={40}
-                  />
+                  <Image className="dark:hidden" src="/images/logo/full-logo.svg" alt="Logo" width={150} height={40} />
+                  <Image className="hidden dark:block" src="/images/logo/full-logo-white.svg" alt="Logo" width={150} height={40} />
                 </>
             ) : (
-                <Image
-                    src="/images/logo/setjen.svg"
-                    alt="Logo"
-                    width={32}
-                    height={32}
-                />
+                <Image src="/images/logo/setjen.svg" alt="Logo" width={32} height={32} />
             )}
           </Link>
         </div>
@@ -466,19 +379,15 @@ const AppSidebar: React.FC = () => {
           <nav className="mb-6">
             <div className="flex flex-col gap-4">
               <div>
-                <h2 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                    !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-                }`}>
+                <h2
+                    className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
+                        !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+                    }`}
+                >
                   {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(navItems, "main")}
               </div>
-              {othersItems.length > 0 && (
-                  <div>
-                    <h2 className="mb-4 text-xs uppercase text-gray-400">Others</h2>
-                    {renderMenuItems(othersItems, "others")}
-                  </div>
-              )}
             </div>
           </nav>
           {(isExpanded || isHovered || isMobileOpen) && <SidebarWidget />}
