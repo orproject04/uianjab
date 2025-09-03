@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
-import { GridIcon, ListIcon, PageIcon, ChevronDownIcon, HorizontaLDots } from "../icons/index";
+import { GridIcon, ListIcon, PageIcon, ChevronDownIcon, HorizontaLDots, GroupIcon } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
 
 type APINode = {
@@ -93,7 +93,7 @@ const AppSidebar: React.FC = () => {
     { name: "Anjab", icon: <ListIcon />, subItems: anjabSubs },
   ];
   const adminOnlyNav: NavItem[] = isAdmin
-      ? [{ name: "Struktur Organisasi", icon: <PageIcon />, path: "/StrukturOrganisasi", subItems: [] }]
+      ? [{ name: "Struktur Organisasi", icon: <GroupIcon />, path: "/StrukturOrganisasi", subItems: [] }]
       : [];
   const navItems: NavItem[] = [...baseNav, ...adminOnlyNav];
   const othersItems: NavItem[] = [];

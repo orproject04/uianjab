@@ -10,27 +10,29 @@ type Row = {
 };
 
 export default function StrukturOrganisasi() {
-    const diagramRef = React.useRef<HTMLDivElement | null>(null);
+    const containerRef = React.useRef<HTMLDivElement | null>(null);  // wrapper untuk fullscreen
+    const diagramDivRef = React.useRef<HTMLDivElement | null>(null); // div diagram
     const diagram = React.useRef<go.Diagram | null>(null);
 
     const [info, setInfo] = React.useState('');
     const [error, setError] = React.useState<string | null>(null);
     const [isSaving, setIsSaving] = React.useState(false);
+    const [isFullscreen, setIsFullscreen] = React.useState(false);
 
-    // Modal states
+    // Modal
     const [showAdd, setShowAdd] = React.useState(false);
     const [showDelete, setShowDelete] = React.useState(false);
 
-    // Add form states
+    // Form Tambah
     const [addName, setAddName] = React.useState('Unit Baru');
     const [addSlug, setAddSlug] = React.useState('unit-baru');
     const [slugTouched, setSlugTouched] = React.useState(false);
 
-    // Selection states
+    // Selection
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [selectedName, setSelectedName] = React.useState<string>('');
 
-    // util slugify
+    // slugify
     const toSlug = (s: string) =>
         (s || 'unit')
             .toLowerCase()
@@ -41,10 +43,10 @@ export default function StrukturOrganisasi() {
 
     // ===== INIT DIAGRAM =====
     React.useEffect(() => {
-        if (!diagramRef.current || diagram.current) return;
+        if (!diagramDivRef.current || diagram.current) return;
         const $ = go.GraphObject.make;
 
-        const d = $(go.Diagram, diagramRef.current, {
+        const d = $(go.Diagram, diagramDivRef.current, {
             'undoManager.isEnabled': true,
             layout: $(go.TreeLayout, { angle: 90, layerSpacing: 35 }), // kebawah
             'draggingTool.dragsTree': true,
@@ -54,6 +56,10 @@ export default function StrukturOrganisasi() {
             allowDrop: true,
         });
 
+        // Pastikan fullscreen tidak gelap
+        d.background = 'white';
+        if (d.div) d.div.style.background = 'white';
+
         // UX pan/drag/zoom
         d.toolManager.dragSelectingTool.isEnabled = false;
         d.toolManager.draggingTool.isEnabled = true;
@@ -61,7 +67,7 @@ export default function StrukturOrganisasi() {
         d.toolManager.mouseWheelBehavior = go.ToolManager.WheelZoom;
         d.animationManager.isEnabled = false;
 
-        // Pan hanya di background (kalau di node → drag node)
+        // Pan hanya saat drag di background
         const origCanStartPan = d.toolManager.panningTool.canStart.bind(d.toolManager.panningTool);
         d.toolManager.panningTool.canStart = function () {
             const dia = this.diagram;
@@ -72,10 +78,11 @@ export default function StrukturOrganisasi() {
             return origCanStartPan();
         };
 
-        // Node template (highlight hijau saat drag over)
+        // ========== Node Template dengan TreeExpanderButton ==========
         d.nodeTemplate = $(
-            go.Node, 'Auto',
+            go.Node, 'Horizontal',
             {
+                selectionAdorned: true,
                 cursor: 'pointer',
                 mouseDragEnter: (_e, node) => {
                     const shape = node.findObject('SHAPE') as go.Shape | null;
@@ -126,12 +133,31 @@ export default function StrukturOrganisasi() {
                     if (shape) { shape.stroke = null; shape.strokeWidth = 0; }
                 }
             },
-            $(go.Shape, 'RoundedRectangle',
-                { name: 'SHAPE', fill: '#2F5597', strokeWidth: 0,
-                    spot1: new go.Spot(0,0,4,4), spot2: new go.Spot(1,1,-4,-4) }),
-            $(go.TextBlock,
-                { name: 'TEXT', margin: 8, editable: true, stroke: 'white' },
-                new go.Binding('text', 'name').makeTwoWay()
+            // tombol expand/collapse (plus/minus)
+            $('TreeExpanderButton', {
+                width: 14, height: 14,
+                alignment: go.Spot.Left,
+                alignmentFocus: go.Spot.Center,
+                // biar ada jarak kecil dari kartu
+                margin: new go.Margin(0, 4, 0, 0),
+            }),
+            // kartu node
+            $(
+                go.Panel, 'Auto',
+                $(go.Shape, 'RoundedRectangle',
+                    {
+                        name: 'SHAPE',
+                        fill: '#2F5597',
+                        strokeWidth: 0,
+                        spot1: new go.Spot(0, 0, 4, 4),
+                        spot2: new go.Spot(1, 1, -4, -4),
+                    }
+                ),
+                $(
+                    go.TextBlock,
+                    { name: 'TEXT', margin: 8, editable: true, stroke: 'white' },
+                    new go.Binding('text', 'name').makeTwoWay()
+                )
             )
         );
 
@@ -180,7 +206,32 @@ export default function StrukturOrganisasi() {
             setSelectedName(part ? (part.data as any).name : '');
         });
 
+        // Resize observer → fit selalu (termasuk fullscreen)
+        const ro = new ResizeObserver(() => {
+            try { d.zoomToFit(); } catch {}
+        });
+        if (containerRef.current) ro.observe(containerRef.current);
+
+        // Fullscreen state sync
+        const onFs = () => {
+            const fs = !!document.fullscreenElement;
+            setIsFullscreen(fs);
+            if (containerRef.current) {
+                containerRef.current.style.height = fs ? '100vh' : '';
+                setTimeout(() => { try { d.zoomToFit(); } catch {} }, 50);
+            }
+        };
+        document.addEventListener('fullscreenchange', onFs);
+
         diagram.current = d;
+
+        return () => {
+            document.removeEventListener('fullscreenchange', onFs);
+            ro.disconnect();
+            d.clear();
+            if (d.div) d.div = null;
+            diagram.current = null;
+        };
     }, []);
 
     // ===== LOAD DATA =====
@@ -188,6 +239,7 @@ export default function StrukturOrganisasi() {
         const d = diagram.current; if (!d) return;
         setError(null); setInfo('');
         try {
+            // ambil tree (flat id/parent/name)
             const res = await fetch('/api/struktur-organisasi/tree', { cache: 'no-store' });
             if (!res.ok) throw new Error('Gagal ambil data');
             const rows = (await res.json()) as Row[];
@@ -200,7 +252,7 @@ export default function StrukturOrganisasi() {
 
             d.model = new go.TreeModel(arr);
 
-            // geser sedikit ke atas setelah layout awal (sekali)
+            // geser view sedikit ke atas saat layout awal (sekali)
             const once = (e: go.DiagramEvent) => {
                 d.position = new go.Point(d.position.x, d.documentBounds.y - 100);
                 d.removeDiagramListener('InitialLayoutCompleted', once);
@@ -214,7 +266,7 @@ export default function StrukturOrganisasi() {
     }, []);
     React.useEffect(() => { load(); }, [load]);
 
-    // ===== TAMBAH (dengan NAME + SLUG) =====
+    // ===== TAMBAH =====
     const openAdd = () => {
         setAddName('Unit Baru');
         setAddSlug('unit-baru');
@@ -285,7 +337,7 @@ export default function StrukturOrganisasi() {
         }
     };
 
-    // ===== SIMPAN (sinkronisasi level massal) =====
+    // ===== SIMPAN =====
     const saveAll = async () => {
         const d = diagram.current; if (!d) return;
         if (isSaving) return;
@@ -333,16 +385,57 @@ export default function StrukturOrganisasi() {
         }
     };
 
+    // ===== EXPAND / COLLAPSE ALL =====
+    const expandAll = React.useCallback(() => {
+        const d = diagram.current; if (!d) return;
+        d.startTransaction('expandAll');
+        d.nodes.each((n) => (n.isTreeExpanded = true));
+        d.commitTransaction('expandAll');
+        d.zoomToFit();
+    }, []);
+
+    const collapseAll = React.useCallback(() => {
+        const d = diagram.current; if (!d) return;
+        d.startTransaction('collapseAll');
+        d.nodes.each((n) => (n.isTreeExpanded = false));
+        d.commitTransaction('collapseAll');
+        d.zoomToFit();
+    }, []);
+
+    // ===== FULLSCREEN =====
+    const enterFullscreen = async () => {
+        if (!containerRef.current) return;
+        try { await containerRef.current.requestFullscreen(); } catch {}
+    };
+    const exitFullscreen = async () => {
+        if (document.fullscreenElement) {
+            try { await document.exitFullscreen(); } catch {}
+        }
+    };
+
     return (
-        <div className="p-4 space-y-3">
+        <div ref={containerRef} className="p-4 space-y-3 bg-white">
             {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-2">
                 <button className="px-3 py-1 rounded bg-black text-white" onClick={load}>Reload</button>
-                <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={openAdd}>Tambah Node</button>
-                <button className="px-3 py-1 rounded bg-rose-600 text-white" onClick={() => {
-                    if (!selectedId) { setError('Pilih node terlebih dahulu.'); return; }
-                    setShowDelete(true);
-                }}>Hapus Node</button>
+
+                <button
+                    className="px-3 py-1 rounded bg-blue-600 text-white"
+                    onClick={() => { setError(null); openAdd(); }}
+                >
+                    Tambah Node
+                </button>
+
+                <button
+                    className="px-3 py-1 rounded bg-rose-600 text-white"
+                    onClick={() => {
+                        if (!selectedId) { setError('Pilih node terlebih dahulu.'); return; }
+                        setShowDelete(true);
+                    }}
+                >
+                    Hapus Node
+                </button>
+
                 <button
                     className="px-3 py-1 rounded bg-emerald-600 text-white disabled:opacity-60"
                     onClick={saveAll}
@@ -350,14 +443,39 @@ export default function StrukturOrganisasi() {
                 >
                     {isSaving ? 'Menyimpan…' : 'Simpan'}
                 </button>
+
+                <span className="mx-2 h-5 w-px bg-gray-300" />
+
+                <button className="px-3 py-1 rounded border border-gray-300" onClick={expandAll}>
+                    Expand All
+                </button>
+                <button className="px-3 py-1 rounded border border-gray-300" onClick={collapseAll}>
+                    Collapse All
+                </button>
+
+                <span className="mx-2 h-5 w-px bg-gray-300" />
+
+                {!isFullscreen ? (
+                    <button className="px-3 py-1 rounded border border-gray-300" onClick={enterFullscreen}>
+                        Fullscreen
+                    </button>
+                ) : (
+                    <button className="px-3 py-1 rounded border border-gray-300" onClick={exitFullscreen}>
+                        Exit Fullscreen
+                    </button>
+                )}
+
                 {info && <span className="text-sm text-gray-600">{info}</span>}
                 {error && <span className="text-sm text-red-600">{error}</span>}
             </div>
 
             {/* Diagram */}
-            <div ref={diagramRef} style={{ width: '100%', height: 600, border: '1px solid #e5e7eb' }} />
+            <div
+                ref={diagramDivRef}
+                style={{ width: '100%', height: 600, border: '1px solid #e5e7eb', background: 'white' }}
+            />
 
-            {/* Modal Tambah (Name + Slug) */}
+            {/* Modal Tambah */}
             {showAdd && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
                     <div className="bg-white rounded-lg p-4 w-full max-w-md shadow-lg">
@@ -385,7 +503,44 @@ export default function StrukturOrganisasi() {
 
                         <div className="flex justify-end gap-2">
                             <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setShowAdd(false)}>Batal</button>
-                            <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={submitAdd}>Simpan</button>
+                            <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={async () => {
+                                // submitAdd inline biar tidak berubah logic
+                                const d = diagram.current; if (!d) return;
+                                const name = addName.trim();
+                                const slug = addSlug.trim();
+                                if (!name) { setError('Nama tidak boleh kosong.'); return; }
+                                if (!slug) { setError('Slug tidak boleh kosong.'); return; }
+
+                                const sel = d.selection.first();
+                                const parentKey = sel ? (sel.data as any).key as string : null;
+
+                                try {
+                                    const res = await fetch('/api/struktur-organisasi/node', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ parent_id: parentKey, name, slug })
+                                    });
+                                    const json = await res.json();
+                                    if (!res.ok || !json?.node?.id) throw new Error(json?.error || 'Gagal membuat node');
+                                    const newId: string = json.node.id;
+
+                                    d.startTransaction('add-node');
+                                    (d.model as go.TreeModel).addNodeData({ key: newId, parent: parentKey ?? undefined, name });
+                                    d.commitTransaction('add-node');
+
+                                    const once = () => {
+                                        const np = d.findNodeForKey(newId);
+                                        if (np) { d.select(np); d.centerRect(np.actualBounds); }
+                                        d.removeDiagramListener('LayoutCompleted', once as any);
+                                    };
+                                    d.addDiagramListener('LayoutCompleted', once as any);
+                                    d.layoutDiagram(true);
+
+                                    setShowAdd(false);
+                                    setInfo('Node baru dibuat.');
+                                } catch (err: any) {
+                                    setError(err.message || 'Gagal menambah node.');
+                                }
+                            }}>Simpan</button>
                         </div>
                     </div>
                 </div>
@@ -401,17 +556,39 @@ export default function StrukturOrganisasi() {
                         </p>
                         <div className="flex justify-end gap-2">
                             <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setShowDelete(false)}>Batal</button>
-                            <button className="px-3 py-1 rounded bg-rose-600 text-white" onClick={submitDelete}>Hapus</button>
+                            <button className="px-3 py-1 rounded bg-rose-600 text-white" onClick={async () => {
+                                const d = diagram.current; if (!d) return;
+                                const sel = d.selection.first();
+                                if (!sel || !(sel instanceof go.Node)) { setShowDelete(false); return; }
+                                const id = (sel.data as any).key as string;
+
+                                try {
+                                    const res = await fetch(`/api/struktur-organisasi/node/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                                    const json = await res.json().catch(() => ({}));
+                                    if (!res.ok || json?.ok === false) throw new Error(json?.error || 'Gagal menghapus node');
+
+                                    d.startTransaction('delete-subtree');
+                                    sel.findTreeParts().each(part => {
+                                        if (part instanceof go.Node) (d.model as go.TreeModel).removeNodeData((part as any).data);
+                                    });
+                                    d.commitTransaction('delete-subtree');
+
+                                    setShowDelete(false);
+                                    setInfo('Node terhapus.');
+                                } catch (err: any) {
+                                    setError(err.message || 'Gagal menghapus node.');
+                                    setShowDelete(false);
+                                }
+                            }}>Hapus</button>
                         </div>
                     </div>
                 </div>
             )}
 
             <div className="text-xs text-gray-500">
-                Drag background (klik kiri) untuk pan, scroll untuk zoom.
-                Drag node ke node lain untuk ubah parent (highlight hijau).
-                Drop ke background untuk menjadikannya root.
-                Tambah/Hapus langsung tersimpan. <b>Simpan</b> menyelaraskan level & keseluruhan struktur.
+                • Klik tombol kecil “plus/minus” di kiri node untuk membuka/menutup subtree (TreeExpanderButton).<br />
+                • Drag background untuk pan, scroll untuk zoom. Drag node ke node lain untuk ubah parent (highlight hijau).<br />
+                • Tambah/Hapus langsung via API. Tombol <b>Simpan</b> menyelaraskan level & keseluruhan struktur. Fullscreen didukung.
             </div>
         </div>
     );

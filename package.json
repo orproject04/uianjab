@@ -31,6 +31,7 @@
     "apexcharts": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^3.0.2",
+    "d3": "^7.9.0",
     "docxtemplater": "^3.65.2",
     "flatpickr": "^4.6.13",
     "gojs": "^3.0.26",
