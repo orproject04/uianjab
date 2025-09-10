@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import pool from "@/lib/db";
 
-// ...
 export async function GET(req: NextRequest) {
     const token = new URL(req.url).searchParams.get("token");
     if (!token) return Response.json({ error: "Token wajib dikirim" }, { status: 400 });

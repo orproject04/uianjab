@@ -5,7 +5,7 @@ import { FaUser } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import {apiFetch} from "@/lib/apiFetch";
 
-type Me = { id: string; email: string; role: string; full_name?: string | null };
+type Me = { id: string; email: string; role: string; full_name: string | null };
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);

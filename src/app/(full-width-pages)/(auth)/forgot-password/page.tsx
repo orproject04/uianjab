@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import Input from "@/components/form/input/InputField";
@@ -12,7 +12,6 @@ type NoticeType = "success" | "info" | "error";
 type Notice = { type: NoticeType; text: string };
 
 export default function ForgotPasswordPage() {
-    const router = useRouter();
     const q = useSearchParams();
     const next = useMemo(() => q.get("next") || "/", [q]);
 
@@ -22,60 +21,31 @@ export default function ForgotPasswordPage() {
     const [notice, setNotice] = useState<Notice | null>(null);
     const showNotice = (n: Notice) => setNotice(n);
 
-    // auto-dismiss alert (4 detik)
     useEffect(() => {
         if (!notice) return;
         const t = setTimeout(() => setNotice(null), 4000);
         return () => clearTimeout(t);
     }, [notice]);
 
-    // jika sudah login → redirect
-    // useEffect(() => {
-    //     let cancelled = false;
-    //     (async () => {
-    //         try {
-    //             const r = await fetch("/api/auth/me", { method: "GET" });
-    //             if (!cancelled && r.ok) router.replace(next);
-    //         } catch {}
-    //     })();
-    //     return () => { cancelled = true; };
-    // }, [router, next]);
-
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault();
         setLoading(true);
         setNotice(null);
         try {
-            // 1) cek apakah email terdaftar
-            const c = await fetch("/api/auth/check-email", {
+            const r = await fetch("/api/auth/forgot", {
                 method: "POST",
-                headers: { "Content-Type":"application/json" },
-                body: JSON.stringify({ email })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email }),
             });
-            const cj = await c.json().catch(() => ({}));
-            if (!c.ok) {
-                showNotice({ type: "error", text: cj?.error || "Gagal memeriksa email." });
-                setLoading(false);
-                return;
-            }
-            if (!cj?.exists) {
-                // Tidak terdaftar → kasih alert & hentikan
+
+            if (r.ok) {
+                showNotice({ type: "info", text: "Tautan reset telah dikirim ke email Anda." });
+            } else if (r.status === 404) {
                 showNotice({ type: "error", text: "Email tidak terdaftar." });
-                setLoading(false);
-                return;
+            } else {
+                const j = await r.json().catch(() => ({}));
+                showNotice({ type: "error", text: j?.error || "Gagal mengirim tautan reset." });
             }
-
-            // 2) lanjut kirim forgot (server akan mengirim email reset)
-            await fetch("/api/auth/forgot", {
-                method: "POST",
-                headers: { "Content-Type":"application/json" },
-                body: JSON.stringify({ email })
-            });
-
-            showNotice({
-                type: "info",
-                text: "Tautan reset telah dikirim ke Email Anda."
-            });
         } catch {
             showNotice({ type: "error", text: "Tidak bisa menghubungi server." });
         } finally {
@@ -88,7 +58,7 @@ export default function ForgotPasswordPage() {
             ? "text-green-700 bg-green-50 border border-green-200"
             : notice?.type === "info"
                 ? "text-blue-700 bg-blue-50 border border-blue-200"
-                : "text-red-700 bg-red-50 border border-red-200"; // error
+                : "text-red-700 bg-red-50 border border-red-200";
 
     return (
         <div className="flex flex-col flex-1 lg:w-1/2 w-full">
@@ -102,12 +72,8 @@ export default function ForgotPasswordPage() {
                     </p>
                 </div>
 
-                {/* Alert */}
                 {notice && (
-                    <div
-                        role="status"
-                        className={`${alertClass} rounded-lg px-3 py-2 text-sm mb-4 flex items-start justify-between gap-3`}
-                    >
+                    <div role="status" className={`${alertClass} rounded-lg px-3 py-2 text-sm mb-4 flex items-start justify-between gap-3`}>
                         <span>{notice.text}</span>
                         <button
                             type="button"

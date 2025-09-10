@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
         }
 
         const { rows } = await pool.query(
-            `SELECT id,email,password_hash,is_email_verified,role
+            `SELECT id,email,password_hash,is_email_verified,role, full_name
              FROM user_anjab
              WHERE email=$1`,
             [email]
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         const ok = await comparePassword(password, user.password_hash);
         if (!ok) return Response.json({ error: "Email / Password salah" }, { status: 401 });
 
-        const access  = signAccessToken({ sub: user.id, email: user.email, role: user.role });
+        const access  = signAccessToken({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name });
         const refresh = signRefreshToken({ sub: user.id });
 
         const refreshHash = hashRefreshToken(refresh);

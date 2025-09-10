@@ -33,18 +33,6 @@ export default function SignupPage() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  // jika sudah login → redirect
-  // useEffect(() => {
-  //   let cancelled = false;
-  //   (async () => {
-  //     try {
-  //       const r = await fetch("/api/auth/me", { method: "GET" });
-  //       if (!cancelled && r.ok) router.replace(next);
-  //     } catch {}
-  //   })();
-  //   return () => { cancelled = true; };
-  // }, [router, next]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);

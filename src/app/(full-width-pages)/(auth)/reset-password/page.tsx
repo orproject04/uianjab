@@ -17,7 +17,9 @@ export default function ResetPasswordPage() {
     const sp = useSearchParams();
     const next = useMemo(() => sp.get("next") || "/", [sp]);
 
-    const [token, setToken] = useState("");
+    // Baca token langsung dari query
+    const token = (sp.get("token") || "").trim();
+
     const [pw, setPw] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -25,29 +27,12 @@ export default function ResetPasswordPage() {
     const [notice, setNotice] = useState<Notice | null>(null);
     const showNotice = (n: Notice) => setNotice(n);
 
-    // ambil token dari query
-    useEffect(() => {
-        setToken(sp.get("token") || "");
-    }, [sp]);
-
-    // auto-dismiss alert (4 detik)
+    // auto-dismiss alert
     useEffect(() => {
         if (!notice) return;
         const t = setTimeout(() => setNotice(null), 4000);
         return () => clearTimeout(t);
     }, [notice]);
-
-    // jika sudah login → redirect ke next
-    // useEffect(() => {
-    //     let cancelled = false;
-    //     (async () => {
-    //         try {
-    //             const r = await fetch("/api/auth/me", { method: "GET" });
-    //             if (!cancelled && r.ok) router.replace(next);
-    //         } catch {}
-    //     })();
-    //     return () => { cancelled = true; };
-    // }, [router, next]);
 
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -56,15 +41,17 @@ export default function ResetPasswordPage() {
         try {
             const r = await fetch("/api/auth/reset", {
                 method: "POST",
-                headers: { "Content-Type":"application/json" },
-                body: JSON.stringify({ token, new_password: pw })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token, new_password: pw }),
             });
+
             if (r.ok) {
                 showNotice({ type: "success", text: "Password telah direset. Silakan login." });
                 setTimeout(() => router.replace("/signin"), 1200);
             } else {
                 const j = await r.json().catch(() => ({}));
-                showNotice({ type: "error", text: j?.error || "Gagal reset password." });
+                const msg = j?.error || (r.status === 400 ? "Token tidak valid / kadaluarsa." : "Gagal reset password.");
+                showNotice({ type: "error", text: msg });
             }
         } catch {
             showNotice({ type: "error", text: "Tidak bisa menghubungi server." });
@@ -78,7 +65,7 @@ export default function ResetPasswordPage() {
             ? "text-green-700 bg-green-50 border border-green-200"
             : notice?.type === "info"
                 ? "text-blue-700 bg-blue-50 border border-blue-200"
-                : "text-red-700 bg-red-50 border border-red-200"; // error
+                : "text-red-700 bg-red-50 border border-red-200";
 
     const tokenMissing = !token || token.length < 10;
 
@@ -89,17 +76,11 @@ export default function ResetPasswordPage() {
                     <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
                         Reset Password
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Masukkan password baru Anda.
-                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Masukkan password baru Anda.</p>
                 </div>
 
-                {/* Alert */}
                 {notice && (
-                    <div
-                        role="status"
-                        className={`${alertClass} rounded-lg px-3 py-2 text-sm mb-4 flex items-start justify-between gap-3`}
-                    >
+                    <div role="status" className={`${alertClass} rounded-lg px-3 py-2 text-sm mb-4 flex items-start justify-between gap-3`}>
                         <span>{notice.text}</span>
                         <button
                             type="button"
@@ -112,11 +93,8 @@ export default function ResetPasswordPage() {
                     </div>
                 )}
 
-                {/* Info jika token hilang */}
                 {tokenMissing && (
-                    <div
-                        className={`text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm mb-4`}
-                    >
+                    <div className="text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm mb-4">
                         Token tidak ditemukan. Buka tautan dari email reset password Anda.
                     </div>
                 )}
@@ -139,26 +117,17 @@ export default function ResetPasswordPage() {
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPw(e.target.value)}
                                 />
                                 <span
-                                    onClick={() => setShowPassword(v => !v)}
+                                    onClick={() => setShowPassword((v) => !v)}
                                     className="absolute z-30 -translate-y-1/2 cursor-pointer right-4 top-1/2"
                                     aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
                                 >
-                  {showPassword ? (
-                      <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
-                  ) : (
-                      <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400" />
-                  )}
+                  {showPassword ? <EyeIcon className="fill-gray-500 dark:fill-gray-400" /> : <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400" />}
                 </span>
                             </div>
                         </div>
 
                         <div>
-                            <Button
-                                className="w-full"
-                                size="sm"
-                                type="submit"
-                                disabled={loading || tokenMissing}
-                            >
+                            <Button className="w-full" size="sm" type="submit" disabled={loading || tokenMissing}>
                                 {loading ? "Memproses..." : "Setel Ulang"}
                             </Button>
                         </div>

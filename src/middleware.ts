@@ -119,11 +119,16 @@ export async function middleware(req: NextRequest) {
     // Halaman auth: kalau sudah login, pantulkan ke "/"
     if (isAuthPage(pathname)) {
         if (user) return NextResponse.redirect(new URL("/", req.url));
-        // bersihkan loop ?next=/signin...
+        // ★ dulu kamu buang seluruh query; ganti jadi hapus 'next' saja
         const nextParam = req.nextUrl.searchParams.get("next") || "";
-        if (nextParam.startsWith("/signin")) return NextResponse.redirect(new URL(pathname, req.url));
+        if (nextParam.startsWith("/signin")) {
+            const url = new URL(req.url);
+            url.searchParams.delete("next");   // jangan hilangkan token/query lain
+            return NextResponse.redirect(url);
+        }
         return NextResponse.next();
     }
+
 
     // Global: selain halaman auth → wajib login
     if (!user) {

@@ -8,7 +8,6 @@ import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
-import {apiFetch} from "@/lib/apiFetch";
 
 type NoticeType = "success" | "info" | "error";
 type Notice = { type: NoticeType; text: string };
@@ -46,24 +45,12 @@ export default function SignInForm() {
     }
   }, [q]);
 
-  // jika sudah login, langsung redirect
-  // useEffect(() => {
-  //   let cancelled = false;
-  //   (async () => {
-  //     try {
-  //       const r = await fetch("/api/auth/me", { method: "GET" });
-  //       if (!cancelled && r.ok) router.replace(next);
-  //     } catch {}
-  //   })();
-  //   return () => { cancelled = true; };
-  // }, [router, next]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setNotice(null);
     try {
-      const r = await apiFetch("/api/auth/login", {
+      const r = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
