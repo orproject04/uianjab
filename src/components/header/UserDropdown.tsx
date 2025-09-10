@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { FaUser } from "react-icons/fa";
 import { useRouter } from "next/navigation";
+import {apiFetch} from "@/lib/apiFetch";
 
 type Me = { id: string; email: string; role: string; full_name?: string | null };
 
@@ -17,7 +18,7 @@ export default function UserDropdown() {
     let active = true;
     (async () => {
       try {
-        const r = await fetch("/api/auth/me", { method: "GET" });
+        const r = await apiFetch("/api/auth/me", { method: "GET" });
         if (!active) return;
         if (r.ok) {
           const j = await r.json();

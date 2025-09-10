@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
+import {apiFetch} from "@/lib/apiFetch";
 
 type Status = "loading" | "ok" | "notfound" | "error";
 
@@ -17,7 +18,7 @@ export default function InformasiJabatanPage() {
         let alive = true;
         (async () => {
             try {
-                const r = await fetch("/api/auth/me", { method: "GET", cache: "no-store" });
+                const r = await apiFetch("/api/auth/me", { method: "GET", cache: "no-store" });
                 if (!alive) return;
                 if (r.ok) {
                     const j = await r.json();

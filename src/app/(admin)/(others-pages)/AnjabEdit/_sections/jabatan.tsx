@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
 import WordAbk from "@/components/form/form-elements/WordAbk";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -43,7 +44,7 @@ export default function EditJabatanSection({
                 setLoading(true);
 
                 // Ambil data jabatan
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) {
                     await MySwal.fire({ icon: "error", title: "Gagal memuat", text: `Status: ${res.status}` });
@@ -54,7 +55,7 @@ export default function EditJabatanSection({
                 setTimeout(() => namaRef.current?.focus(), 0);
 
                 // Cek kebutuhan ABK
-                const abkRes = await fetch(`/api/anjab/${encodeURIComponent(id)}/abk`, { cache: "no-store" });
+                const abkRes = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/abk`, { cache: "no-store" });
                 if (abkRes.ok) {
                     const abk = await abkRes.json();
                     setAbkNeeded(Boolean(abk?.needed));
@@ -95,7 +96,7 @@ export default function EditJabatanSection({
 
         setSaving(true);
         try {
-            const res = await fetch(`/api/anjab/${encodeURIComponent(id)}`, {
+            const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/jabatan`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

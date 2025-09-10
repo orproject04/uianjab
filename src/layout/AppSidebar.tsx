@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { GridIcon, ListIcon, PageIcon, ChevronDownIcon, HorizontaLDots, GroupIcon } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
+import {apiFetch} from "@/lib/apiFetch";
 
 type APINode = {
   name: string;
@@ -38,7 +39,7 @@ const AppSidebar: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const res = await apiFetch("/api/auth/me", { cache: "no-store" });
         if (!res.ok) throw new Error("unauthorized");
         const json = await res.json();
         if (!cancelled && json?.ok && json?.data) {

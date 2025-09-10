@@ -8,8 +8,8 @@ async function getUser(req: NextRequest) {
     if (!token) return null;
     try {
         const secret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET!);
-        const { payload } = await jwtVerify(token, secret);
-        const role = String(payload.role ?? "user").toLowerCase(); // normalize
+        const { payload } = await jwtVerify(token, secret, { algorithms: ["HS256"] }); // ★ pin algoritma
+        const role = String(payload.role ?? "user").toLowerCase();
         return {
             id: String(payload.sub ?? ""),
             email: String(payload.email ?? ""),
@@ -18,6 +18,10 @@ async function getUser(req: NextRequest) {
     } catch {
         return null;
     }
+}
+
+function hasRefresh(req: NextRequest) {
+    return Boolean(req.cookies.get("refresh_token")?.value); // ★ cek ada refresh cookie
 }
 
 function isPublicAsset(p: string) {
@@ -110,6 +114,7 @@ export async function middleware(req: NextRequest) {
 
     // ===== Pages =====
     const user = await getUser(req);
+    const hasRefreshCookie = hasRefresh(req); // ★
 
     // Halaman auth: kalau sudah login, pantulkan ke "/"
     if (isAuthPage(pathname)) {
@@ -122,6 +127,12 @@ export async function middleware(req: NextRequest) {
 
     // Global: selain halaman auth → wajib login
     if (!user) {
+        if (hasRefreshCookie) {
+            // ★ JANGAN redirect: biarkan page render, nanti client API (apiFetch)
+            // ★ akan mendapat 401 lalu memicu /api/auth/refresh otomatis.
+            return NextResponse.next();
+        }
+        // Tidak ada access token & TIDAK ada refresh token → redirect signin
         const signinUrl = new URL("/signin", req.url);
         const qs = req.nextUrl.search;
         signinUrl.searchParams.set("next", pathname + (qs || ""));

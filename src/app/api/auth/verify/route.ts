@@ -4,7 +4,7 @@ import pool from "@/lib/db";
 // ...
 export async function GET(req: NextRequest) {
     const token = new URL(req.url).searchParams.get("token");
-    if (!token) return Response.json({ error: "Token wajib" }, { status: 400 });
+    if (!token) return Response.json({ error: "Token wajib dikirim" }, { status: 400 });
 
     const { rows } = await pool.query(
         `SELECT id, user_id, expires_at, used_at FROM email_verification WHERE token=$1`,
