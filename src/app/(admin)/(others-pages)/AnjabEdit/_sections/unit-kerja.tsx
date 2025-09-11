@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -37,7 +38,7 @@ export default function UnitKerjaForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/unit-kerja`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/unit-kerja`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
@@ -70,7 +71,7 @@ export default function UnitKerjaForm({
 
         setSaving(true);
         try {
-            const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/unit-kerja`, {
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/unit-kerja`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

@@ -1,18 +1,27 @@
 // app/api/anjab/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import { getAnjabById } from "@/lib/anjab-queries";
-import { getAuthUser, requireRole } from "@/lib/auth-guard";
+import {getAnjabById} from "@/lib/anjab-queries";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 type Params = { id: string };
 
-// READ: GET /api/anjab/:id  (exposed / tidak perlu login)
-export async function GET(_req: NextRequest, ctx: { params: Promise<Params> }) {
+/**
+ * GET /api/anjab/:id
+ * - Wajib login (Bearer access token)
+ * - Role bebas (user/editor/admin)
+ */
+export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
     try {
-        const { id } = await ctx.params; // ⬅️ WAJIB await
+        const user = getUserFromReq(req);
+        if (!user) {
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        }
+
+        const {id} = await ctx.params; // ⬅️ WAJIB await (Next.js 15+)
         const data = await getAnjabById(id);
         if (!data) {
-            return NextResponse.json({ error: "Data Tidak Ditemukan" }, { status: 404 });
+            return NextResponse.json({error: "Data Tidak Ditemukan"}, {status: 404});
         }
 
         return new NextResponse(JSON.stringify(data), {
@@ -26,38 +35,32 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<Params> }) {
         });
     } catch (e) {
         console.error("[anjab][GET]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }
 
-// HEAD: cek ketersediaan cepat
-export async function HEAD(_req: NextRequest, ctx: { params: Promise<Params> }) {
+/**
+ * DELETE /api/anjab/:id
+ * - Admin-only
+ */
+export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> }) {
     try {
-        const { id } = await ctx.params; // ⬅️ WAJIB await
-        const data = await getAnjabById(id);
-        return new NextResponse(null, { status: data ? 200 : 404 });
-    } catch {
-        return new NextResponse(null, { status: 500 });
-    }
-}
-
-// DELETE: admin-only, hapus jabatan
-export async function DELETE(_req: NextRequest, ctx: { params: Promise<Params> }) {
-    try {
-        const user = await getAuthUser(); // ⬅️ pastikan getAuthUser() juga async + await cookies()
-        if (!user || !requireRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
-        const { id } = await ctx.params; // ⬅️ WAJIB await
-        const del = await pool.query(`DELETE FROM jabatan WHERE id_jabatan = $1`, [id]);
+        const {id} = await ctx.params; // ⬅️ WAJIB await
+        const del = await pool.query(`DELETE
+                                      FROM jabatan
+                                      WHERE id_jabatan = $1`, [id]);
 
         if (del.rowCount === 0) {
-            return NextResponse.json({ error: "Not Found" }, { status: 404 });
+            return NextResponse.json({error: "Not Found"}, {status: 404});
         }
-        return NextResponse.json({ ok: true }, { status: 200 });
+        return NextResponse.json({ok: true}, {status: 200});
     } catch (e) {
         console.error("[anjab][DELETE]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }

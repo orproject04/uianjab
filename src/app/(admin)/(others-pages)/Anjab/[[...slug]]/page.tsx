@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
-import {apiFetch} from "@/lib/apiFetch";
+import { apiFetch } from "@/lib/apiFetch";
 
-type Status = "loading" | "ok" | "notfound" | "error";
+type Status = "idle" | "loading" | "ok" | "notfound" | "error";
 
 export default function InformasiJabatanPage() {
     const params = useParams();
@@ -30,7 +30,9 @@ export default function InformasiJabatanPage() {
                 if (alive) setIsAdmin(false);
             }
         })();
-        return () => { alive = false; };
+        return () => {
+            alive = false;
+        };
     }, []);
 
     // Ambil slug (bisa undefined saat /Anjab)
@@ -56,35 +58,64 @@ export default function InformasiJabatanPage() {
         return `/AnjabEdit/jabatan/${fullPath}`;
     }, [rawSlug]);
 
-    // URL PDF langsung (bukan blob). Tambahkan hash agar fit horizontal.
-    const pdfUrl = id ? `/api/anjab/${encodedId}/pdf#view=FitH` : "";
+    // Blob URL untuk iframe
+    const [pdfSrc, setPdfSrc] = useState<string | null>(null);
+    const [status, setStatus] = useState<Status>("idle");
 
-    const [status, setStatus] = useState<Status>("loading");
-
-    // Cek ketersediaan PDF dengan HEAD (ringan & cepat).
+    // Ambil PDF (GET) → blob → objectURL
     useEffect(() => {
         let alive = true;
-        async function check() {
+        let currentUrl: string | null = null;
+
+        async function loadPdf() {
             if (!id) {
-                if (alive) setStatus("notfound");
+                if (alive) {
+                    setPdfSrc(null);
+                    setStatus("notfound");
+                }
                 return;
             }
+
             try {
-                if (alive) setStatus("loading");
-                const res = await fetch(`/api/anjab/${encodedId}/pdf`, {
-                    method: "HEAD",
+                if (alive) {
+                    setStatus("loading");
+                    setPdfSrc(null);
+                }
+
+                const res = await apiFetch(`/api/anjab/${encodedId}/pdf`, {
+                    method: "GET",
                     cache: "no-store",
                 });
+
                 if (!alive) return;
-                if (res.ok) setStatus("ok");
-                else if (res.status === 404) setStatus("notfound");
-                else setStatus("error");
+
+                if (res.ok) {
+                    const blob = await res.blob();
+                    // Buat object URL untuk iframe
+                    const url = URL.createObjectURL(blob);
+                    currentUrl = url;
+                    if (alive) {
+                        setPdfSrc(url);
+                        setStatus("ok");
+                    }
+                } else if (res.status === 404) {
+                    setStatus("notfound");
+                } else {
+                    setStatus("error");
+                }
             } catch {
                 if (alive) setStatus("error");
             }
         }
-        check();
-        return () => { alive = false; };
+
+        loadPdf();
+
+        return () => {
+            alive = false;
+            if (currentUrl) {
+                URL.revokeObjectURL(currentUrl);
+            }
+        };
     }, [id, encodedId]);
 
     // === Tanpa slug/id ===
@@ -96,7 +127,7 @@ export default function InformasiJabatanPage() {
         );
     }
 
-    if (status === "loading") {
+    if (status === "loading" || status === "idle") {
         return <p style={{ padding: 20 }}>Loading...</p>;
     }
 
@@ -104,8 +135,7 @@ export default function InformasiJabatanPage() {
     if (status === "notfound" || status === "error") {
         const isNotFound = status === "notfound";
 
-        // ---- Jika BUKAN admin: ganti pesan & sembunyikan semua aksi
-// ---- Jika BUKAN admin: ganti pesan & center vertikal-horisontal
+        // Non-admin: pesan sederhana (tanpa aksi)
         if (!isAdmin) {
             return (
                 <div className="w-full min-h-[calc(100dvh-200px)] flex items-center justify-center px-6">
@@ -132,7 +162,7 @@ export default function InformasiJabatanPage() {
             );
         }
 
-        // ---- Admin: tampilan lama (upload .doc & buat manual)
+        // Admin: tampilkan opsi unggah/buat manual
         return (
             <div className="p-8 max-w-5xl mx-auto space-y-6">
                 <div className="text-center space-y-2">
@@ -179,7 +209,7 @@ export default function InformasiJabatanPage() {
         );
     }
 
-    // === OK → tampilkan PDF; non-admin tidak melihat tombol Edit
+    // === OK → tampilkan PDF dari blob; non-admin tidak melihat tombol Edit
     return (
         <>
             {/* Bar atas tipis */}
@@ -193,14 +223,16 @@ export default function InformasiJabatanPage() {
                     alignItems: "center",
                 }}
             >
-                <a
-                    href={pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded border px-3 py-1.5 hover:bg-gray-50"
-                >
-                    Buka di halaman baru
-                </a>
+                {pdfSrc && (
+                    <a
+                        href={pdfSrc}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded border px-3 py-1.5 hover:bg-gray-50"
+                    >
+                        Buka di halaman baru
+                    </a>
+                )}
 
                 {isAdmin && (
                     <Link
@@ -214,16 +246,22 @@ export default function InformasiJabatanPage() {
 
             {/* iframe full viewport height */}
             <div style={{ width: "100%", height: "100dvh" }}>
-                <iframe
-                    src={pdfUrl}
-                    style={{
-                        width: "100%",
-                        height: "100%",
-                        border: "none",
-                        WebkitOverflowScrolling: "touch",
-                    } as React.CSSProperties}
-                    title={`Preview PDF - ${id}`}
-                />
+                {pdfSrc ? (
+                    <iframe
+                        src={pdfSrc}
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            border: "none",
+                            WebkitOverflowScrolling: "touch",
+                        } as React.CSSProperties}
+                        title={`Preview PDF - ${id}`}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+                        Tidak ada konten.
+                    </div>
+                )}
             </div>
         </>
     );

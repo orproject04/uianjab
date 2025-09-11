@@ -1,21 +1,35 @@
 // app/api/anjab/[id]/pdf/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAnjabById } from "@/lib/anjab-queries";
 import { buildAnjabHtml } from "@/lib/anjab-pdf-template";
+import { getUserFromReq } from "@/lib/auth";
 
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
+        // 🔑 pastikan user login (boleh role "user" maupun "admin")
+        const user = getUserFromReq(req);
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await ctx.params;
-
         const data = await getAnjabById(id);
-        if (!data) return Response.json({ error: "Data Tidak Ditemukan" }, { status: 404 });
+        if (!data) {
+            return NextResponse.json({ error: "Data Tidak Ditemukan" }, { status: 404 });
+        }
 
+        // ✅ generate HTML → PDF
         const html = buildAnjabHtml(data);
         const puppeteer = await import("puppeteer");
         const browser = await puppeteer.launch({ headless: "new" });
         const page = await browser.newPage();
         await page.setContent(html, { waitUntil: "networkidle0" });
-        const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+
+        const pdfBuffer = await page.pdf({
+            format: "A4",
+            printBackground: true,
+        });
+
         await browser.close();
 
         return new Response(pdfBuffer, {
@@ -30,7 +44,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
             },
         });
     } catch (err) {
-        console.error("PDF error:", err);
-        return Response.json({ error: "General Error" }, { status: 500 });
+        console.error("[anjab/pdf][GET] error:", err);
+        return NextResponse.json({ error: "General Error" }, { status: 500 });
     }
 }

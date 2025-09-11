@@ -5,7 +5,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
 import WordAbk from "@/components/form/form-elements/WordAbk";
-import {apiFetch} from "@/lib/apiFetch";
+import { apiFetch } from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -22,14 +22,17 @@ export default function EditJabatanSection({
                                                id,
                                                viewerPath,
                                            }: {
-    id: string;         // contoh: "OKK-Ortala"
+    id: string; // contoh: "OKK-Ortala"
     viewerPath: string; // contoh: "Ortala/Organisasi/XYZ"
 }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [data, setData] = useState<Jabatan | null>(null);
     const [abkNeeded, setAbkNeeded] = useState(false);
-    const [abkExamples, setAbkExamples] = useState<Array<{ id_tugas: number; nomor_tugas: number | null }>>([]);
+    const [abkExamples, setAbkExamples] = useState<
+        Array<{ id_tugas: number; nomor_tugas: number | null }>
+    >([]);
     const namaRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -43,11 +46,17 @@ export default function EditJabatanSection({
             try {
                 setLoading(true);
 
-                // Ambil data jabatan
-                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}`, { cache: "no-store" });
+                // Ambil data jabatan (pakai apiFetch agar include Authorization & auto refresh token)
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/jabatan`, {
+                    cache: "no-store",
+                });
                 if (!alive) return;
                 if (!res.ok) {
-                    await MySwal.fire({ icon: "error", title: "Gagal memuat", text: `Status: ${res.status}` });
+                    await MySwal.fire({
+                        icon: "error",
+                        title: "Gagal memuat",
+                        text: `Status: ${res.status}`,
+                    });
                     return;
                 }
                 const json = await res.json();
@@ -55,7 +64,9 @@ export default function EditJabatanSection({
                 setTimeout(() => namaRef.current?.focus(), 0);
 
                 // Cek kebutuhan ABK
-                const abkRes = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/abk`, { cache: "no-store" });
+                const abkRes = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/abk`, {
+                    cache: "no-store",
+                });
                 if (abkRes.ok) {
                     const abk = await abkRes.json();
                     setAbkNeeded(Boolean(abk?.needed));
@@ -73,7 +84,9 @@ export default function EditJabatanSection({
             }
         })();
 
-        return () => { alive = false; };
+        return () => {
+            alive = false;
+        };
     }, [id]);
 
     async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -90,20 +103,28 @@ export default function EditJabatanSection({
         };
 
         if (!payload.nama_jabatan || !payload.kode_jabatan) {
-            await MySwal.fire({ icon: "warning", title: "Validasi", text: "Nama & Kode Jabatan wajib diisi." });
+            await MySwal.fire({
+                icon: "warning",
+                title: "Validasi",
+                text: "Nama & Kode Jabatan wajib diisi.",
+            });
             return;
         }
 
         setSaving(true);
         try {
-            const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/jabatan`, {
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/jabatan`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
             const json = await res.json();
             if (!res.ok) {
-                await MySwal.fire({ icon: "error", title: "Gagal menyimpan", text: json?.error || `Status: ${res.status}` });
+                await MySwal.fire({
+                    icon: "error",
+                    title: "Gagal menyimpan",
+                    text: json?.error || `Status: ${res.status}`,
+                });
                 return;
             }
             await MySwal.fire({ icon: "success", title: "Tersimpan", text: "Perubahan berhasil disimpan." });
@@ -127,8 +148,11 @@ export default function EditJabatanSection({
         });
         if (!ok.isConfirmed) return;
 
+        setDeleting(true);
         try {
-            const res = await fetch(`/api/anjab/${encodeURIComponent(id)}`, { method: "DELETE" });
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+            });
             const json = await res.json().catch(() => ({}));
             if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
             await MySwal.fire({ icon: "success", title: "Terhapus", text: `Anjab ${id} telah dihapus.` });
@@ -137,6 +161,8 @@ export default function EditJabatanSection({
         } catch (e) {
             console.error(e);
             await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
+        } finally {
+            setDeleting(false);
         }
     }
 
@@ -144,7 +170,9 @@ export default function EditJabatanSection({
         return (
             <div className="p-6 text-center">
                 <p>Slug tidak valid.</p>
-                <Link href="/Anjab" className="text-blue-600 underline">Kembali</Link>
+                <Link href="/Anjab" className="text-blue-600 underline">
+                    Kembali
+                </Link>
             </div>
         );
     }
@@ -160,10 +188,11 @@ export default function EditJabatanSection({
                     <button
                         type="button"
                         onClick={onDelete}
-                        className="rounded px-3 py-1.5 bg-red-600 text-white hover:bg-red-700"
+                        disabled={deleting}
+                        className="rounded px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
                         title="Hapus anjab ini"
                     >
-                        Hapus Anjab
+                        {deleting ? "Menghapus..." : "Hapus Anjab"}
                     </button>
                 </div>
             </div>
@@ -177,17 +206,33 @@ export default function EditJabatanSection({
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Kode Jabatan *</label>
-                    <input ref={namaRef} name="kode_jabatan" defaultValue={data.kode_jabatan ?? ""} className="w-full rounded border px-3 py-2" required />
+                    <input
+                        ref={namaRef}
+                        name="kode_jabatan"
+                        defaultValue={data.kode_jabatan ?? ""}
+                        className="w-full rounded border px-3 py-2"
+                        required
+                    />
                 </div>
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Nama Jabatan *</label>
-                    <input name="nama_jabatan" defaultValue={data.nama_jabatan ?? ""} className="w-full rounded border px-3 py-2" required />
+                    <input
+                        name="nama_jabatan"
+                        defaultValue={data.nama_jabatan ?? ""}
+                        className="w-full rounded border px-3 py-2"
+                        required
+                    />
                 </div>
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Ikhtisar Jabatan</label>
-                    <textarea name="ikhtisar_jabatan" defaultValue={data.ikhtisar_jabatan ?? ""} rows={4} className="w-full rounded border px-3 py-2" />
+                    <textarea
+                        name="ikhtisar_jabatan"
+                        defaultValue={data.ikhtisar_jabatan ?? ""}
+                        rows={4}
+                        className="w-full rounded border px-3 py-2"
+                    />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -197,7 +242,11 @@ export default function EditJabatanSection({
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1">Prestasi Diharapkan</label>
-                        <input name="prestasi_diharapkan" defaultValue={data.prestasi_diharapkan ?? ""} className="w-full rounded border px-3 py-2" />
+                        <input
+                            name="prestasi_diharapkan"
+                            defaultValue={data.prestasi_diharapkan ?? ""}
+                            className="w-full rounded border px-3 py-2"
+                        />
                     </div>
                 </div>
 
@@ -219,13 +268,10 @@ export default function EditJabatanSection({
                             <h3 className="font-semibold text-yellow-800">Sebagian kolom ABK pada Tugas Pokok belum terisi</h3>
                             {abkExamples.length > 0 && (
                                 <p className="text-sm text-yellow-700">
-                                    Contoh item belum lengkap:{" "}
-                                    {abkExamples.map((x, i) => `#${x.nomor_tugas ?? x.id_tugas}`).join(", ")}
+                                    Contoh item belum lengkap: {abkExamples.map((x, i) => `#${x.nomor_tugas ?? x.id_tugas}`).join(", ")}
                                 </p>
                             )}
-                            <p className="text-sm text-yellow-700 mt-1">
-                                Kamu bisa unggah file ABK (Word) untuk melengkapi otomatis.
-                            </p>
+                            <p className="text-sm text-yellow-700 mt-1">Kamu bisa unggah file ABK (Word) untuk melengkapi otomatis.</p>
                         </div>
                     </div>
 

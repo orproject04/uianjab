@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/anjab/route.ts  (POST create jabatan)
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import { z } from "zod";
+import {z} from "zod";
+import {getUserFromReq, hasRole} from "@/lib/auth"; // ← pakai Bearer dari header Authorization
 
 const CreateJabatanSchema = z.object({
     id_jabatan: z.string().trim().min(1).max(50),
@@ -13,12 +15,19 @@ const CreateJabatanSchema = z.object({
 
 export async function POST(req: NextRequest) {
     try {
+        // ====== AUTH: wajib admin ======
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
+
+        // ====== VALIDASI BODY ======
         const body = await req.json().catch(() => ({}));
         const parsed = CreateJabatanSchema.safeParse(body);
         if (!parsed.success) {
             return NextResponse.json(
-                { error: "Validasi gagal", detail: parsed.error.flatten() },
-                { status: 400 }
+                {error: "Validasi gagal", detail: parsed.error.flatten()},
+                {status: 400}
             );
         }
 
@@ -31,23 +40,24 @@ export async function POST(req: NextRequest) {
             prestasi_diharapkan = null,
         } = parsed.data;
 
-        // Cek duplikasi
+        // ====== CEK DUPLIKASI ======
         const existed = await pool.query(
-            `SELECT 1 FROM jabatan WHERE id_jabatan = $1 LIMIT 1`,
+            `SELECT 1
+             FROM jabatan
+             WHERE id_jabatan = $1 LIMIT 1`,
             [id_jabatan]
         );
         if (existed.rowCount) {
-            return NextResponse.json(
-                { error: "id_jabatan sudah ada" },
-                { status: 409 }
-            );
+            return NextResponse.json({error: "id_jabatan sudah ada"}, {status: 409});
         }
 
-        const { rows } = await pool.query(
+        // ====== INSERT ======
+        const {rows} = await pool.query(
             `INSERT INTO jabatan
-        (id_jabatan, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6, NOW(), NOW())
-       RETURNING id_jabatan, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan`,
+             (id_jabatan, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, created_at,
+              updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW(),
+                     NOW()) RETURNING id_jabatan, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan`,
             [
                 id_jabatan,
                 kode_jabatan,
@@ -58,9 +68,13 @@ export async function POST(req: NextRequest) {
             ]
         );
 
-        return NextResponse.json({ ok: true, data: rows[0] }, { status: 201 });
-    } catch (e) {
+        return NextResponse.json({ok: true, data: rows[0]}, {status: 201});
+    } catch (e: any) {
+        // tangani error auth
+        if (e?.message === "UNAUTHORIZED") {
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        }
         console.error("[api/anjab][POST] error:", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }

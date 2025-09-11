@@ -219,14 +219,3 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         client.release();
     }
 }
-
-// (opsional) HEAD untuk cek exist
-export async function HEAD(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-    try {
-        const { id } = await ctx.params;
-        const { rows } = await pool.query(`SELECT 1 FROM syarat_jabatan WHERE id_jabatan=$1`, [id]);
-        return new Response(null, { status: rows.length ? 200 : 404 });
-    } catch {
-        return new Response(null, { status: 500 });
-    }
-}

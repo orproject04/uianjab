@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -41,7 +42,7 @@ export default function AnjabCreateByIdPage() {
 
         setSaving(true);
         try {
-            const res = await fetch("/api/anjab", {
+            const res = await apiFetch("/api/anjab", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
