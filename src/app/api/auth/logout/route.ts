@@ -1,31 +1,27 @@
 // src/app/api/auth/logout/route.ts
-import { cookies } from "next/headers";
+import { NextRequest } from "next/server";
 import pool from "@/lib/db";
 import { hashRefreshToken } from "@/lib/tokens";
 
-function clearCookie(name: string) {
-    // Sesuaikan flags dengan httpOnlyCookie() milikmu
-    return `${name}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
-}
-
-export async function POST() {
-    const cookieStore = await cookies();
-    const refresh = cookieStore.get("refresh_token")?.value;
+/**
+ * Logout: kirim refresh token via Authorization Bearer atau body { refresh_token }.
+ * Server akan revoke baris user_session yg cocok. Tidak ada cookie yang dibersihkan.
+ */
+export async function POST(req: NextRequest) {
+    const auth = req.headers.get("authorization") || "";
+    const headerRefresh = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    const body = await req.json().catch(() => ({}));
+    const refresh = headerRefresh || body?.refresh_token;
 
     if (refresh) {
-        const h = hashRefreshToken(refresh);
-        // Revoke sesi yang cocok dengan refresh token di browser ini
         await pool.query(
-            `UPDATE user_session SET is_revoked = true, last_used_at = now()
+            `UPDATE user_session
+          SET is_revoked = true,
+              last_used_at = now()
         WHERE refresh_token_hash = $1`,
-            [h]
+            [hashRefreshToken(refresh)]
         );
     }
 
-    // Kosongkan cookie access & refresh
-    const headers = new Headers();
-    headers.append("Set-Cookie", clearCookie("access_token"));
-    headers.append("Set-Cookie", clearCookie("refresh_token"));
-
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+    return Response.json({ ok: true }, { status: 200 });
 }

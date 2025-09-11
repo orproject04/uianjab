@@ -5,9 +5,7 @@ import {
     comparePassword,
     signAccessToken,
     signRefreshToken,
-    httpOnlyCookie,
-    ACCESS_TOKEN_MAXAGE_SEC,
-    REFRESH_TOKEN_MAXAGE_SEC,
+    ACCESS_TOKEN_MAXAGE_SEC
 } from "@/lib/auth";
 import { hashRefreshToken } from "@/lib/tokens";
 
@@ -19,7 +17,7 @@ export async function POST(req: NextRequest) {
         }
 
         const { rows } = await pool.query(
-            `SELECT id,email,password_hash,is_email_verified,role, full_name
+            `SELECT id,email,password_hash,is_email_verified,role,full_name
              FROM user_anjab
              WHERE email=$1`,
             [email]
@@ -27,7 +25,6 @@ export async function POST(req: NextRequest) {
         if (!rows.length) return Response.json({ error: "Email / Password salah" }, { status: 401 });
         const user = rows[0];
 
-        // Blokir bila belum verifikasi
         if (!user.is_email_verified) {
             return Response.json({ error: "Email belum diverifikasi" }, { status: 403 });
         }
@@ -38,19 +35,23 @@ export async function POST(req: NextRequest) {
         const access  = signAccessToken({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name });
         const refresh = signRefreshToken({ sub: user.id });
 
+        // simpan HASH refresh di DB
         const refreshHash = hashRefreshToken(refresh);
-        const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // pindah ke konstanta jika mau
-
+        const expires     = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // atau pakai REFRESH_TOKEN_MAXAGE_SEC jika ingin konsisten
         await pool.query(
             `INSERT INTO user_session (user_id, refresh_token_hash, expires_at)
              VALUES ($1, $2, $3)`,
             [user.id, refreshHash, expires]
         );
 
-        const headers = new Headers();
-        headers.append("Set-Cookie", httpOnlyCookie("access_token", access,  ACCESS_TOKEN_MAXAGE_SEC));
-        headers.append("Set-Cookie", httpOnlyCookie("refresh_token", refresh, REFRESH_TOKEN_MAXAGE_SEC));
-        return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+        // Kembali JSON tokens (tanpa Set-Cookie)
+        return Response.json({
+            ok: true,
+            token_type: "Bearer",
+            access_token: access,
+            refresh_token: refresh,
+            expires_in: ACCESS_TOKEN_MAXAGE_SEC,
+        }, { status: 200 });
     } catch {
         return Response.json({ error: "Gagal login" }, { status: 500 });
     }

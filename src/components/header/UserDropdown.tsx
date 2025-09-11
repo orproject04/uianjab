@@ -1,65 +1,64 @@
+// src/components/layout/UserDropdown.tsx
 "use client";
+
 import React, { useEffect, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { FaUser } from "react-icons/fa";
 import { useRouter } from "next/navigation";
-import {apiFetch} from "@/lib/apiFetch";
+
+import { useMe } from "@/context/MeContext";
+import { tokenStore, clearTokens } from "@/lib/tokens";
 
 type Me = { id: string; email: string; role: string; full_name: string | null };
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [me, setMe] = useState<Me | null>(null);
   const router = useRouter();
 
-  // Ambil profil ringan dari /api/auth/me
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const r = await apiFetch("/api/auth/me", { method: "GET" });
-        if (!active) return;
-        if (r.ok) {
-          const j = await r.json();
-          setMe(j.data as Me);
-        } else {
-          setMe(null); // unauthorized → biarkan null (middleware sudah handle proteksi halaman)
-        }
-      } catch {
-        setMe(null);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+  // Ambil profil dari MeContext (tidak fetch sendiri)
+  const { me } = useMe();
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
     setIsOpen((prev) => !prev);
   }
-  function closeDropdown() { setIsOpen(false); }
+  function closeDropdown() {
+    setIsOpen(false);
+  }
+
+  // Tutup dropdown saat klik di luar
+  useEffect(() => {
+    function onDocClick() {
+      setIsOpen(false);
+    }
+    if (isOpen) document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [isOpen]);
 
   async function handleSignOut() {
     if (signingOut) return;
     setSigningOut(true);
     try {
-      const r = await fetch("/api/auth/logout", { method: "POST" });
-      closeDropdown();
-      router.replace(r.ok ? "/signin" : "/signin?loggedout=1");
-    } catch {
-      router.replace("/signin?loggedout=1");
+      // Kirim refresh token ke server agar sesi direvoke (jika ada)
+      const refresh = tokenStore.refresh;
+      if (refresh) {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "omit", // Bearer-only; kita simpan token di sessionStorage
+          body: JSON.stringify({ refresh_token: refresh }),
+        }).catch(() => { /* abaikan error jaringan */ });
+      }
     } finally {
+      // Selalu bersihkan token lokal agar benar-benar keluar
+      clearTokens();
+      closeDropdown();
+      router.replace("/signin?loggedout=1");
       setSigningOut(false);
     }
   }
 
-  useEffect(() => {
-    function onDocClick() { setIsOpen(false); }
-    if (isOpen) document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, [isOpen]);
-
-  // Tentukan nama yang ditampilkan
   const displayName =
       me?.full_name?.trim() ||
       (me?.email ? me.email.split("@")[0] : "User");
@@ -67,11 +66,12 @@ export default function UserDropdown() {
   return (
       <div className="relative">
         <button
+            type="button"
             onClick={toggleDropdown}
             className="flex items-center text-gray-700 dark:text-gray-400 dropdown-toggle"
         >
         <span className="mr-3 overflow-hidden rounded-full h-8 w-8 flex items-center justify-center bg-gray-200 dark:bg-gray-800">
-          <FaUser size={28} />
+          <FaUser size={20} />
         </span>
           <span className="block mr-1 font-medium text-theme-sm">
           {displayName}
@@ -80,6 +80,7 @@ export default function UserDropdown() {
               className={`stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
               width="18" height="20" viewBox="0 0 18 20" fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden
           >
             <path d="M4.3125 8.65625L9 13.3437L13.6875 8.65625" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>

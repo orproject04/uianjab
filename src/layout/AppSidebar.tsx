@@ -1,12 +1,22 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+
 import { useSidebar } from "../context/SidebarContext";
-import { GridIcon, ListIcon, PageIcon, ChevronDownIcon, HorizontaLDots, GroupIcon } from "../icons/index";
+import {
+  GridIcon,
+  ListIcon,
+  PageIcon,
+  ChevronDownIcon,
+  HorizontaLDots,
+  GroupIcon,
+} from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
-import {apiFetch} from "@/lib/apiFetch";
+import { useMe } from "@/context/MeContext";        // ⬅️ Ambil data user dari context
+import { apiFetch } from "@/lib/apiFetch";          // tetap untuk fetch struktur organisasi
 
 type APINode = {
   name: string;
@@ -31,29 +41,8 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
 
-  // ====== AUTH via /api/me ======
-  const [userRole, setUserRole] = useState<string>("user");
-  const [meLoaded, setMeLoaded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch("/api/auth/me", { cache: "no-store" });
-        if (!res.ok) throw new Error("unauthorized");
-        const json = await res.json();
-        if (!cancelled && json?.ok && json?.data) {
-          setUserRole(json.data.role ?? "user");
-        }
-      } catch {
-        // non-admin / belum login dianggap user (menu admin tersembunyi)
-      } finally {
-        if (!cancelled) setMeLoaded(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-  const isAdmin = userRole === "admin";
+  // ✅ Ambil role dari MeContext (tidak fetch /api/auth/me sendiri lagi)
+  const { isAdmin, loading: meLoading } = useMe();
 
   // ====== STATE: menu Anjab dari API ======
   const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
@@ -66,6 +55,7 @@ const AppSidebar: React.FC = () => {
       try {
         setLoadingAnjab(true);
         setAnjabError(null);
+        // boleh pakai fetch biasa karena endpoint ini public/GET
         const res = await fetch("/api/struktur-organisasi?base=Anjab", { cache: "no-store" });
         if (!res.ok) throw new Error(`Gagal memuat Anjab (${res.status})`);
         const data: APINode[] | APINode = await res.json();
@@ -219,7 +209,9 @@ const AppSidebar: React.FC = () => {
                             aria-label="toggle"
                         >
                           <ChevronDownIcon
-                              className={`w-4 h-4 transition-transform duration-300 ${isNestedOpen ? "rotate-180" : ""}`}
+                              className={`w-4 h-4 transition-transform duration-300 ${
+                                  isNestedOpen ? "rotate-180" : ""
+                              }`}
                           />
                         </button>
                       </div>
@@ -272,12 +264,18 @@ const AppSidebar: React.FC = () => {
                             <>
                       <span className="menu-item-text">
                         {nav.name}
-                        {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
-                        {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
+                        {isAnjab && loadingAnjab && (
+                            <span className="ml-2 text-xs text-gray-400">(loading…)</span>
+                        )}
+                        {isAnjab && anjabError && (
+                            <span className="ml-2 text-xs text-red-500">({anjabError})</span>
+                        )}
                       </span>
                               <ChevronDownIcon
                                   className={`ml-auto w-5 h-5 transition-transform duration-300 ${
-                                      openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-500" : ""
+                                      openSubmenu?.type === menuType && openSubmenu.index === index
+                                          ? "rotate-180 text-brand-500"
+                                          : ""
                                   }`}
                               />
                             </>
@@ -310,7 +308,9 @@ const AppSidebar: React.FC = () => {
                         }`}
                     >
                       <span>{nav.icon}</span>
-                      {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
+                      {(isExpanded || isHovered || isMobileOpen) && (
+                          <span className="menu-item-text">{nav.name}</span>
+                      )}
                     </Link>
                 )}
               </li>
@@ -350,10 +350,8 @@ const AppSidebar: React.FC = () => {
     });
   }, [pathname, anjabSubs]);
 
-  // Opsional: sembunyikan sementara sampai /api/me selesai (biar tidak flicker)
-  if (!meLoaded) {
-    return null; // atau skeleton sidebar
-  }
+  // Opsional: sembunyikan sementara sampai /api/auth/me selesai (hindari flicker menu admin)
+  if (meLoading) return null;
 
   return (
       <aside

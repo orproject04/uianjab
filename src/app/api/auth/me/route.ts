@@ -1,10 +1,16 @@
-// src/app/api/me/route.ts
-import { cookies } from "next/headers";
+// src/app/api/auth/me/route.ts
+import { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-export async function GET() {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("access_token")?.value;
+export async function GET(req: NextRequest) {
+    // 1) Ambil token dari Authorization header: "Bearer <token>"
+    const auth = req.headers.get("authorization") || "";
+    let token = "";
+
+    if (auth.toLowerCase().startsWith("bearer ")) {
+        token = auth.slice(7).trim();
+    }
+
     if (!token) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }

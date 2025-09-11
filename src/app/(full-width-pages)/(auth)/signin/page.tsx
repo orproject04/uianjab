@@ -1,3 +1,4 @@
+// src/app/(auth)/signin/SignInForm.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -9,6 +10,9 @@ import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 
+import { setTokens } from "@/lib/tokens";
+import { useMe } from "@/context/MeContext"; // ⬅️ kita pakai refresh() dari context
+
 type NoticeType = "success" | "info" | "error";
 type Notice = { type: NoticeType; text: string };
 
@@ -17,19 +21,17 @@ export default function SignInForm() {
   const q = useSearchParams();
   const next = useMemo(() => q.get("next") || "/", [q]);
 
+  const { refresh } = useMe(); // ⬅️ ambil refresh loader profil dari MeContext
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [notice, setNotice] = useState<Notice | null>(null);
+  const showNotice = (n: Notice) => setNotice(n);
 
-  // util singkat buat munculin alert
-  function showNotice(n: Notice) {
-    setNotice(n);
-  }
-
-  // auto-dismiss setelah 4 detik
+  // auto-dismiss alert (4 detik)
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(null), 4000);
@@ -49,18 +51,38 @@ export default function SignInForm() {
     e.preventDefault();
     setLoading(true);
     setNotice(null);
+
     try {
+      // bersihkan token lama (rapi, opsional)
+      sessionStorage.removeItem("access_token");
+      sessionStorage.removeItem("refresh_token");
+
       const r = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        credentials: "omit", // Bearer-only flow
+        body: JSON.stringify({ email, password }),
       });
-      if (r.ok) {
-        router.replace(next);
-      } else {
-        const j = await r.json().catch(() => ({}));
+
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok) {
         showNotice({ type: "error", text: j?.error || "Login gagal. Periksa email/password." });
+        return;
       }
+
+      if (!j?.access_token || !j?.refresh_token) {
+        showNotice({ type: "error", text: "Token tidak ditemukan dari server." });
+        return;
+      }
+
+      // simpan token ke sessionStorage
+      setTokens(j.access_token, j.refresh_token);
+
+      // ⬅️ langsung muat profil ke MeContext sebelum redirect
+      await refresh();
+
+      // redirect ke tujuan
+      router.replace(next);
     } catch {
       showNotice({ type: "error", text: "Tidak bisa menghubungi server." });
     } finally {
@@ -68,13 +90,12 @@ export default function SignInForm() {
     }
   }
 
-  // map style alert
   const alertClass =
       notice?.type === "success"
           ? "text-green-700 bg-green-50 border border-green-200"
           : notice?.type === "info"
               ? "text-blue-700 bg-blue-50 border border-blue-200"
-              : "text-red-700 bg-red-50 border border-red-200"; // error default
+              : "text-red-700 bg-red-50 border border-red-200";
 
   return (
       <div className="flex flex-col flex-1 lg:w-1/2 w-full">
@@ -84,7 +105,7 @@ export default function SignInForm() {
               Sign In
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Silahkan input email dan password.
+              Silakan input email dan password.
             </p>
           </div>
 
