@@ -1,32 +1,36 @@
+// src/components/sidebar/AppSidebar.tsx
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
+import Swal from "sweetalert2";
 
 import { useSidebar } from "../context/SidebarContext";
-import {
-  GridIcon,
-  ListIcon,
-  PageIcon,
-  ChevronDownIcon,
-  HorizontaLDots,
-  GroupIcon,
-} from "../icons/index";
+import { GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
-import { useMe } from "@/context/MeContext";        // ⬅️ Ambil data user dari context
-import { apiFetch } from "@/lib/apiFetch";          // tetap untuk fetch struktur organisasi
+import { useMe } from "@/context/MeContext";
+import {apiFetch} from "@/lib/apiFetch";
 
-type APINode = {
+/** ====== TIPE API (flat) ====== */
+type APIRow = {
+  id: string;
+  parent_id: string | null;
   name: string;
-  path: string;        // contoh: "Anjab/setjen/depmin"
-  subItems?: APINode[];
+  slug: string;
+  level: number;
+  order_index: number;
 };
 
+/** ====== TIPE INTERNAL ====== */
 type SubNavItem = {
+  id: string;
   name: string;
-  path: string;
+  slug: string;
+  path: string;                 // "Anjab/<slug>/<child-slug>"
+  order_index: number;
   subItems?: SubNavItem[];
 };
 
@@ -40,82 +44,93 @@ type NavItem = {
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
-
-  // ✅ Ambil role dari MeContext (tidak fetch /api/auth/me sendiri lagi)
+  const router = useRouter();
   const { isAdmin, loading: meLoading } = useMe();
 
-  // ====== STATE: menu Anjab dari API ======
+  // ====== SLUGIFY (identik dgn halaman GoJS) ======
+  const toSlug = (s: string) =>
+      (s || "unit")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "")
+          .slice(0, 48) || "unit";
+
+  // ====== STATE data anjab ======
   const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
   const [loadingAnjab, setLoadingAnjab] = useState<boolean>(false);
   const [anjabError, setAnjabError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoadingAnjab(true);
-        setAnjabError(null);
-        // boleh pakai fetch biasa karena endpoint ini public/GET
-        const res = await fetch("/api/struktur-organisasi?base=Anjab", { cache: "no-store" });
-        if (!res.ok) throw new Error(`Gagal memuat Anjab (${res.status})`);
-        const data: APINode[] | APINode = await res.json();
-        const arr = Array.isArray(data) ? data : [data];
-
-        const mapNode = (n: APINode): SubNavItem => ({
-          name: n.name,
-          path: n.path,
-          subItems: n.subItems?.map(mapNode),
-        });
-
-        const mapped = arr.map(mapNode);
-        if (!cancelled) setAnjabSubs(mapped);
-      } catch (e: any) {
-        if (!cancelled) setAnjabError(e?.message || "Gagal memuat Anjab");
-      } finally {
-        if (!cancelled) setLoadingAnjab(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // ====== NAV ITEMS (Struktur Organisasi → hanya admin) ======
-  const baseNav: NavItem[] = [
-    { icon: <GridIcon />, name: "Homepage", path: "/", subItems: [] },
-    { name: "Anjab", icon: <ListIcon />, subItems: anjabSubs },
-  ];
-  const adminOnlyNav: NavItem[] = isAdmin
-      ? [{ name: "Struktur Organisasi", icon: <GroupIcon />, path: "/StrukturOrganisasi", subItems: [] }]
-      : [];
-  const navItems: NavItem[] = [...baseNav, ...adminOnlyNav];
-  const othersItems: NavItem[] = [];
-
-  // ====== UI STATE ======
+  // ====== STATE menu ======
   const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
   const [openNestedSubmenus, setOpenNestedSubmenus] = useState<Record<string, boolean>>({});
 
-  const resetAllSubmenus = () => {
-    setOpenSubmenu(null);
-    setOpenNestedSubmenus({});
+  /** ====== Build tree dari flat (slug chain) ====== */
+  const buildTreeFromFlat = (rows: APIRow[]): SubNavItem[] => {
+    const children = new Map<string | null, APIRow[]>();
+    for (const r of rows) {
+      const arr = children.get(r.parent_id) || [];
+      arr.push(r);
+      children.set(r.parent_id, arr);
+    }
+    const buildNode = (node: APIRow, parentPath: string | null): SubNavItem => {
+      const path = parentPath ? `${parentPath}/${node.slug}` : `Anjab/${node.slug}`;
+      const kids = children.get(node.id) || [];
+      const subItems = kids.map((k) => buildNode(k, path));
+      return subItems.length
+          ? { id: node.id, name: node.name, slug: node.slug, path, order_index: node.order_index, subItems }
+          : { id: node.id, name: node.name, slug: node.slug, path, order_index: node.order_index };
+    };
+    const roots = children.get(null) || [];
+    return roots.map((r) => buildNode(r, null));
   };
 
-  // ====== ACTIVE HELPERS ======
-  const isExactActive = useCallback(
-      (path?: string) => {
-        if (!path) return false;
-        const norm = `/${String(path).replace(/^\/+/, "")}`;
-        return pathname === norm;
-      },
-      [pathname]
-  );
+  /** load data */
+  const loadData = useCallback(async () => {
+    setLoadingAnjab(true);
+    setAnjabError(null);
+    try {
+      const res = await apiFetch("/api/struktur-organisasi", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Gagal memuat Anjab (${res.status})`);
+      const flat: APIRow[] = await res.json();
+      setAnjabSubs(buildTreeFromFlat(flat));
+    } catch (e: any) {
+      setAnjabError(e?.message || "Gagal memuat Anjab");
+    } finally {
+      setLoadingAnjab(false);
+    }
+  }, []);
 
-  const isDescendantActive = useCallback(
-      (path?: string) => {
-        if (!path) return false;
-        const norm = `/${String(path).replace(/^\/+/, "")}`;
-        return pathname === norm || pathname.startsWith(norm + "/");
-      },
-      [pathname]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await loadData();
+      if (cancelled) return;
+    })();
+    return () => { cancelled = true; };
+  }, [loadData]);
+
+  /** ====== NAV ITEMS ====== */
+  const navItems: NavItem[] = [
+    { icon: <GridIcon />, name: "Homepage", path: "/", subItems: [] },
+    { name: "Anjab", icon: <ListIcon />, subItems: anjabSubs },
+    ...(isAdmin ? [{ name: "Struktur Organisasi", icon: <GroupIcon />, path: "/StrukturOrganisasi", subItems: [] }] : []),
+  ];
+  const othersItems: NavItem[] = [];
+
+  /** ====== ACTIVE HELPERS ====== */
+  const isExactActive = useCallback((path?: string) => {
+    if (!path) return false;
+    const norm = `/${String(path).replace(/^\/+/, "")}`;
+    return pathname === norm;
+  }, [pathname]);
+
+  const isDescendantActive = useCallback((path?: string) => {
+    if (!path) return false;
+    const norm = `/${String(path).replace(/^\/+/, "")}`;
+    return pathname === norm || pathname.startsWith(norm + "/");
+  }, [pathname]);
 
   const findItemByPath = (path: string, items: SubNavItem[]): SubNavItem | null => {
     for (const item of items) {
@@ -162,12 +177,6 @@ const AppSidebar: React.FC = () => {
     });
   };
 
-  const hasActiveSubItem = useCallback(
-      (items: SubNavItem[]): boolean =>
-          items.some((item) => isDescendantActive(item.path) || (item.subItems ? hasActiveSubItem(item.subItems) : false)),
-      [pathname]
-  );
-
   const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
     setOpenSubmenu((prevOpen) => {
       const isSame = prevOpen?.type === menuType && prevOpen.index === index;
@@ -180,7 +189,291 @@ const AppSidebar: React.FC = () => {
     });
   };
 
-  // ====== RENDERERS ======
+  /** ====== SweetAlert helper ====== */
+  const swalLoading = (title = "Memproses…") =>
+      Swal.fire({ title, allowOutsideClick: false, allowEscapeKey: false, didOpen: () => Swal.showLoading() });
+
+  /** ====== ACTIONS ====== */
+  const handleEditNode = async (node: SubNavItem) => {
+    const html = `
+      <div class="swal2-stack">
+        <label class="block text-left text-xs mb-1">Name</label>
+        <input id="swal-name" class="swal2-input" placeholder="Name" value="${node.name.replace(/"/g, "&quot;")}">
+        <label class="block text-left text-xs mb-1">Slug</label>
+        <input id="swal-slug" class="swal2-input" placeholder="slug" value="${node.slug.replace(/"/g, "&quot;")}">
+        <label class="block text-left text-xs mb-1">Order index</label>
+        <input id="swal-order" type="number" min="0" class="swal2-input" placeholder="0" value="${node.order_index}">
+      </div>
+    `;
+
+    let slugTouched = false;
+
+    const res = await Swal.fire({
+      title: "Edit node",
+      html,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Simpan",
+      cancelButtonText: "Batal",
+      didOpen: () => {
+        const nameEl = document.getElementById("swal-name") as HTMLInputElement | null;
+        const slugEl = document.getElementById("swal-slug") as HTMLInputElement | null;
+        if (!nameEl || !slugEl) return;
+
+        nameEl.addEventListener("input", () => {
+          if (!slugTouched) slugEl.value = toSlug(nameEl.value);
+        });
+        slugEl.addEventListener("input", () => {
+          slugTouched = true;
+          slugEl.value = toSlug(slugEl.value);
+        });
+      },
+      preConfirm: () => {
+        const name = (document.getElementById("swal-name") as HTMLInputElement)?.value?.trim();
+        const rawSlug = (document.getElementById("swal-slug") as HTMLInputElement)?.value?.trim();
+        const orderStr = (document.getElementById("swal-order") as HTMLInputElement)?.value?.trim();
+        const order_index = Number.isFinite(Number(orderStr)) ? Number(orderStr) : NaN;
+
+        const slug = toSlug(rawSlug || name || "");
+
+        if (!name) { Swal.showValidationMessage("Nama wajib diisi"); return; }
+        if (!slug) { Swal.showValidationMessage("Slug wajib diisi"); return; }
+        if (!Number.isFinite(order_index) || order_index < 0) {
+          Swal.showValidationMessage("Order index harus angka ≥ 0");
+          return;
+        }
+        return { name, slug, order_index };
+      },
+    });
+
+    if (!res.isConfirmed || !res.value) return;
+    const payload = res.value as { name: string; slug: string; order_index: number };
+
+    swalLoading("Menyimpan…");
+    try {
+      const resp = await apiFetch(`/api/struktur-organisasi?id=${encodeURIComponent(node.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data?.ok === false) throw new Error(data?.error || `Gagal (${resp.status})`);
+      await loadData();
+      Swal.fire({ icon: "success", title: "Perubahan tersimpan", timer: 1200, showConfirmButton: false });
+    } catch (err: any) {
+      Swal.fire({ icon: "error", title: "Gagal menyimpan", text: err?.message || "Terjadi kesalahan." });
+    }
+  };
+
+  const handleAddChild = async (parent: SubNavItem) => {
+    const html = `
+      <div class="swal2-stack">
+        <label class="block text-left text-xs mb-1">Name</label>
+        <input id="swal-name" class="swal2-input" placeholder="Name" value="">
+        <label class="block text-left text-xs mb-1">Slug</label>
+        <input id="swal-slug" class="swal2-input" placeholder="slug" value="">
+        <label class="block text-left text-xs mb-1">Order index</label>
+        <input id="swal-order" type="number" min="0" class="swal2-input" placeholder="(kosong=auto)">
+        <p class="text-xs text-gray-500 mt-2">Jika order index dikosongkan, backend akan otomatis mengisi ke posisi paling akhir.</p>
+      </div>
+    `;
+
+    let slugTouched = false;
+
+    const res = await Swal.fire({
+      title: `Tambah child untuk "${parent.name}"`,
+      html,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Tambah",
+      cancelButtonText: "Batal",
+      didOpen: () => {
+        const nameEl = document.getElementById("swal-name") as HTMLInputElement | null;
+        const slugEl = document.getElementById("swal-slug") as HTMLInputElement | null;
+        if (!nameEl || !slugEl) return;
+
+        nameEl.addEventListener("input", () => {
+          if (!slugTouched) slugEl.value = toSlug(nameEl.value);
+        });
+        slugEl.addEventListener("input", () => {
+          slugTouched = true;
+          slugEl.value = toSlug(slugEl.value);
+        });
+      },
+      preConfirm: () => {
+        const name = (document.getElementById("swal-name") as HTMLInputElement)?.value?.trim();
+        const rawSlug = (document.getElementById("swal-slug") as HTMLInputElement)?.value?.trim();
+        const orderStr = (document.getElementById("swal-order") as HTMLInputElement)?.value?.trim();
+
+        const slug = toSlug(rawSlug || name || "");
+        const order_index = orderStr === "" ? null : Number(orderStr);
+
+        if (!name) { Swal.showValidationMessage("Nama wajib diisi"); return; }
+        if (!slug) { Swal.showValidationMessage("Slug wajib diisi"); return; }
+        if (order_index !== null && (!Number.isFinite(order_index) || order_index < 0)) {
+          Swal.showValidationMessage("Order index harus angka ≥ 0 atau kosongkan");
+          return;
+        }
+        return { name, slug, order_index };
+      },
+    });
+
+    if (!res.isConfirmed || !res.value) return;
+    const payload = res.value as { name: string; slug: string; order_index: number | null };
+
+    swalLoading("Menambah…");
+    try {
+      const resp = await apiFetch(`/api/struktur-organisasi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parent_id: parent.id,
+          name: payload.name,
+          slug: payload.slug,
+          order_index: payload.order_index, // boleh null → backend auto last
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data?.ok === false) throw new Error(data?.error || `Gagal (${resp.status})`);
+
+      await loadData();
+      setOpenNestedSubmenus((prev) => ({ ...prev, [parent.path]: true }));
+      Swal.fire({ icon: "success", title: "Child ditambahkan", timer: 1200, showConfirmButton: false });
+    } catch (err: any) {
+      Swal.fire({ icon: "error", title: "Gagal menambah", text: err?.message || "Terjadi kesalahan." });
+    }
+  };
+
+  const handleDeleteNode = async (node: SubNavItem) => {
+    const resConfirm = await Swal.fire({
+      title: "Hapus node ini?",
+      html: `"<b>${node.name}</b>" beserta seluruh subtree akan dihapus.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Hapus",
+      cancelButtonText: "Batal",
+      confirmButtonColor: "#ef4444",
+      focusCancel: true,
+      reverseButtons: true,
+    });
+    if (!resConfirm.isConfirmed) return;
+
+    swalLoading("Menghapus…");
+    try {
+      const resp = await apiFetch(`/api/struktur-organisasi?id=${encodeURIComponent(node.id)}`, { method: "DELETE" });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data?.ok === false) throw new Error(data?.error || `Gagal (${resp.status})`);
+      await loadData();
+      Swal.fire({ icon: "success", title: "Berhasil dihapus", text: `${data?.deleted ?? 0} record terhapus.`, timer: 1400, showConfirmButton: false });
+    } catch (err: any) {
+      Swal.fire({ icon: "error", title: "Gagal menghapus", text: err?.message || "Terjadi kesalahan." });
+    }
+  };
+
+  /** ====== BTN ⋯ (portal + fixed) — hanya render jika admin ====== */
+  const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({ node }) => {
+    const [open, setOpen] = useState(false);
+    const btnRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
+    const [pos, setPos] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
+
+    const placeMenu = useCallback(() => {
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const menuW = 176;
+      const menuH = (menuRef.current?.offsetHeight ?? 140) + 2;
+      const gap = 6;
+
+      let left = r.right - menuW;
+      left = Math.max(8, Math.min(left, window.innerWidth - 8 - menuW));
+      const flipUp = window.innerHeight - r.bottom < menuH + 12;
+      const top = flipUp ? r.top - gap - menuH : r.bottom + gap;
+
+      setPos({ top, left });
+    }, []);
+
+    const stop = (e: React.SyntheticEvent) => { e.preventDefault(); e.stopPropagation(); };
+
+    useEffect(() => {
+      if (!open) return;
+      placeMenu();
+      const onScrollResize = () => placeMenu();
+      window.addEventListener("scroll", onScrollResize, true);
+      window.addEventListener("resize", onScrollResize);
+      const onDocDown = (e: MouseEvent) => {
+        const t = e.target as Node;
+        if (btnRef.current?.contains(t)) return;
+        if (menuRef.current?.contains(t)) return;
+        setOpen(false);
+      };
+      document.addEventListener("mousedown", onDocDown);
+      return () => {
+        window.removeEventListener("scroll", onScrollResize, true);
+        window.removeEventListener("resize", onScrollResize);
+        document.removeEventListener("mousedown", onDocDown);
+      };
+    }, [open, placeMenu]);
+
+    if (!isAdmin) return null; // ⬅️ inti: sembunyikan jika bukan admin
+
+    return (
+        <>
+          <button
+              ref={btnRef}
+              type="button"
+              onPointerDown={stop}
+              onMouseDown={stop}
+              onClick={(e) => { stop(e); setOpen(v => !v); }}
+              className="relative z-50 p-1 rounded hover:bg-gray-100 text-gray-500"
+              aria-label="Node actions"
+              title="Aksi"
+          >
+            ⋯
+          </button>
+
+          {open && createPortal(
+              <div
+                  ref={menuRef}
+                  style={{ position: "fixed", top: pos.top, left: pos.left, width: 176 }}
+                  className="rounded-xl border border-gray-200 bg-white shadow-lg z-[1000] text-sm overflow-hidden"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => { setOpen(false); handleEditNode(node); }}
+                    className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700"
+                >
+                  Edit node
+                </button>
+                <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => { setOpen(false); handleAddChild(node); }}
+                    className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700"
+                >
+                  Tambah child
+                </button>
+                <div className="h-px bg-gray-100" />
+                <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => { setOpen(false); handleDeleteNode(node); }}
+                    className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50"
+                >
+                  Hapus (beserta subtree)
+                </button>
+              </div>,
+              document.body
+          )}
+        </>
+    );
+  };
+
+  /** ====== RENDERERS ====== */
   const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
       <ul className={`mt-2 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
         {subItems.map((subItem) => {
@@ -189,13 +482,13 @@ const AppSidebar: React.FC = () => {
           const href = `/${(subItem.path || "").replace(/^\/+/, "")}`;
 
           return (
-              <li key={`${subItem.path}-${subItem.name}`}>
+              <li key={`${subItem.path}-${subItem.id}`}>
                 {hasSubItems ? (
                     <div>
-                      <div className="flex items-center">
+                      <div className="relative isolate flex items-center">
                         <Link
                             href={href}
-                            className={`flex-1 menu-dropdown-item ${
+                            className={`relative z-0 flex-1 menu-dropdown-item ${
                                 isExactActive(subItem.path)
                                     ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
                                     : "menu-dropdown-item-inactive"
@@ -204,16 +497,16 @@ const AppSidebar: React.FC = () => {
                           {subItem.name}
                         </Link>
                         <button
-                            onClick={() => toggleNestedSubmenu(subItem.path)}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleNestedSubmenu(subItem.path); }}
                             className="ml-2 p-1 hover:bg-gray-100 rounded"
                             aria-label="toggle"
+                            title="Expand/Collapse"
                         >
                           <ChevronDownIcon
-                              className={`w-4 h-4 transition-transform duration-300 ${
-                                  isNestedOpen ? "rotate-180" : ""
-                              }`}
+                              className={`w-4 h-4 transition-transform duration-300 ${isNestedOpen ? "rotate-180" : ""}`}
                           />
                         </button>
+                        {isAdmin && <NodeActionsButton node={subItem} />}{/* ⬅️ hanya admin */}
                       </div>
                       <div
                           className={`transition-all duration-300 ease-in-out overflow-hidden ${
@@ -224,16 +517,19 @@ const AppSidebar: React.FC = () => {
                       </div>
                     </div>
                 ) : (
-                    <Link
-                        href={href}
-                        className={`menu-dropdown-item ${
-                            isExactActive(subItem.path)
-                                ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
-                                : "menu-dropdown-item-inactive"
-                        }`}
-                    >
-                      {subItem.name}
-                    </Link>
+                    <div className="relative isolate flex items-center">
+                      <Link
+                          href={href}
+                          className={`relative z-0 flex-1 menu-dropdown-item ${
+                              isExactActive(subItem.path)
+                                  ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
+                                  : "menu-dropdown-item-inactive"
+                          }`}
+                      >
+                        {subItem.name}
+                      </Link>
+                      {isAdmin && <NodeActionsButton node={subItem} />}{/* ⬅️ hanya admin */}
+                    </div>
                 )}
               </li>
           );
@@ -252,7 +548,16 @@ const AppSidebar: React.FC = () => {
                 {hasChildren ? (
                     <>
                       <button
-                          onClick={() => handleSubmenuToggle(index, menuType)}
+                          onClick={() => setOpenSubmenu((prev) => {
+                            const same = prev?.type === menuType && prev.index === index;
+                            if (same) {
+                              setOpenSubmenu(null);
+                              setOpenNestedSubmenus({});
+                              return null;
+                            }
+                            setOpenNestedSubmenus({});
+                            return { type: menuType, index };
+                          })}
                           className={`menu-item group ${
                               openSubmenu?.type === menuType && openSubmenu.index === index
                                   ? "menu-item-active bg-purple-100 text-purple-700 font-semibold"
@@ -264,18 +569,12 @@ const AppSidebar: React.FC = () => {
                             <>
                       <span className="menu-item-text">
                         {nav.name}
-                        {isAnjab && loadingAnjab && (
-                            <span className="ml-2 text-xs text-gray-400">(loading…)</span>
-                        )}
-                        {isAnjab && anjabError && (
-                            <span className="ml-2 text-xs text-red-500">({anjabError})</span>
-                        )}
+                        {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
+                        {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
                       </span>
                               <ChevronDownIcon
                                   className={`ml-auto w-5 h-5 transition-transform duration-300 ${
-                                      openSubmenu?.type === menuType && openSubmenu.index === index
-                                          ? "rotate-180 text-brand-500"
-                                          : ""
+                                      openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-500" : ""
                                   }`}
                               />
                             </>
@@ -299,7 +598,10 @@ const AppSidebar: React.FC = () => {
                     <Link
                         href={nav.path || "/"}
                         onClick={() => {
-                          if (nav.name !== "Anjab") resetAllSubmenus();
+                          if (nav.name !== "Anjab") {
+                            setOpenSubmenu(null);
+                            setOpenNestedSubmenus({});
+                          }
                         }}
                         className={`menu-item group ${
                             isExactActive(nav.path)
@@ -308,9 +610,7 @@ const AppSidebar: React.FC = () => {
                         }`}
                     >
                       <span>{nav.icon}</span>
-                      {(isExpanded || isHovered || isMobileOpen) && (
-                          <span className="menu-item-text">{nav.name}</span>
-                      )}
+                      {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
                     </Link>
                 )}
               </li>
@@ -319,7 +619,7 @@ const AppSidebar: React.FC = () => {
       </ul>
   );
 
-  // ====== AUTO-EXPAND sesuai URL aktif ======
+  // Auto-expand sesuai URL aktif
   useEffect(() => {
     const expandNested = (items: SubNavItem[]) => {
       items.forEach((item) => {
@@ -331,7 +631,7 @@ const AppSidebar: React.FC = () => {
       });
     };
 
-    ["main", "others"].forEach((menuType) => {
+    (["main", "others"] as const).forEach((menuType) => {
       const items = menuType === "main" ? navItems : othersItems;
       items.forEach((nav, index) => {
         if (nav.subItems?.length) {
@@ -342,7 +642,7 @@ const AppSidebar: React.FC = () => {
               });
 
           if (active(nav.subItems)) {
-            setOpenSubmenu({ type: menuType as "main" | "others", index });
+            setOpenSubmenu({ type: menuType, index });
             expandNested(nav.subItems);
           }
         }
@@ -350,7 +650,6 @@ const AppSidebar: React.FC = () => {
     });
   }, [pathname, anjabSubs]);
 
-  // Opsional: sembunyikan sementara sampai /api/auth/me selesai (hindari flicker menu admin)
   if (meLoading) return null;
 
   return (

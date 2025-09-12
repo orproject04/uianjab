@@ -1,128 +1,243 @@
 // src/app/api/struktur-organisasi/route.ts
-import { NextRequest } from 'next/server';
-import pool from '@/lib/db';
+import {NextRequest, NextResponse} from "next/server";
+import pool from "@/lib/db";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 type Row = {
     id: string;
+    parent_id: string | null;
     name: string;
     slug: string;
-    parent_id: string | null;
     level: number;
+    order_index: number;
     created_at: string;
-};
-
-type TreeNode = {
-    name: string;
-    path: string;
-    subItems?: TreeNode[];
 };
 
 export async function GET(req: NextRequest) {
     try {
-        const { searchParams } = new URL(req.url);
+        const user = getUserFromReq(req);
+        if (!user) {
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        }
+        const {searchParams} = new URL(req.url);
+        const root_id = searchParams.get("root_id");
 
-        const base = (searchParams.get('base') || 'Anjab').trim() || 'Anjab';
-        const root_id = searchParams.get('root_id');
-        const root_slug = searchParams.get('root_slug');
-
-        let rows: Row[] = [];
-
-        if (root_id || root_slug) {
-            // Ambil SUBTREE lewat CTE, urut level + created_at
-            const { rows: r0 } = await pool.query<Row>(
-                root_id
-                    ? `WITH RECURSIVE subtree AS (
-                            SELECT id, name, slug, parent_id, level, created_at
-                            FROM struktur_organisasi
-                            WHERE id::text = $1
-                       UNION ALL
-                        SELECT c.id, c.name, c.slug, c.parent_id, c.level, c.created_at
-                        FROM struktur_organisasi c
-                                 JOIN subtree s ON c.parent_id = s.id
-                            )
-                        SELECT * FROM subtree
-                        ORDER BY level ASC, created_at ASC`
-                    : `WITH RECURSIVE subtree AS (
-                            SELECT id, name, slug, parent_id, level, created_at
-                            FROM struktur_organisasi
-                            WHERE slug = $1
-                            UNION ALL
-                            SELECT c.id, c.name, c.slug, c.parent_id, c.level, c.created_at
-                            FROM struktur_organisasi c
-                                     JOIN subtree s ON c.parent_id = s.id
-                        )
-                       SELECT * FROM subtree
-                       ORDER BY level ASC, created_at ASC`,
-                [root_id ?? root_slug!]
+        if (root_id) {
+            const {rows} = await pool.query<Row>(
+                `
+                    WITH RECURSIVE subtree AS (SELECT id, parent_id, name, slug, level, order_index
+                                               FROM struktur_organisasi
+                                               WHERE id::text = $1
+                    UNION ALL
+                    SELECT c.id, c.parent_id, c.name, c.slug, c.level, c.order_index
+                    FROM struktur_organisasi c
+                             JOIN subtree s ON c.parent_id = s.id )
+                    SELECT *
+                    FROM subtree
+                    ORDER BY parent_id NULLS FIRST, order_index ASC
+                `,
+                [root_id]
             );
-            rows = r0;
-            if (!rows.length) {
-                return Response.json({ ok: false, error: 'Root not found' }, { status: 404 });
+            return Response.json(rows);
+        }
+
+        const {rows} = await pool.query<Row>(
+            `
+                SELECT id, parent_id, name, slug, level, order_index
+                FROM struktur_organisasi
+                ORDER BY parent_id NULLS FIRST, order_index ASC;
+            `
+        );
+        return Response.json(rows);
+    } catch (e) {
+        console.error(e);
+        return Response.json({ok: false, error: "Internal error"}, {status: 500});
+    }
+}
+
+/**
+ * POST /api/struktur-organisasi
+ * Body: { parent_id?: string|null, name: string, slug: string, order_index?: number|null }
+ * - level = 0 jika parent_id null
+ * - level = parent.level + 1 jika ada parent
+ * - jika order_index null → set ke (max(order_index)+1) per parent
+ */
+export async function POST(req: NextRequest) {
+    try {
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
+        const body = await req.json().catch(() => ({}));
+        let {parent_id, name, slug, order_index} = body || {};
+        if (typeof name !== "string" || !name.trim()) {
+            return Response.json({ok: false, error: "name wajib diisi"}, {status: 400});
+        }
+        if (typeof slug !== "string" || !slug.trim()) {
+            return Response.json({ok: false, error: "slug wajib diisi"}, {status: 400});
+        }
+        name = name.trim();
+        slug = slug.trim();
+        if (parent_id === undefined) parent_id = null;
+        if (order_index !== null && order_index !== undefined) {
+            if (typeof order_index !== "number" || !Number.isFinite(order_index) || order_index < 0) {
+                return Response.json({ok: false, error: "order_index tidak valid"}, {status: 400});
             }
         } else {
-            // Ambil SEMUA, urut level + created_at
-            const { rows: r0 } = await pool.query<Row>(
-                `SELECT id, name, slug, parent_id, level, created_at
-                 FROM struktur_organisasi
-                 ORDER BY level ASC, created_at ASC`
-            );
-            rows = r0;
-            if (!rows.length) return Response.json([]);
+            order_index = null; // biar auto
         }
 
-        // Index: per id & anak per parent (pakai urutan push dari query → sudah by created_at)
-        const byId = new Map<string, Row>();
-        const children = new Map<string | null, Row[]>();
-        for (const r of rows) {
-            byId.set(r.id, r);
-            const key = r.parent_id;
-            const arr = children.get(key);
-            if (arr) arr.push(r);
-            else children.set(key, [r]);
-        }
+        const {rows} = await pool.query<Row>(
+            `
+                WITH parent AS (SELECT id, level
+                                FROM struktur_organisasi
+                                WHERE id
+                    ::text = $1
+                    )
+                   , defaults AS (
+                SELECT
+                    CASE WHEN $1 IS NULL THEN 0 ELSE (SELECT level FROM parent) + 1 END AS lvl, COALESCE (
+                              $3:: int, (
+                    SELECT COALESCE (MAX (order_index) + 1, 0)
+                    FROM struktur_organisasi
+                    WHERE parent_id IS NOT DISTINCT FROM (SELECT id FROM parent)
+                    )
+                    ) AS ord
+                    ), ins AS (
+                INSERT
+                INTO struktur_organisasi (parent_id, name, slug, level, order_index)
+                VALUES (
+                    (SELECT id FROM parent), $2, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults)
+                    )
+                    RETURNING id, parent_id, name, slug, level, order_index, created_at
+                    )
+                SELECT *
+                FROM ins;
+            `,
+            [parent_id, name, order_index, slug]
+        );
 
-        // Cache path per id (base + rantai slug)
-        const memoPath = new Map<string, string>();
-        function pathOf(node: Row): string {
-            const cached = memoPath.get(node.id);
-            if (cached) return cached;
-
-            const segs: string[] = [node.slug];
-            let cur = node.parent_id ? byId.get(node.parent_id) || null : null;
-            while (cur) {
-                segs.push(cur.slug);
-                cur = cur.parent_id ? byId.get(cur.parent_id) || null : null;
-            }
-            segs.reverse();
-            const p = [base, ...segs].join('/');
-            memoPath.set(node.id, p);
-            return p;
-        }
-
-        // Builder rekursif — TIDAK sort, biarkan urutan dari query (created_at)
-        function build(node: Row): TreeNode {
-            const kids = children.get(node.id) || [];
-            const mappedKids = kids.map(build);
-            const t: TreeNode = {
-                name: node.name,
-                path: pathOf(node),
-            };
-            if (mappedKids.length) t.subItems = mappedKids;
-            return t;
-        }
-
-        // Jika minta subtree → kembalikan 1 object (root = level minimum di hasil CTE)
-        if (root_id || root_slug) {
-            const rootNode = rows.reduce((min, x) => (x.level < min.level ? x : min), rows[0]);
-            return Response.json(build(rootNode));
-        }
-
-        // Kalau tanpa filter → kembalikan semua root (parent_id null), urutan root ikut created_at global
-        const roots = children.get(null) || [];
-        const trees = roots.map(build);
-        return Response.json(trees);
+        return Response.json({ok: true, node: rows[0]});
     } catch (e: any) {
+        if (e?.code === "23505") {
+            return Response.json({ok: false, error: "Slug sudah dipakai di parent yang sama"}, {status: 409});
+        }
         console.error(e);
-        return Response.json({ ok: false, error: 'Internal error' }, { status: 500 });
+        return Response.json({ok: false, error: "Internal error"}, {status: 500});
+    }
+}
+
+/**
+ * PATCH /api/struktur-organisasi?id=<UUID>
+ * Body: { name?: string, slug?: string, order_index?: number }
+ */
+export async function PATCH(req: NextRequest) {
+    try {
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
+        const {searchParams} = new URL(req.url);
+        const id = searchParams.get("id");
+        if (!id) return Response.json({ok: false, error: "id diperlukan"}, {status: 400});
+
+        const body = await req.json().catch(() => ({}));
+        const {name, slug, order_index} = body ?? {};
+
+        const sets: string[] = [];
+        const vals: any[] = [];
+        let i = 1;
+
+        if (typeof name === "string") {
+            sets.push(`name = $${i++}`);
+            vals.push(name.trim());
+        }
+        if (typeof slug === "string") {
+            sets.push(`slug = $${i++}`);
+            vals.push(slug.trim());
+        }
+        if (order_index !== undefined) {
+            if (order_index === null) {
+                // null → auto set ke MAX+1 pada parent id node tsb
+                sets.push(`order_index = (
+          SELECT COALESCE(MAX(s2.order_index)+1, 0) FROM struktur_organisasi s2
+          WHERE s2.parent_id IS NOT DISTINCT FROM struktur_organisasi.parent_id
+        )`);
+            } else if (typeof order_index === "number" && Number.isFinite(order_index) && order_index >= 0) {
+                sets.push(`order_index = $${i++}`);
+                vals.push(order_index);
+            } else {
+                return Response.json({ok: false, error: "order_index tidak valid"}, {status: 400});
+            }
+        }
+
+        if (!sets.length) {
+            return Response.json({ok: false, error: "Tidak ada field untuk diupdate"}, {status: 400});
+        }
+
+        vals.push(id); // WHERE
+        const {rowCount, rows} = await pool.query<Row>(
+            `
+                UPDATE struktur_organisasi
+                SET ${sets.join(", ")}
+                WHERE id::text = $${i}
+                    RETURNING id
+                    , parent_id
+                    , name
+                    , slug
+                    , level
+                    , order_index
+                    , created_at;
+            `,
+            vals
+        );
+
+        if (!rowCount) {
+            return Response.json({ok: false, error: "ID tidak ditemukan"}, {status: 404});
+        }
+
+        return Response.json({ok: true, data: rows[0]});
+    } catch (e: any) {
+        if (e?.code === "23505") {
+            return Response.json({ok: false, error: "Slug sudah dipakai di parent yang sama"}, {status: 409});
+        }
+        console.error(e);
+        return Response.json({ok: false, error: "Internal error"}, {status: 500});
+    }
+}
+
+/**
+ * DELETE /api/struktur-organisasi?id=<UUID>
+ */
+export async function DELETE(req: NextRequest) {
+    try {
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
+        const {searchParams} = new URL(req.url);
+        const id = searchParams.get("id");
+        if (!id) return Response.json({ok: false, error: "id diperlukan"}, {status: 400});
+
+        const {rowCount} = await pool.query(
+            `
+                WITH RECURSIVE subtree AS (SELECT id
+                                           FROM struktur_organisasi
+                                           WHERE id::text = $1
+                UNION ALL
+                SELECT c.id
+                FROM struktur_organisasi c
+                         JOIN subtree s ON c.parent_id = s.id )
+                DELETE
+                FROM struktur_organisasi
+                WHERE id IN (SELECT id FROM subtree);
+            `,
+            [id]
+        );
+
+        return Response.json({ok: true, deleted: rowCount ?? 0});
+    } catch (e) {
+        console.error(e);
+        return Response.json({ok: false, error: "Internal error"}, {status: 500});
     }
 }
