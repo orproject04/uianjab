@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -96,7 +97,7 @@ export default function KorelasiJabatanForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
@@ -141,13 +142,13 @@ export default function KorelasiJabatanForm({
         try {
             let res: Response;
             if (it.id_korelasi > 0) {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan/${it.id_korelasi}`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan/${it.id_korelasi}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -178,7 +179,7 @@ export default function KorelasiJabatanForm({
 
         try {
             if (it.id_korelasi > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan/${it.id_korelasi}`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/korelasi-jabatan/${it.id_korelasi}`, {
                     method: "DELETE",
                 });
                 const json = await res.json().catch(() => ({}));

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -29,7 +30,7 @@ export default function WewenangForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/wewenang`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/wewenang`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
@@ -72,13 +73,13 @@ export default function WewenangForm({
         try {
             let res: Response;
             if (it.id_wewenang > 0) {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/wewenang/${it.id_wewenang}`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/wewenang/${it.id_wewenang}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/wewenang`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/wewenang`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -109,7 +110,7 @@ export default function WewenangForm({
 
         try {
             if (it.id_wewenang > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/wewenang/${it.id_wewenang}`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/wewenang/${it.id_wewenang}`, {
                     method: "DELETE",
                 });
                 const json = await res.json().catch(() => ({}));

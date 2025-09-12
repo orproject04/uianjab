@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -152,7 +153,7 @@ export default function BahanKerjaForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
@@ -191,13 +192,13 @@ export default function BahanKerjaForm({
         try {
             let res: Response;
             if (it.id_bahan > 0) {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja/${it.id_bahan}`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja/${it.id_bahan}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -228,7 +229,7 @@ export default function BahanKerjaForm({
 
         try {
             if (it.id_bahan > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja/${it.id_bahan}`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/bahan-kerja/${it.id_bahan}`, {
                     method: "DELETE",
                 });
                 const json = await res.json().catch(() => ({}));

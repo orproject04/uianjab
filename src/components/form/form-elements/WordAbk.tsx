@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { FileJson, Loader2 } from 'lucide-react';
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -74,7 +75,7 @@ export default function WordAbk({ id }: WordAbkProps) {
 
         setIsLoading(true);
         try {
-            const res = await fetch('/api/abk/docs', { method: 'POST', body: formData });
+            const res = await apiFetch('/api/abk/docs', { method: 'POST', body: formData });
             const result = await res.json();
             await showResultModal(res.ok, result.message || (res.ok ? 'Upload berhasil' : 'Gagal'));
         } catch (err) {

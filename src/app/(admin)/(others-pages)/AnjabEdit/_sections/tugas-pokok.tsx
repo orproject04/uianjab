@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -118,7 +119,7 @@ export default function TugasPokokForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data: TugasPokok[] = await res.json();
@@ -157,7 +158,7 @@ export default function TugasPokokForm({
         try {
             if (item.id_tugas > 0) {
                 // PATCH
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok/${item.id_tugas}`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok/${item.id_tugas}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -168,7 +169,7 @@ export default function TugasPokokForm({
                 updateLocal(idx, json.data);
             } else {
                 // POST create
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -199,7 +200,7 @@ export default function TugasPokokForm({
 
         try {
             if (item.id_tugas > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok/${item.id_tugas}`, { method: "DELETE" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/tugas-pokok/${item.id_tugas}`, { method: "DELETE" });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
             }

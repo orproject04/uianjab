@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -160,7 +161,7 @@ export default function PerangkatKerjaForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
@@ -200,13 +201,13 @@ export default function PerangkatKerjaForm({
         try {
             let res: Response;
             if (it.id_perangkat > 0) {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja/${it.id_perangkat}`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja/${it.id_perangkat}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -237,7 +238,7 @@ export default function PerangkatKerjaForm({
 
         try {
             if (it.id_perangkat > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja/${it.id_perangkat}`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/perangkat-kerja/${it.id_perangkat}`, {
                     method: "DELETE",
                 });
                 const json = await res.json().catch(() => ({}));

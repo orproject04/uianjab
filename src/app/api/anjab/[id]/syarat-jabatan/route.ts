@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import { z } from "zod";
+import {z} from "zod";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 const noCache = {
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -45,16 +46,31 @@ const SyaratSchema = z.object({
 // ===== GET: kembalikan 1 baris atau default kosong =====
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = await ctx.params;
-        const { rows } = await pool.query(
-            `SELECT id_syarat, id_jabatan,
-              keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
-              kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
-              kondisi_fisik_tampilan, kondisi_fisik_keadaan,
-              fungsi_pekerja, created_at, updated_at
-       FROM syarat_jabatan
-       WHERE id_jabatan = $1
-       LIMIT 1`,
+        const user = getUserFromReq(_req);
+        if (!user) {
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        }
+        const {id} = await ctx.params;
+        const {rows} = await pool.query(
+            `SELECT id_syarat,
+                    id_jabatan,
+                    keterampilan_kerja,
+                    bakat_kerja,
+                    temperamen_kerja,
+                    minat_kerja,
+                    upaya_fisik,
+                    kondisi_fisik_jenkel,
+                    kondisi_fisik_umur,
+                    kondisi_fisik_tb,
+                    kondisi_fisik_bb,
+                    kondisi_fisik_pb,
+                    kondisi_fisik_tampilan,
+                    kondisi_fisik_keadaan,
+                    fungsi_pekerja,
+                    created_at,
+                    updated_at
+             FROM syarat_jabatan
+             WHERE id_jabatan = $1 LIMIT 1`,
             [id]
         );
 
@@ -76,7 +92,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
                 kondisi_fisik_pb: "",
                 kondisi_fisik_tampilan: "",
                 kondisi_fisik_keadaan: "",
-            }, { headers: noCache });
+            }, {headers: noCache});
         }
 
         // pastikan array tidak null
@@ -88,10 +104,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         r.upaya_fisik = Array.isArray(r.upaya_fisik) ? r.upaya_fisik : [];
         r.fungsi_pekerja = Array.isArray(r.fungsi_pekerja) ? r.fungsi_pekerja : [];
 
-        return NextResponse.json(r, { headers: noCache });
+        return NextResponse.json(r, {headers: noCache});
     } catch (e) {
         console.error("[syarat-jabatan][GET]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }
 
@@ -99,19 +115,25 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const client = await pool.connect();
     try {
-        const { id } = await ctx.params;
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
+        const {id} = await ctx.params;
         const json = await req.json().catch(() => ({}));
         const p = SyaratSchema.safeParse(json);
         if (!p.success) {
-            return NextResponse.json({ error: "Validasi gagal", detail: p.error.flatten() }, { status: 400 });
+            return NextResponse.json({error: "Validasi gagal", detail: p.error.flatten()}, {status: 400});
         }
 
         const data = p.data;
         const upsert = data.upsert !== false; // default true
 
         // Ambil yg ada
-        const { rows } = await client.query(
-            `SELECT id_syarat FROM syarat_jabatan WHERE id_jabatan=$1 LIMIT 1`,
+        const {rows} = await client.query(
+            `SELECT id_syarat
+             FROM syarat_jabatan
+             WHERE id_jabatan = $1 LIMIT 1`,
             [id]
         );
 
@@ -120,23 +142,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         if (rows.length === 0) {
             if (!upsert) {
                 await client.query("ROLLBACK");
-                return NextResponse.json({ error: "Belum ada record dan upsert=false" }, { status: 404 });
+                return NextResponse.json({error: "Belum ada record dan upsert=false"}, {status: 404});
             }
             // INSERT baru: set semua kolom, kosongkan yang tidak ada
             const ins = await client.query(
                 `INSERT INTO syarat_jabatan
-          (id_jabatan,
-           keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
-           kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
-           kondisi_fisik_tampilan, kondisi_fisik_keadaan,
-           fungsi_pekerja,
-           created_at, updated_at)
-         VALUES
-          ($1,$2,$3,$4,$5,$6,
-           $7,$8,$9,$10,$11,$12,$13,
-           $14,
-           NOW(), NOW())
-         RETURNING *`,
+                 (id_jabatan,
+                  keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
+                  kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
+                  kondisi_fisik_tampilan, kondisi_fisik_keadaan,
+                  fungsi_pekerja,
+                  created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6,
+                         $7, $8, $9, $10, $11, $12, $13,
+                         $14,
+                         NOW(), NOW()) RETURNING *`,
                 [
                     id,
                     data.keterampilan_kerja ?? [],
@@ -162,7 +182,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             r.minat_kerja = r.minat_kerja ?? [];
             r.upaya_fisik = r.upaya_fisik ?? [];
             r.fungsi_pekerja = r.fungsi_pekerja ?? [];
-            return NextResponse.json({ ok: true, data: r });
+            return NextResponse.json({ok: true, data: r});
         }
 
         // UPDATE partial: hanya kolom yang dikirim
@@ -193,14 +213,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         if (!fields.length) {
             await client.query("ROLLBACK");
-            return NextResponse.json({ ok: true }); // tidak ada perubahan
+            return NextResponse.json({ok: true}); // tidak ada perubahan
         }
 
         values.push(id);
         const q = `UPDATE syarat_jabatan
-               SET ${fields.join(", ")}, updated_at=NOW()
-               WHERE id_jabatan=$${values.length}
-               RETURNING *`;
+                   SET ${fields.join(", ")},
+                       updated_at=NOW()
+                   WHERE id_jabatan = $${values.length} RETURNING *`;
         const up = await client.query(q, values);
         await client.query("COMMIT");
         const r = up.rows[0];
@@ -210,11 +230,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         r.minat_kerja = r.minat_kerja ?? [];
         r.upaya_fisik = r.upaya_fisik ?? [];
         r.fungsi_pekerja = r.fungsi_pekerja ?? [];
-        return NextResponse.json({ ok: true, data: r });
+        return NextResponse.json({ok: true, data: r});
     } catch (e) {
         await pool.query("ROLLBACK");
         console.error("[syarat-jabatan][PATCH]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     } finally {
         client.release();
     }

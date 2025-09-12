@@ -5,9 +5,14 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import pool from '@/lib/db';
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
     try {
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
         const formData = await req.formData();
         const files = formData.getAll('files') as File[];
         const id_jabatan = formData.get('id_jabatan') as string | null;

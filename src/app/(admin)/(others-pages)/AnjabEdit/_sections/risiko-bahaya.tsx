@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
@@ -30,7 +31,7 @@ export default function RisikoBahayaForm({
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya`, { cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya`, { cache: "no-store" });
                 if (!alive) return;
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
@@ -74,13 +75,13 @@ export default function RisikoBahayaForm({
         try {
             let res: Response;
             if (it.id_risiko > 0) {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya/${it.id_risiko}`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya/${it.id_risiko}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya`, {
+                res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -111,7 +112,7 @@ export default function RisikoBahayaForm({
 
         try {
             if (it.id_risiko > 0) {
-                const res = await fetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya/${it.id_risiko}`, {
+                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/risiko-bahaya/${it.id_risiko}`, {
                     method: "DELETE",
                 });
                 const json = await res.json().catch(() => ({}));
