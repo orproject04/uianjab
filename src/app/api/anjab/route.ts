@@ -1,8 +1,8 @@
 // src/app/api/anjab/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import { z } from "zod";
-import { getUserFromReq, hasRole } from "@/lib/auth";
+import {z} from "zod";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 // util slugify yang konsisten dengan frontend
 function toSlug(s: string): string {
@@ -24,7 +24,7 @@ function toSlug(s: string): string {
 const CreateJabatanSchema = z.object({
     kode_jabatan: z.string().trim().min(1).max(50),
     nama_jabatan: z.string().trim().min(1).max(200),
-    slug: z.string().trim().min(1).max(200).optional(),
+    slug: z.string().trim().min(1).max(200),
     ikhtisar_jabatan: z.string().trim().optional().nullable(),
     kelas_jabatan: z.string().trim().optional().nullable(),
     prestasi_diharapkan: z.string().trim().optional().nullable(),
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         // AUTH
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
         // VALIDASI BODY
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
         const parsed = CreateJabatanSchema.safeParse(body);
         if (!parsed.success) {
             return NextResponse.json(
-                { error: "Validasi gagal", detail: parsed.error.flatten() },
-                { status: 400 }
+                {error: "Validasi gagal", detail: parsed.error.flatten()},
+                {status: 400}
             );
         }
 
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         } = parsed.data;
 
         // siapkan slug (FE sudah kirim format 2 segmen dash)
-        slug = toSlug(slug ?? nama_jabatan);
+        slug = toSlug(slug);
 
         // cek slug duplicate (opsional)
         const dup = await pool.query<{ exists: boolean }>(
@@ -69,29 +69,30 @@ export async function POST(req: NextRequest) {
         );
         if (dup.rows[0]?.exists) {
             return NextResponse.json(
-                { error: "Slug sudah digunakan. Gunakan slug lain." },
-                { status: 409 }
+                {error: "Slug sudah digunakan. Gunakan slug lain."},
+                {status: 409}
             );
         }
 
         // ===== Validasi struktur_id: wajib ada di struktur_organisasi =====
-        const chk = await pool.query(`SELECT 1 FROM struktur_organisasi WHERE id = $1 LIMIT 1`, [struktur_id]);
+        const chk = await pool.query(`SELECT 1
+                                      FROM struktur_organisasi
+                                      WHERE id = $1 LIMIT 1`, [struktur_id]);
         if (chk.rowCount === 0) {
             // 400 supaya FE bisa menampilkan SweetAlert khusus
             return NextResponse.json(
-                { error: "struktur_id tidak valid atau tidak ditemukan" },
-                { status: 400 }
+                {error: "struktur_id tidak valid atau tidak ditemukan"},
+                {status: 400}
             );
         }
 
         // INSERT
-        const { rows } = await pool.query(
+        const {rows} = await pool.query(
             `
                 INSERT INTO jabatan
-                (kode_jabatan, nama_jabatan, slug, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, struktur_id, created_at, updated_at)
-                VALUES
-                    ($1, $2, $3, $4, $5, $6, $7, now(), now())
-                    RETURNING
+                (kode_jabatan, nama_jabatan, slug, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, struktur_id,
+                 created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now()) RETURNING
           id,
           kode_jabatan,
           nama_jabatan,
@@ -114,18 +115,18 @@ export async function POST(req: NextRequest) {
             ]
         );
 
-        return NextResponse.json({ ok: true, data: rows[0] }, { status: 201 });
+        return NextResponse.json({ok: true, data: rows[0]}, {status: 201});
     } catch (e: any) {
         if (e?.code === "23505") {
             return NextResponse.json(
-                { error: "Slug sudah digunakan. Gunakan slug lain." },
-                { status: 409 }
+                {error: "Slug sudah digunakan. Gunakan slug lain."},
+                {status: 409}
             );
         }
         if (e?.message === "UNAUTHORIZED") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
         }
         console.error("[api/anjab][POST] error:", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }

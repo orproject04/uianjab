@@ -1,5 +1,5 @@
 // src/app/api/anjab/[id]/abk-needed/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth";
 
@@ -11,14 +11,16 @@ export async function GET(
         // 🔑 Auth: wajib login & admin
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
-        const { id } = await ctx.params;
+        const {id} = await ctx.params;
 
         // 🔹 Step 1: cek apakah ada tugas_pokok untuk jabatan_id
-        const { rows: allRows } = await pool.query(
-            `SELECT id, nomor_tugas FROM tugas_pokok WHERE jabatan_id = $1`,
+        const {rows: allRows} = await pool.query(
+            `SELECT id, nomor_tugas
+             FROM tugas_pokok
+             WHERE jabatan_id = $1`,
             [id]
         );
 
@@ -41,7 +43,7 @@ export async function GET(
         }
 
         // 🔹 Step 2: cek incomplete rows
-        const { rows: incomplete } = await pool.query(
+        const {rows: incomplete} = await pool.query(
             `
                 SELECT id, nomor_tugas
                 FROM tugas_pokok
@@ -52,8 +54,7 @@ export async function GET(
                         OR waktu_efektif IS NULL
                         OR kebutuhan_pegawai IS NULL
                     )
-                ORDER BY COALESCE(nomor_tugas, 999999), id
-                    LIMIT 5
+                ORDER BY COALESCE(nomor_tugas, 999999), id LIMIT 5
             `,
             [id]
         );
@@ -75,9 +76,9 @@ export async function GET(
         );
     } catch (e: any) {
         if (e.message === "UNAUTHORIZED") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
         }
         console.error("[abk-needed][GET]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }

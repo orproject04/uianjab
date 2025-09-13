@@ -6,10 +6,18 @@ import {getUserFromReq, hasRole} from "@/lib/auth";
 
 type Params = { id: string };
 
+// Helper: cek UUID v1–v5
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(s: string) {
+    return UUID_RE.test(s);
+}
+
 /**
  * GET /api/anjab/:id
  * - Wajib login (Bearer access token)
- * - Role bebas (user/editor/admin)
+ * - Boleh id UUID atau slug (pakai getAnjabByIdOrSlug)
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
     try {
@@ -18,7 +26,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
             return NextResponse.json({error: "Unauthorized"}, {status: 401});
         }
 
-        const {id} = await ctx.params; // ⬅️ WAJIB await (Next.js 15+)
+        const {id} = await ctx.params; // Next.js 15+: wajib await
         const data = await getAnjabByIdOrSlug(id);
         if (!data) {
             return NextResponse.json({error: "Data Tidak Ditemukan"}, {status: 404});
@@ -29,11 +37,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
             headers: {
                 "Content-Type": "application/json",
                 "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
+                Pragma: "no-cache",
+                Expires: "0",
             },
         });
-    } catch (e) {
+    } catch (e: any) {
+        // Jika e.code = '22P02', kemungkinan dari CAST/::uuid di dalam getAnjabByIdOrSlug (kalau ada)
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid identifier format"}, {status: 400});
+        }
         console.error("[anjab][GET]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     }
@@ -42,6 +54,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
 /**
  * DELETE /api/anjab/:id
  * - Admin-only
+ * - HARUS UUID. Kalau bukan, balas 400 (bukan 500)
  */
 export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> }) {
     try {
@@ -50,16 +63,36 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> })
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
-        const {id} = await ctx.params; // ⬅️ WAJIB await
-        const del = await pool.query(`DELETE
-                                      FROM jabatan
-                                      WHERE id = $1`, [id]);
+        const {id} = await ctx.params;
+
+        // Lapis 1: early validation
+        if (!isUuid(id)) {
+            return NextResponse.json(
+                {error: "Invalid id (must be a UUID)"},
+                {status: 400}
+            );
+        }
+
+        // Opsi tambahan: paksa cast di SQL -> jika somehow bukan UUID, PG lempar 22P02 (ditangani di catch)
+        const del = await pool.query(
+            `DELETE
+             FROM jabatan
+             WHERE id = $1::uuid`,
+            [id]
+        );
 
         if (del.rowCount === 0) {
             return NextResponse.json({error: "Not Found"}, {status: 404});
         }
         return NextResponse.json({ok: true}, {status: 200});
-    } catch (e) {
+    } catch (e: any) {
+        // Lapis 2: map error PG "invalid_text_representation" jadi 400
+        if (e?.code === "22P02") {
+            return NextResponse.json(
+                {error: "Invalid id (must be a UUID)"},
+                {status: 400}
+            );
+        }
         console.error("[anjab][DELETE]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     }

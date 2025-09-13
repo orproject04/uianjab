@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 
 /**
@@ -22,7 +22,7 @@ export async function PATCH(
 ) {
     const client = await pool.connect();
     try {
-        const { id } = await ctx.params; // ⬅️ WAJIB di-await
+        const {id} = await ctx.params; // ⬅️ WAJIB di-await
         const body = await req.json().catch(() => ({} as any));
 
         const name =
@@ -49,7 +49,7 @@ export async function PATCH(
         );
         if (curRes.rowCount === 0) {
             await client.query("ROLLBACK");
-            return NextResponse.json({ ok: false, error: "Node tidak ditemukan" }, { status: 404 });
+            return NextResponse.json({ok: false, error: "Node tidak ditemukan"}, {status: 404});
         }
         const cur = curRes.rows[0] as { id: string; parent_id: string | null; level: number };
 
@@ -65,8 +65,8 @@ export async function PATCH(
             if (newParentId === id) {
                 await client.query("ROLLBACK");
                 return NextResponse.json(
-                    { ok: false, error: "parent_id tidak boleh diri sendiri" },
-                    { status: 400 }
+                    {ok: false, error: "parent_id tidak boleh diri sendiri"},
+                    {status: 400}
                 );
             }
 
@@ -74,14 +74,15 @@ export async function PATCH(
                 // Pastikan bukan descendant
                 const sub = await client.query(
                     `
-                        WITH RECURSIVE subtree AS (
-                            SELECT id FROM struktur_organisasi WHERE id::text = $1
+                        WITH RECURSIVE subtree AS (SELECT id
+                                                   FROM struktur_organisasi
+                                                   WHERE id::text = $1
                         UNION ALL
                         SELECT c.id
                         FROM struktur_organisasi c
-                                 JOIN subtree s ON c.parent_id = s.id
-                            )
-                        SELECT id::text AS id FROM subtree
+                                 JOIN subtree s ON c.parent_id = s.id )
+                        SELECT id::text AS id
+                        FROM subtree
                     `,
                     [id]
                 );
@@ -89,8 +90,8 @@ export async function PATCH(
                 if (descendants.has(newParentId)) {
                     await client.query("ROLLBACK");
                     return NextResponse.json(
-                        { ok: false, error: "parent_id tidak boleh salah satu descendant" },
-                        { status: 400 }
+                        {ok: false, error: "parent_id tidak boleh salah satu descendant"},
+                        {status: 400}
                     );
                 }
 
@@ -102,8 +103,8 @@ export async function PATCH(
                 if (p.rowCount === 0) {
                     await client.query("ROLLBACK");
                     return NextResponse.json(
-                        { ok: false, error: "parent_id tidak ditemukan" },
-                        { status: 400 }
+                        {ok: false, error: "parent_id tidak ditemukan"},
+                        {status: 400}
                     );
                 }
                 newLevel = Number(p.rows[0].level) + 1;
@@ -124,17 +125,19 @@ export async function PATCH(
             if (deltaLevel !== 0) {
                 await client.query(
                     `
-                        WITH RECURSIVE subtree AS (
-                            SELECT id FROM struktur_organisasi WHERE id::text = $1
+                        WITH RECURSIVE subtree AS (SELECT id
+                                                   FROM struktur_organisasi
+                                                   WHERE id::text = $1
                         UNION ALL
                         SELECT c.id
                         FROM struktur_organisasi c
-                                 JOIN subtree s ON c.parent_id = s.id
-                            )
+                                 JOIN subtree s ON c.parent_id = s.id )
                         UPDATE struktur_organisasi t
-                        SET level = t.level + $2, updated_at = NOW()
-                        WHERE t.id IN (
-                            SELECT id FROM subtree WHERE id <> $3::uuid
+                        SET level = t.level + $2,
+                            updated_at = NOW()
+                        WHERE t.id IN (SELECT id
+                                       FROM subtree
+                                       WHERE id <> $3::uuid
                             )
                     `,
                     [id, deltaLevel, id]
@@ -172,11 +175,12 @@ export async function PATCH(
         await rebuildJabatanSlugsForSubtreeLast2(client, id);
 
         await client.query("COMMIT");
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ok: true});
     } catch (e) {
-        await pool.query("ROLLBACK").catch(() => {});
+        await pool.query("ROLLBACK").catch(() => {
+        });
         console.error("[struktur-organisasi][PATCH]", e);
-        return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
+        return NextResponse.json({ok: false, error: "Internal error"}, {status: 500});
     } finally {
         client.release();
     }

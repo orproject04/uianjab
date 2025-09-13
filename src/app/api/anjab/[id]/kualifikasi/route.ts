@@ -12,25 +12,36 @@ const Schema = z.object({
     upsert: z.boolean().optional(),
 });
 
+// Helper: cek UUID v1–v5
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(s: string) {
+    return UUID_RE.test(s);
+}
+
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
         const user = getUserFromReq(_req);
-        if (!user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-        const { id } = await ctx.params;
+        if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
 
-        const { rows } = await pool.query(
-            `SELECT
-                 jabatan_id,
-                 pendidikan_formal,
-                 diklat_penjenjangan,
-                 diklat_teknis,
-                 diklat_fungsional,
-                 pengalaman_kerja
+        const {id} = await ctx.params;
+
+        // Early validation UUID
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
+        const {rows} = await pool.query(
+            `SELECT jabatan_id,
+                    pendidikan_formal,
+                    diklat_penjenjangan,
+                    diklat_teknis,
+                    diklat_fungsional,
+                    pengalaman_kerja
              FROM kualifikasi_jabatan
-             WHERE jabatan_id = $1
-                 LIMIT 1`,
+             WHERE jabatan_id = $1::uuid
+       LIMIT 1`,
             [id]
         );
 
@@ -47,8 +58,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
                 {
                     headers: {
                         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                        "Pragma": "no-cache",
-                        "Expires": "0",
+                        Pragma: "no-cache",
+                        Expires: "0",
                     },
                 }
             );
@@ -57,13 +68,16 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         return NextResponse.json(rows[0], {
             headers: {
                 "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
+                Pragma: "no-cache",
+                Expires: "0",
             },
         });
-    } catch (e) {
+    } catch (e: any) {
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
         console.error("[kualifikasi][GET] error:", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }
 
@@ -71,14 +85,22 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
-        const { id } = await ctx.params;
+        const {id} = await ctx.params;
+
+        // Early validation UUID
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
 
         const json = await req.json().catch(() => ({}));
         const p = Schema.safeParse(json);
         if (!p.success) {
-            return NextResponse.json({ error: "Validasi gagal", detail: p.error.flatten() }, { status: 400 });
+            return NextResponse.json(
+                {error: "Validasi gagal", detail: p.error.flatten()},
+                {status: 400}
+            );
         }
 
         const {
@@ -90,7 +112,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             upsert = true,
         } = p.data;
 
-        // UPDATE terlebih dahulu (FK: jabatan_id)
+        // UPDATE dulu
         const up = await pool.query(
             `UPDATE kualifikasi_jabatan
              SET pendidikan_formal=$1,
@@ -99,42 +121,47 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  diklat_fungsional=$4,
                  pengalaman_kerja=$5,
                  updated_at=NOW()
-             WHERE jabatan_id = $6`,
+             WHERE jabatan_id = $6::uuid`,
             [pendidikan_formal, diklat_penjenjangan, diklat_teknis, diklat_fungsional, pengalaman_kerja, id]
         );
 
         if (up.rowCount === 0) {
             if (!upsert) {
-                return NextResponse.json({ error: "Data belum ada, upsert=false" }, { status: 404 });
+                return NextResponse.json({error: "Data belum ada, upsert=false"}, {status: 404});
             }
-            // INSERT baru (kolom FK: jabatan_id)
+            // INSERT baru
             await pool.query(
                 `INSERT INTO kualifikasi_jabatan
                  (jabatan_id, pendidikan_formal, diklat_penjenjangan, diklat_teknis, diklat_fungsional,
                   pengalaman_kerja, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, NOW(), NOW())`,
                 [id, pendidikan_formal, diklat_penjenjangan, diklat_teknis, diklat_fungsional, pengalaman_kerja]
             );
         }
 
-        // Kembalikan data terbaru (alias agar kompatibel)
-        const { rows } = await pool.query(
-            `SELECT
-                 jabatan_id,
-                 pendidikan_formal,
-                 diklat_penjenjangan,
-                 diklat_teknis,
-                 diklat_fungsional,
-                 pengalaman_kerja
+        const {rows} = await pool.query(
+            `SELECT jabatan_id,
+                    pendidikan_formal,
+                    diklat_penjenjangan,
+                    diklat_teknis,
+                    diklat_fungsional,
+                    pengalaman_kerja
              FROM kualifikasi_jabatan
-             WHERE jabatan_id = $1
-                 LIMIT 1`,
+             WHERE jabatan_id = $1::uuid
+       LIMIT 1`,
             [id]
         );
 
-        return NextResponse.json({ ok: true, data: rows[0] });
-    } catch (e) {
+        return NextResponse.json({ok: true, data: rows[0]});
+    } catch (e: any) {
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+        if (e?.code === "23503") {
+            // FK violation: jabatan_id tidak ada di tabel rujukan (kalau ada constraint)
+            return NextResponse.json({error: "jabatan_id tidak ditemukan (FK violation)"}, {status: 400});
+        }
         console.error("[kualifikasi][PATCH] error:", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }

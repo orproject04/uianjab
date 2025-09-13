@@ -1,23 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import { z } from "zod";
-import { getUserFromReq, hasRole } from "@/lib/auth";
+import {z} from "zod";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 const noCache = {
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-    "Pragma": "no-cache",
-    "Expires": "0",
+    Pragma: "no-cache",
+    Expires: "0",
 };
+
+// UUID helper
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (s: string) => UUID_RE.test(s);
 
 // Helpers normalisasi
 const toTrimmed = (v: unknown) => String(v ?? "").trim();
 const strOpt = z.union([z.string(), z.number()]).transform(toTrimmed);
 
 const strArr = z
-    .union([
-        z.array(z.union([z.string(), z.number()])),
-        z.union([z.string(), z.number()]) // izinkan string tunggal → array 1 item
-    ])
+    .union([z.array(z.union([z.string(), z.number()])), z.union([z.string(), z.number()])])
     .transform((val) => {
         const arr = Array.isArray(val) ? val : [val];
         return arr.map(toTrimmed).filter(Boolean);
@@ -46,10 +48,16 @@ const SyaratSchema = z.object({
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
         const user = getUserFromReq(_req);
-        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
 
-        const { id } = await ctx.params; // jabatan_id
-        const { rows } = await pool.query(
+        const {id} = await ctx.params; // jabatan_id
+
+        // Early validation UUID
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
+        const {rows} = await pool.query(
             `SELECT id,
                     jabatan_id,
                     keterampilan_kerja,
@@ -68,29 +76,32 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
                     created_at,
                     updated_at
              FROM syarat_jabatan
-             WHERE jabatan_id = $1
-                 LIMIT 1`,
+             WHERE jabatan_id = $1::uuid
+       LIMIT 1`,
             [id]
         );
 
         if (!rows.length) {
-            return NextResponse.json({
-                id: null,
-                jabatan_id: id,
-                keterampilan_kerja: [],
-                bakat_kerja: [],
-                temperamen_kerja: [],
-                minat_kerja: [],
-                upaya_fisik: [],
-                fungsi_pekerja: [],
-                kondisi_fisik_jenkel: "",
-                kondisi_fisik_umur: "",
-                kondisi_fisik_tb: "",
-                kondisi_fisik_bb: "",
-                kondisi_fisik_pb: "",
-                kondisi_fisik_tampilan: "",
-                kondisi_fisik_keadaan: "",
-            }, { headers: noCache });
+            return NextResponse.json(
+                {
+                    id: null,
+                    jabatan_id: id,
+                    keterampilan_kerja: [],
+                    bakat_kerja: [],
+                    temperamen_kerja: [],
+                    minat_kerja: [],
+                    upaya_fisik: [],
+                    fungsi_pekerja: [],
+                    kondisi_fisik_jenkel: "",
+                    kondisi_fisik_umur: "",
+                    kondisi_fisik_tb: "",
+                    kondisi_fisik_bb: "",
+                    kondisi_fisik_pb: "",
+                    kondisi_fisik_tampilan: "",
+                    kondisi_fisik_keadaan: "",
+                },
+                {headers: noCache}
+            );
         }
 
         const r = rows[0];
@@ -101,52 +112,73 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         r.upaya_fisik = Array.isArray(r.upaya_fisik) ? r.upaya_fisik : [];
         r.fungsi_pekerja = Array.isArray(r.fungsi_pekerja) ? r.fungsi_pekerja : [];
 
-        return NextResponse.json(r, { headers: noCache });
-    } catch (e) {
+        return NextResponse.json(r, {headers: noCache});
+    } catch (e: any) {
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
         console.error("[syarat-jabatan][GET]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }
 
 // PATCH: partial update + upsert
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-    const client = await pool.connect();
+    let client;
+    let txBegan = false;
     try {
         const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
+        }
 
-        const { id } = await ctx.params; // jabatan_id
+        const {id} = await ctx.params; // jabatan_id
+
+        // Early validation UUID
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
         const json = await req.json().catch(() => ({}));
         const p = SyaratSchema.safeParse(json);
-        if (!p.success) return NextResponse.json({ error: "Validasi gagal", detail: p.error.flatten() }, { status: 400 });
+        if (!p.success) {
+            return NextResponse.json({error: "Validasi gagal", detail: p.error.flatten()}, {status: 400});
+        }
         const data = p.data;
         const upsert = data.upsert !== false;
 
-        const { rows } = await client.query(
-            `SELECT id FROM syarat_jabatan WHERE jabatan_id = $1 LIMIT 1`,
+        client = await pool.connect();
+
+        // Cek eksistensi
+        const {rows} = await client.query(
+            `SELECT id
+             FROM syarat_jabatan
+             WHERE jabatan_id = $1::uuid LIMIT 1`,
             [id]
         );
 
         await client.query("BEGIN");
+        txBegan = true;
 
         if (!rows.length) {
             if (!upsert) {
                 await client.query("ROLLBACK");
-                return NextResponse.json({ error: "Belum ada record dan upsert=false" }, { status: 404 });
+                txBegan = false;
+                return NextResponse.json({error: "Belum ada record dan upsert=false"}, {status: 404});
             }
+
             const ins = await client.query(
                 `INSERT INTO syarat_jabatan
-         (jabatan_id,
-          keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
-          kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
-          kondisi_fisik_tampilan, kondisi_fisik_keadaan,
-          fungsi_pekerja,
-          created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6,
-                 $7, $8, $9, $10, $11, $12, $13,
-                 $14,
-                 NOW(), NOW())
-         RETURNING *`,
+                 (jabatan_id,
+                  keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
+                  kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
+                  kondisi_fisik_tampilan, kondisi_fisik_keadaan,
+                  fungsi_pekerja,
+                  created_at, updated_at)
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6,
+                         $7, $8, $9, $10, $11, $12, $13,
+                         $14,
+                         NOW(), NOW()) RETURNING *`,
                 [
                     id,
                     data.keterampilan_kerja ?? [],
@@ -165,6 +197,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                 ]
             );
             await client.query("COMMIT");
+            txBegan = false;
+
             const r = ins.rows[0];
             r.keterampilan_kerja = r.keterampilan_kerja ?? [];
             r.bakat_kerja = r.bakat_kerja ?? [];
@@ -172,9 +206,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             r.minat_kerja = r.minat_kerja ?? [];
             r.upaya_fisik = r.upaya_fisik ?? [];
             r.fungsi_pekerja = r.fungsi_pekerja ?? [];
-            return NextResponse.json({ ok: true, data: r });
+            return NextResponse.json({ok: true, data: r});
         }
 
+        // Build partial UPDATE
         const fields: string[] = [];
         const values: any[] = [];
         const setIf = (key: string, val: unknown) => {
@@ -201,16 +236,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         if (!fields.length) {
             await client.query("ROLLBACK");
-            return NextResponse.json({ ok: true });
+            txBegan = false;
+            return NextResponse.json({ok: true});
         }
 
         values.push(id);
         const q = `UPDATE syarat_jabatan
-                   SET ${fields.join(", ")}, updated_at=NOW()
-                   WHERE jabatan_id = $${values.length}
-                       RETURNING *`;
+                   SET ${fields.join(", ")},
+                       updated_at=NOW()
+                   WHERE jabatan_id = $${values.length}::uuid
+               RETURNING *`;
         const up = await client.query(q, values);
         await client.query("COMMIT");
+        txBegan = false;
 
         const r = up.rows[0];
         r.keterampilan_kerja = r.keterampilan_kerja ?? [];
@@ -220,12 +258,25 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         r.upaya_fisik = r.upaya_fisik ?? [];
         r.fungsi_pekerja = r.fungsi_pekerja ?? [];
 
-        return NextResponse.json({ ok: true, data: r });
-    } catch (e) {
-        await pool.query("ROLLBACK");
+        return NextResponse.json({ok: true, data: r});
+    } catch (e: any) {
+        // Map error umum
+        if (client && txBegan) {
+            try {
+                await client.query("ROLLBACK");
+            } catch {
+            }
+            txBegan = false;
+        }
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+        if (e?.code === "23503") {
+            return NextResponse.json({error: "jabatan_id tidak ditemukan (FK violation)"}, {status: 400});
+        }
         console.error("[syarat-jabatan][PATCH]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     } finally {
-        client.release();
+        if (client) client.release();
     }
 }

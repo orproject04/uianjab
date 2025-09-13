@@ -1,9 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/anjab/[id]/tugas-pokok/route.ts
+import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import { z } from "zod";
-import { getUserFromReq, hasRole } from "@/lib/auth";
+import {z} from "zod";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
-/** ========= Zod helpers ========= */
+/** ======= Helpers ======= */
+const noCache = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+};
+
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (s: string) => UUID_RE.test(s);
+
+/** ======= Zod helpers ======= */
 const zIntNullable = z.preprocess(
     (v) => (v === "" || v == null ? null : typeof v === "string" ? parseInt(v, 10) : v),
     z.number().int().nullable()
@@ -13,7 +25,7 @@ const zNumNullable = z.preprocess(
     z.number().nullable()
 );
 
-/** ========= Schemas ========= */
+/** ======= Schemas ======= */
 const ItemSchema = z.object({
     nomor_tugas: zIntNullable.optional(),
     uraian_tugas: z.string().default(""),
@@ -26,11 +38,11 @@ const ItemSchema = z.object({
 });
 const ReplaceAllSchema = z.array(ItemSchema);
 
-/** ========= Normalizer untuk response (tanpa alias kolom) ========= */
+/** ======= Normalizer (output) ======= */
 const toNum = (v: any): number | null => (v == null ? null : Number(v));
-const normalizeRow = (r: any, tahapan: string[] = []) => ({
-    id: r.id,                              // UUID dari tugas_pokok.id
-    jabatan_id: r.jabatan_id,              // UUID dari tugas_pokok.jabatan_id
+const normalizeRow = (r: any) => ({
+    id: Number(r.id), // INT
+    jabatan_id: r.jabatan_id, // UUID
     nomor_tugas: toNum(r.nomor_tugas),
     uraian_tugas: r.uraian_tugas ?? "",
     hasil_kerja: Array.isArray(r.hasil_kerja) ? r.hasil_kerja : [],
@@ -38,84 +50,80 @@ const normalizeRow = (r: any, tahapan: string[] = []) => ({
     waktu_penyelesaian_jam: toNum(r.waktu_penyelesaian_jam),
     waktu_efektif: toNum(r.waktu_efektif),
     kebutuhan_pegawai: r.kebutuhan_pegawai == null ? null : Number(r.kebutuhan_pegawai),
-    tahapan,                               // properti tambahan (bukan kolom, hasil join)
+    tahapan: Array.isArray(r.tahapan) ? r.tahapan : [],
 });
 
-/** ========= Load list (join tahapan) ========= */
+/** ======= Query helper: load list with JOIN + json_agg ======= */
 async function loadList(jabatanId: string) {
-    const { rows } = await pool.query(
-        `SELECT
-             id,
-             jabatan_id,
-             nomor_tugas,
-             uraian_tugas,
-             hasil_kerja,
-             jumlah_hasil,
-             waktu_penyelesaian_jam,
-             waktu_efektif,
-             kebutuhan_pegawai
-         FROM tugas_pokok
-         WHERE jabatan_id = $1
-         ORDER BY COALESCE(nomor_tugas, 2147483647), created_at, id`,
+    const {rows} = await pool.query(
+        `
+            SELECT t.id,
+                   t.jabatan_id,
+                   t.nomor_tugas,
+                   t.uraian_tugas,
+                   t.hasil_kerja,
+                   t.jumlah_hasil,
+                   t.waktu_penyelesaian_jam,
+                   t.waktu_efektif,
+                   t.kebutuhan_pegawai,
+                   COALESCE(
+                           json_agg(u.tahapan ORDER BY u.created_at, u.id)
+                           FILTER(WHERE u.tugas_id IS NOT NULL),
+                           '[]'
+                   ) AS tahapan
+            FROM tugas_pokok t
+                     LEFT JOIN tahapan_uraian_tugas u ON u.tugas_id = t.id
+            WHERE t.jabatan_id = $1::uuid
+            GROUP BY
+                t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas, t.hasil_kerja,
+                t.jumlah_hasil, t.waktu_penyelesaian_jam, t.waktu_efektif, t.kebutuhan_pegawai
+            ORDER BY COALESCE (t.nomor_tugas, 2147483647), t.created_at, t.id
+        `,
         [jabatanId]
     );
 
-    if (!rows.length) return [];
-
-    const tugasIds: string[] = rows.map((r: any) => r.id);
-    const tah = await pool.query(
-        `SELECT tugas_id, tahapan
-         FROM tahapan_uraian_tugas
-         WHERE tugas_id = ANY ($1)
-         ORDER BY created_at, id`,
-        [tugasIds]
-    );
-
-    const map = new Map<string, string[]>();
-    for (const t of tah.rows) {
-        const arr = map.get(t.tugas_id) ?? [];
-        arr.push(t.tahapan ?? "");
-        map.set(t.tugas_id, arr);
-    }
-
-    return rows.map((r: any) => normalizeRow(r, map.get(r.id) ?? []));
+    return rows.map(normalizeRow);
 }
 
-/** ========= Routes ========= */
-
+/** ======= Routes ======= */
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
         const user = getUserFromReq(_req);
-        if (!user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
+
+        const {id} = await ctx.params; // jabatan_id
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
         }
-        const { id } = await ctx.params; // jabatan_id (UUID)
+
         const data = await loadList(id);
-        return NextResponse.json(data, {
-            headers: {
-                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        });
-    } catch (e) {
+        return NextResponse.json(data, {headers: noCache});
+    } catch (e: any) {
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
         console.error("[tugas-pokok][GET]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const client = await pool.connect();
+    let began = false;
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
-        const { id } = await ctx.params; // jabatan_id
+        const {id} = await ctx.params; // jabatan_id
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
         const json = await req.json().catch(() => ({}));
         const p = ItemSchema.safeParse(json);
         if (!p.success) {
-            return NextResponse.json({ error: "Validasi gagal", detail: p.error.flatten() }, { status: 400 });
+            return NextResponse.json({error: "Validasi gagal", detail: p.error.flatten()}, {status: 400});
         }
 
         const {
@@ -130,87 +138,131 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         } = p.data;
 
         await client.query("BEGIN");
+        began = true;
 
         const ins = await client.query(
             `INSERT INTO tugas_pokok
              (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
               waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-                 RETURNING
-         id,
-         jabatan_id,
-         nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
-         waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai`,
+             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
             [id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai]
         );
 
-        const newId: string = ins.rows[0].id;
+        const newId: number = Number(ins.rows[0].id);
 
-        // isi tahapan (jika ada)
+        // Insert tahapan (jika ada)
         for (const t of tahapan) {
             await client.query(
                 `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
-                 VALUES ($1, $2, $3, NOW(), NOW())`,
+                 VALUES ($1::int, $2::uuid, $3, NOW(), NOW())`,
                 [newId, id, t]
             );
         }
 
         await client.query("COMMIT");
+        began = false;
 
-        // balas apa adanya (tanpa alias) + tambahkan properti tahapan
-        return NextResponse.json({ ok: true, data: normalizeRow(ins.rows[0], tahapan) });
-    } catch (e) {
-        await pool.query("ROLLBACK");
+        // Reload satu baris pakai JOIN + json_agg
+        const {rows} = await pool.query(
+            `
+                SELECT t.id,
+                       t.jabatan_id,
+                       t.nomor_tugas,
+                       t.uraian_tugas,
+                       t.hasil_kerja,
+                       t.jumlah_hasil,
+                       t.waktu_penyelesaian_jam,
+                       t.waktu_efektif,
+                       t.kebutuhan_pegawai,
+                       COALESCE(
+                               json_agg(u.tahapan ORDER BY u.created_at, u.id)
+                               FILTER(WHERE u.tugas_id IS NOT NULL),
+                               '[]'
+                       ) AS tahapan
+                FROM tugas_pokok t
+                         LEFT JOIN tahapan_uraian_tugas u ON u.tugas_id = t.id
+                WHERE t.jabatan_id = $1::uuid AND t.id = $2:: int
+                GROUP BY
+                    t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas, t.hasil_kerja,
+                    t.jumlah_hasil, t.waktu_penyelesaian_jam, t.waktu_efektif, t.kebutuhan_pegawai
+            `,
+            [id, newId]
+        );
+
+        return NextResponse.json({ok: true, data: normalizeRow(rows[0])});
+    } catch (e: any) {
+        if (began) {
+            try {
+                await client.query("ROLLBACK");
+            } catch {
+            }
+        }
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+        if (e?.code === "23503") {
+            return NextResponse.json({error: "jabatan_id tidak ditemukan (FK violation)"}, {status: 400});
+        }
         console.error("[tugas-pokok][POST]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     } finally {
         client.release();
     }
 }
 
-// (Opsional) replace-all
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const client = await pool.connect();
+    let began = false;
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
-        const { id } = await ctx.params; // jabatan_id
+        const {id} = await ctx.params; // jabatan_id
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
         const json = await req.json().catch(() => ([]));
         const p = ReplaceAllSchema.safeParse(json);
         if (!p.success) {
-            return NextResponse.json({ error: "Validasi gagal", detail: p.error.flatten() }, { status: 400 });
+            return NextResponse.json({error: "Validasi gagal", detail: p.error.flatten()}, {status: 400});
         }
 
         await client.query("BEGIN");
+        began = true;
 
-        // hapus lama
+        // Hapus lama
         const old = await client.query(
-            `SELECT id FROM tugas_pokok WHERE jabatan_id = $1`,
+            `SELECT id
+             FROM tugas_pokok
+             WHERE jabatan_id = $1::uuid`,
             [id]
         );
-        const oldIds: string[] = old.rows.map((r: any) => r.id);
+        const oldIds: number[] = old.rows.map((r: any) => Number(r.id)).filter((n: number) => Number.isInteger(n));
 
         if (oldIds.length) {
             await client.query(
-                `DELETE FROM tahapan_uraian_tugas WHERE tugas_id = ANY ($1)`,
+                `DELETE
+                 FROM tahapan_uraian_tugas
+                 WHERE tugas_id = ANY ($1::int[])`,
                 [oldIds]
             );
             await client.query(
-                `DELETE FROM tugas_pokok WHERE jabatan_id = $1`,
+                `DELETE
+                 FROM tugas_pokok
+                 WHERE jabatan_id = $1::uuid`,
                 [id]
             );
         }
 
-        // insert baru
+        // Insert baru
         for (const it of p.data) {
             const ins = await client.query(
                 `INSERT INTO tugas_pokok
                  (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
                   waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-                     RETURNING id`,
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
                 [
                     id,
                     it.nomor_tugas ?? null,
@@ -222,22 +274,34 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
                     it.kebutuhan_pegawai ?? null,
                 ]
             );
-            const newId = ins.rows[0].id as string;
+            const newId: number = Number(ins.rows[0].id);
             for (const t of it.tahapan ?? []) {
                 await client.query(
                     `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
-                     VALUES ($1, $2, $3, NOW(), NOW())`,
+                     VALUES ($1::int, $2::uuid, $3, NOW(), NOW())`,
                     [newId, id, t]
                 );
             }
         }
 
         await client.query("COMMIT");
-        return NextResponse.json({ ok: true });
-    } catch (e) {
-        await pool.query("ROLLBACK");
+        began = false;
+        return NextResponse.json({ok: true});
+    } catch (e: any) {
+        if (began) {
+            try {
+                await client.query("ROLLBACK");
+            } catch {
+            }
+        }
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+        if (e?.code === "23503") {
+            return NextResponse.json({error: "jabatan_id tidak ditemukan (FK violation)"}, {status: 400});
+        }
         console.error("[tugas-pokok][PUT]", e);
-        return NextResponse.json({ error: "General Error" }, { status: 500 });
+        return NextResponse.json({error: "General Error"}, {status: 500});
     } finally {
         client.release();
     }

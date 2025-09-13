@@ -1,17 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import {NextRequest, NextResponse} from 'next/server';
+import {spawn} from 'child_process';
 import * as fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import pool from '@/lib/db';
-import { getUserFromReq, hasRole } from "@/lib/auth";
+import {getUserFromReq, hasRole} from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+            return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
         const formData = await req.formData();
         const files = formData.getAll('files') as File[];
@@ -19,10 +19,10 @@ export async function POST(req: NextRequest) {
         const struktur_id = (formData.get('struktur_id') as string | null) || null; // ⬅️ tambahkan
 
         if (!id_jabatan) {
-            return NextResponse.json({ message: 'id_jabatan wajib dikirim' }, { status: 400 });
+            return NextResponse.json({message: 'id_jabatan wajib dikirim'}, {status: 400});
         }
         if (!files.length) {
-            return NextResponse.json({ message: 'Tidak ada file yang dikirim' }, { status: 400 });
+            return NextResponse.json({message: 'Tidak ada file yang dikirim'}, {status: 400});
         }
 
         const results: any[] = [];
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
                 let stderrData = '';
 
                 const exitCode: number = await new Promise((resolve, reject) => {
-                    const python = spawn('python', [scriptPath, tempDocPath], { windowsHide: true });
+                    const python = spawn('python', [scriptPath, tempDocPath], {windowsHide: true});
                     python.stdout.on('data', (d) => (stdoutData += d.toString()));
                     python.stderr.on('data', (d) => (stderrData += d.toString()));
                     python.on('close', (code) => resolve(code ?? 1));
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
                 if (exitCode !== 0 || !stdoutData) {
                     console.error(`❌ Gagal ekstrak ${file.name}:`, stderrData);
-                    results.push({ file: file.name, status: 'extract_failed', error: stderrData });
+                    results.push({file: file.name, status: 'extract_failed', error: stderrData});
                     continue;
                 }
 
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
 
                     if (!nama_jabatan || !kode_jabatan) {
                         console.warn(`⚠️ Data tidak lengkap untuk file: ${file.name}`);
-                        results.push({ file: file.name, status: 'missing_data' });
+                        results.push({file: file.name, status: 'missing_data'});
                         continue;
                     }
 
@@ -88,9 +88,9 @@ export async function POST(req: NextRequest) {
                         // ⬇️ Tambah kolom struktur_id saat insert jabatan (opsional; null jika tidak ada)
                         const insJabatan = await client.query(
                             `INSERT INTO jabatan
-                             (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, slug, struktur_id, created_at, updated_at)
-                             VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
-                                 RETURNING id`,
+                             (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, slug,
+                              struktur_id, created_at, updated_at)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id`,
                             [
                                 kode_jabatan,
                                 nama_jabatan,
@@ -105,9 +105,10 @@ export async function POST(req: NextRequest) {
 
                         await client.query(
                             `INSERT INTO unit_kerja (jabatan_id,
-                                                     jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional,
+                                                     jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas,
+                                                     pelaksana, jabatan_fungsional,
                                                      created_at, updated_at)
-                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())`,
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
                             [
                                 jabatanUUID,
                                 unit_kerja['JPT Utama'] || '',
@@ -138,9 +139,10 @@ export async function POST(req: NextRequest) {
 
                         await client.query(
                             `INSERT INTO kualifikasi_jabatan (jabatan_id,
-                                                              pendidikan_formal, diklat_penjenjangan, diklat_teknis, diklat_fungsional, pengalaman_kerja,
+                                                              pendidikan_formal, diklat_penjenjangan, diklat_teknis,
+                                                              diklat_fungsional, pengalaman_kerja,
                                                               created_at, updated_at)
-                             VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+                             VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
                             [
                                 jabatanUUID,
                                 pendidikan_formal_arr,
@@ -168,7 +170,7 @@ export async function POST(req: NextRequest) {
                                                           nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
                                                           waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai,
                                                           created_at, updated_at)
-                                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()) RETURNING id`,
+                                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
                                 [
                                     jabatanUUID,
                                     nomor_tugas,
@@ -186,7 +188,7 @@ export async function POST(req: NextRequest) {
                             for (const tahap of tahapan) {
                                 await client.query(
                                     `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
-                                     VALUES ($1,$2,$3,NOW(),NOW())`,
+                                     VALUES ($1, $2, $3, NOW(), NOW())`,
                                     [tugas_id, jabatanUUID, tahap],
                                 );
                             }
@@ -198,7 +200,7 @@ export async function POST(req: NextRequest) {
                             const satuan_hasil_arr = Array.isArray(hasil.satuan_hasil) ? hasil.satuan_hasil : [];
                             await client.query(
                                 `INSERT INTO hasil_kerja (jabatan_id, hasil_kerja, satuan_hasil, created_at, updated_at)
-                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                 VALUES ($1, $2, $3, NOW(), NOW())`,
                                 [jabatanUUID, hasil_kerja_arr, satuan_hasil_arr],
                             );
                         }
@@ -206,8 +208,9 @@ export async function POST(req: NextRequest) {
                         const bahanKerjaList = item.bahan_kerja || [];
                         for (const bahan of bahanKerjaList) {
                             await client.query(
-                                `INSERT INTO bahan_kerja (jabatan_id, bahan_kerja, penggunaan_dalam_tugas, created_at, updated_at)
-                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                `INSERT INTO bahan_kerja (jabatan_id, bahan_kerja, penggunaan_dalam_tugas, created_at,
+                                                          updated_at)
+                                 VALUES ($1, $2, $3, NOW(), NOW())`,
                                 [jabatanUUID, bahan.bahan_kerja || [], bahan.penggunaan_dalam_tugas || []],
                             );
                         }
@@ -215,8 +218,9 @@ export async function POST(req: NextRequest) {
                         const perangkatKerjaList = item.perangkat_kerja || [];
                         for (const perangkat of perangkatKerjaList) {
                             await client.query(
-                                `INSERT INTO perangkat_kerja (jabatan_id, perangkat_kerja, penggunaan_untuk_tugas, created_at, updated_at)
-                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                `INSERT INTO perangkat_kerja (jabatan_id, perangkat_kerja, penggunaan_untuk_tugas,
+                                                              created_at, updated_at)
+                                 VALUES ($1, $2, $3, NOW(), NOW())`,
                                 [jabatanUUID, perangkat.perangkat_kerja || [], perangkat.penggunaan_untuk_tugas || []],
                             );
                         }
@@ -225,7 +229,7 @@ export async function POST(req: NextRequest) {
                         for (const tj of tanggungJawabList) {
                             await client.query(
                                 `INSERT INTO tanggung_jawab (jabatan_id, uraian_tanggung_jawab, created_at, updated_at)
-                                 VALUES ($1,$2,NOW(),NOW())`,
+                                 VALUES ($1, $2, NOW(), NOW())`,
                                 [jabatanUUID, tj.uraian || ''],
                             );
                         }
@@ -234,7 +238,7 @@ export async function POST(req: NextRequest) {
                         for (const w of wewenangList) {
                             await client.query(
                                 `INSERT INTO wewenang (jabatan_id, uraian_wewenang, created_at, updated_at)
-                                 VALUES ($1,$2,NOW(),NOW())`,
+                                 VALUES ($1, $2, NOW(), NOW())`,
                                 [jabatanUUID, w.uraian || ''],
                             );
                         }
@@ -242,8 +246,9 @@ export async function POST(req: NextRequest) {
                         const korelasiList = item.korelasi_jabatan || [];
                         for (const k of korelasiList) {
                             await client.query(
-                                `INSERT INTO korelasi_jabatan (jabatan_id, jabatan_terkait, unit_kerja_instansi, dalam_hal, created_at, updated_at)
-                                 VALUES ($1,$2,$3,$4,NOW(),NOW())`,
+                                `INSERT INTO korelasi_jabatan (jabatan_id, jabatan_terkait, unit_kerja_instansi,
+                                                               dalam_hal, created_at, updated_at)
+                                 VALUES ($1, $2, $3, $4, NOW(), NOW())`,
                                 [jabatanUUID, k.jabatan || '', k.unit_kerja_instansi || '', k.dalam_hal || []],
                             );
                         }
@@ -252,7 +257,7 @@ export async function POST(req: NextRequest) {
                         for (const kondisi of kondisiList) {
                             await client.query(
                                 `INSERT INTO kondisi_lingkungan_kerja (jabatan_id, aspek, faktor, created_at, updated_at)
-                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                 VALUES ($1, $2, $3, NOW(), NOW())`,
                                 [jabatanUUID, kondisi.aspek || '', kondisi.faktor || ''],
                             );
                         }
@@ -261,20 +266,23 @@ export async function POST(req: NextRequest) {
                         for (const risiko of risikoList) {
                             await client.query(
                                 `INSERT INTO risiko_bahaya (jabatan_id, nama_risiko, penyebab, created_at, updated_at)
-                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                 VALUES ($1, $2, $3, NOW(), NOW())`,
                                 [jabatanUUID, risiko.nama_risiko || '', risiko.penyebab || ''],
                             );
                         }
 
                         const syarat = item.syarat_jabatan || {};
                         await client.query(
-                            `INSERT INTO syarat_jabatan (jabatan_id, keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
-                                                         kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb,
-                                                         kondisi_fisik_pb, kondisi_fisik_tampilan, kondisi_fisik_keadaan, fungsi_pekerja,
+                            `INSERT INTO syarat_jabatan (jabatan_id, keterampilan_kerja, bakat_kerja, temperamen_kerja,
+                                                         minat_kerja, upaya_fisik,
+                                                         kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb,
+                                                         kondisi_fisik_bb,
+                                                         kondisi_fisik_pb, kondisi_fisik_tampilan,
+                                                         kondisi_fisik_keadaan, fungsi_pekerja,
                                                          created_at, updated_at)
-                             VALUES ($1,$2,$3,$4,$5,$6,
-                                     $7,$8,$9,$10,$11,$12,$13,$14,
-                                     NOW(),NOW())`,
+                             VALUES ($1, $2, $3, $4, $5, $6,
+                                     $7, $8, $9, $10, $11, $12, $13, $14,
+                                     NOW(), NOW())`,
                             [
                                 jabatanUUID,
                                 syarat.keterampilan_kerja || [],
@@ -294,17 +302,17 @@ export async function POST(req: NextRequest) {
                         );
 
                         await client.query('COMMIT');
-                        results.push({ file: file.name, status: 'success', id_jabatan });
+                        results.push({file: file.name, status: 'success', id_jabatan});
                     } catch (err) {
                         await client.query('ROLLBACK');
                         console.error(`❌ Error insert data untuk ${file.name}:`, err);
-                        results.push({ file: file.name, status: 'failed', error: String(err) });
+                        results.push({file: file.name, status: 'failed', error: String(err)});
                     } finally {
                         client.release();
                     }
                 } catch (jsonErr) {
                     console.error(`❌ JSON tidak valid dari ${file.name}:`, jsonErr);
-                    results.push({ file: file.name, status: 'invalid_json' });
+                    results.push({file: file.name, status: 'invalid_json'});
                 }
             }
 
@@ -313,11 +321,11 @@ export async function POST(req: NextRequest) {
                 detail: results,
             });
         } finally {
-            await fs.rm(sessionTmpDir, { recursive: true, force: true });
+            await fs.rm(sessionTmpDir, {recursive: true, force: true});
         }
     } catch (err) {
         console.error('❌ Upload error:', err);
-        return NextResponse.json({ message: 'Server error', error: String(err) }, { status: 500 });
+        return NextResponse.json({message: 'Server error', error: String(err)}, {status: 500});
     }
 }
 
