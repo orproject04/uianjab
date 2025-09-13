@@ -5,17 +5,18 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import pool from '@/lib/db';
-import {getUserFromReq, hasRole} from "@/lib/auth";
+import { getUserFromReq, hasRole } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         const formData = await req.formData();
         const files = formData.getAll('files') as File[];
         const id_jabatan = formData.get('id_jabatan') as string | null;
+        const struktur_id = (formData.get('struktur_id') as string | null) || null; // ⬅️ tambahkan
 
         if (!id_jabatan) {
             return NextResponse.json({ message: 'id_jabatan wajib dikirim' }, { status: 400 });
@@ -27,20 +28,17 @@ export async function POST(req: NextRequest) {
         const results: any[] = [];
         const scriptPath = path.resolve(process.cwd(), 'scripts', 'ekstrakanjab.py');
 
-        // 1) Buat temp dir unik per request
         const sessionTmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'anjab-'));
 
         try {
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
 
-                // 2) Bangun nama file unik
                 const ext = path.extname(file.name) || '.doc';
                 const base = path.basename(file.name, ext).replace(/[^\w\-]+/g, '_');
                 const unique = crypto.randomUUID();
                 const tempDocPath = path.join(sessionTmpDir, `${base}-${unique}${ext}`);
 
-                // 3) Tulis file (retry kecil)
                 const buffer = Buffer.from(await file.arrayBuffer());
                 await writeWithRetry(tempDocPath, buffer);
 
@@ -55,7 +53,6 @@ export async function POST(req: NextRequest) {
                     python.on('error', reject);
                 });
 
-                // 4) Hapus file tmp
                 await safeUnlink(tempDocPath);
 
                 if (exitCode !== 0 || !stdoutData) {
@@ -88,22 +85,23 @@ export async function POST(req: NextRequest) {
                     try {
                         await client.query('BEGIN');
 
-                        // === PERUBAHAN: tidak set kolom id; simpan id_jabatan ke kolom slug; ambil UUID via RETURNING id ===
+                        // ⬇️ Tambah kolom struktur_id saat insert jabatan (opsional; null jika tidak ada)
                         const insJabatan = await client.query(
                             `INSERT INTO jabatan
-               (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, slug, created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
-               RETURNING id`,
+                             (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, slug, struktur_id, created_at, updated_at)
+                             VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+                                 RETURNING id`,
                             [
                                 kode_jabatan,
                                 nama_jabatan,
                                 ikhtisar_jabatan || '',
                                 kelas_jabatan || '',
                                 prestasi_yang_diharapkan || '',
-                                id_jabatan, // <- ditaruh di kolom slug
+                                id_jabatan,      // tetap menaruh id_jabatan ke kolom slug (tidak diubah)
+                                struktur_id,     // ⬅️ baru: isi struktur_id bila ada
                             ],
                         );
-                        const jabatanUUID: string = insJabatan.rows[0].id; // UUID auto-generate
+                        const jabatanUUID: string = insJabatan.rows[0].id;
 
                         await client.query(
                             `INSERT INTO unit_kerja (jabatan_id,
@@ -296,7 +294,7 @@ export async function POST(req: NextRequest) {
                         );
 
                         await client.query('COMMIT');
-                        results.push({ file: file.name, status: 'success', id_jabatan }); // tetap sama seperti sebelumnya
+                        results.push({ file: file.name, status: 'success', id_jabatan });
                     } catch (err) {
                         await client.query('ROLLBACK');
                         console.error(`❌ Error insert data untuk ${file.name}:`, err);
@@ -315,7 +313,6 @@ export async function POST(req: NextRequest) {
                 detail: results,
             });
         } finally {
-            // 5) Bersihkan folder session
             await fs.rm(sessionTmpDir, { recursive: true, force: true });
         }
     } catch (err) {

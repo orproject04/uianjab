@@ -62,21 +62,19 @@ export default function InformasiJabatanPage() {
     const [pdfSrc, setPdfSrc] = useState<string | null>(null);
     const [status, setStatus] = useState<Status>("idle");
 
-    // === Tambahan: resolve UUID jabatan dari slug (2 segmen terakhir) & simpan ke localStorage ===
+    // === resolve UUID jabatan dari slug (2 segmen terakhir) & simpan ke localStorage — HANYA untuk admin ===
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            if (!id) return;
+            if (!id || !isAdmin) return; // <— ditambah pengecekan admin
             try {
-                // Asumsi endpoint GET /api/anjab/[slug] mengembalikan JSON yang memuat kolom id (uuid jabatan)
+                // Asumsi endpoint GET /api/anjab/[slug]/uuid mengembalikan JSON yang memuat kolom id (uuid jabatan)
                 const res = await apiFetch(`/api/anjab/${encodedId}/uuid`, { method: "GET", cache: "no-store" });
                 if (!res.ok) return;
                 const data = await res.json();
 
                 // Ambil UUID dengan fallback aman
-                const createdId =
-                    data?.id ??
-                    null;
+                const createdId = data?.id ?? null;
 
                 if (!cancelled && createdId && typeof window !== "undefined") {
                     // Key = dua segmen terakhir (nilai `id`)
@@ -90,7 +88,7 @@ export default function InformasiJabatanPage() {
         return () => {
             cancelled = true;
         };
-    }, [id, encodedId]);
+    }, [id, encodedId, isAdmin]); // <— depend pada isAdmin
 
     // Ambil PDF (GET) → blob → objectURL
     useEffect(() => {
@@ -214,7 +212,7 @@ export default function InformasiJabatanPage() {
                     <div className="border rounded-lg p-4">
                         <h3 className="font-medium mb-2 text-center">Upload Dokumen Anjab (.doc)</h3>
                         <p className="text-sm text-gray-600 mb-3">
-                            Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk ID: <b>{id}</b>. <i>.docx tidak didukung.</i>
+                            Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk <b>{id}</b>. <i>.docx tidak didukung.</i>
                         </p>
                         <WordAnjab id={id} acceptExt=".doc" />
                     </div>
@@ -224,7 +222,7 @@ export default function InformasiJabatanPage() {
                         <div className="m-auto text-center space-y-3">
                             <h3 className="font-medium">Buat Anjab Manual</h3>
                             <p className="text-sm text-gray-600">
-                                Mulai dari form kosong. ID akan dikunci: <b>{id}</b>.
+                                Mulai dari form kosong.
                             </p>
                             <Link
                                 href={`/AnjabCreate/${encodeURIComponent(id)}`}

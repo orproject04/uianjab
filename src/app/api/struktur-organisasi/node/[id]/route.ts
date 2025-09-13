@@ -18,17 +18,19 @@ import pool from "@/lib/db";
  */
 export async function PATCH(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    ctx: { params: Promise<{ id: string }> } // ⬅️ params sekarang Promise
 ) {
     const client = await pool.connect();
     try {
-        const id = params.id;
+        const { id } = await ctx.params; // ⬅️ WAJIB di-await
         const body = await req.json().catch(() => ({} as any));
 
         const name =
             typeof body.name === "string" ? body.name.trim() : (undefined as string | undefined);
         const slug =
             typeof body.slug === "string" ? body.slug.trim() : (undefined as string | undefined);
+        const unit_kerja =
+            typeof body.unit_kerja === "string" ? body.unit_kerja.trim() : (undefined as string | undefined);
         const hasOrder = Object.prototype.hasOwnProperty.call(body, "order_index");
         const order_index = hasOrder ? Number(body.order_index) : (undefined as number | undefined);
         const wantParent = Object.prototype.hasOwnProperty.call(body, "parent_id");
@@ -153,6 +155,12 @@ export async function PATCH(
                 [slug, id]
             );
         }
+        if (unit_kerja !== undefined) {
+            await client.query(
+                "UPDATE struktur_organisasi SET unit_kerja = $1, updated_at = NOW() WHERE id::text = $2",
+                [unit_kerja, id]
+            );
+        }
         if (hasOrder && Number.isFinite(order_index)) {
             await client.query(
                 "UPDATE struktur_organisasi SET order_index = $1, updated_at = NOW() WHERE id::text = $2",
@@ -198,68 +206,68 @@ async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootIdText: strin
             FROM struktur_organisasi so
                      JOIN subtree s ON so.parent_id = s.id
                 ),
-    upwalk AS (
-      -- mulai dari node di subtree, lalu naik ke atas sampai root global
-      SELECT s.id AS node_id,
-             s.id AS anc_id,
-             s.slug AS anc_slug,
-             s.level AS anc_level,
-             s.parent_id
-      FROM subtree s
-      UNION ALL
-      SELECT u.node_id,
-             p.id,
-             p.slug,
-             p.level,
-             p.parent_id
-      FROM upwalk u
-      JOIN struktur_organisasi p ON p.id = u.parent_id
-      WHERE u.parent_id IS NOT NULL
-    ),
-    parts AS (
-      -- normalisasi & buang empty
-      SELECT
-        node_id,
-        NULLIF(
-          regexp_replace(
-            replace(lower(trim(anc_slug)), ' ', '-'),
-            '[^a-z0-9-]+',
-            '',
-            'g'
-          ),
-          ''
-        ) AS part,
-        anc_level
-      FROM upwalk
-    ),
-    grouped AS (
-      SELECT
-        node_id,
-        ARRAY_REMOVE(ARRAY_AGG(part ORDER BY anc_level), NULL) AS parts_arr
-      FROM parts
-      GROUP BY node_id
-    ),
-    last2 AS (
-      SELECT
-        node_id,
-        CASE
-          WHEN array_length(parts_arr, 1) >= 2
-            THEN parts_arr[(array_length(parts_arr,1)-1):array_length(parts_arr,1)]
-          ELSE parts_arr
-        END AS last_two
-      FROM grouped
-    ),
-    paths AS (
-      SELECT
-        node_id,
-        regexp_replace(
-          COALESCE(array_to_string(last_two, '-'), ''),
-          '-{2,}',
-          '-',
-          'g'
-        ) AS short_slug
-      FROM last2
-    )
+        upwalk AS (
+          -- mulai dari node di subtree, lalu naik ke atas sampai root global
+          SELECT s.id AS node_id,
+                 s.id AS anc_id,
+                 s.slug AS anc_slug,
+                 s.level AS anc_level,
+                 s.parent_id
+          FROM subtree s
+          UNION ALL
+          SELECT u.node_id,
+                 p.id,
+                 p.slug,
+                 p.level,
+                 p.parent_id
+          FROM upwalk u
+          JOIN struktur_organisasi p ON p.id = u.parent_id
+          WHERE u.parent_id IS NOT NULL
+        ),
+        parts AS (
+          -- normalisasi & buang empty
+          SELECT
+            node_id,
+            NULLIF(
+              regexp_replace(
+                replace(lower(trim(anc_slug)), ' ', '-'),
+                '[^a-z0-9-]+',
+                '',
+                'g'
+              ),
+              ''
+            ) AS part,
+            anc_level
+          FROM upwalk
+        ),
+        grouped AS (
+          SELECT
+            node_id,
+            ARRAY_REMOVE(ARRAY_AGG(part ORDER BY anc_level), NULL) AS parts_arr
+          FROM parts
+          GROUP BY node_id
+        ),
+        last2 AS (
+          SELECT
+            node_id,
+            CASE
+              WHEN array_length(parts_arr, 1) >= 2
+                THEN parts_arr[(array_length(parts_arr,1)-1):array_length(parts_arr,1)]
+              ELSE parts_arr
+            END AS last_two
+          FROM grouped
+        ),
+        paths AS (
+          SELECT
+            node_id,
+            regexp_replace(
+              COALESCE(array_to_string(last_two, '-'), ''),
+              '-{2,}',
+              '-',
+              'g'
+            ) AS short_slug
+          FROM last2
+        )
             UPDATE jabatan
             SET slug = paths.short_slug,
                 updated_at = NOW()

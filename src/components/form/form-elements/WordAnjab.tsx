@@ -4,7 +4,8 @@ import { useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { FileJson, Loader2 } from 'lucide-react';
-import {apiFetch} from "@/lib/apiFetch";
+import { apiFetch } from "@/lib/apiFetch";
+import { usePathname } from 'next/navigation';
 
 const MySwal = withReactContent(Swal);
 
@@ -17,6 +18,7 @@ interface WordAnjabProps {
 export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabProps) {
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const pathname = usePathname();
 
     const clearFileInput = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -60,11 +62,29 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
         });
     };
 
+    // Ambil 2 segmen terakhir setelah /AnjabEdit/jabatan/... → gabung '-' → key: so:<slug-dash>
+    const getStrukturIdFromLocalStorage = (): string | null => {
+        try {
+            const path = String(pathname || "");
+            const parts = path.split('/').filter(Boolean);
+            const idx = parts.findIndex(p => p.toLowerCase() === 'anjab');
+            const tail = idx >= 0 ? parts.slice(idx + 1) : [];
+            const lastTwo = tail.slice(-2);
+            if (lastTwo.length === 0) return null;
+            const slugDash = lastTwo.join('-');
+            const key = `so:${slugDash}`;
+            const v = localStorage.getItem(key);
+            return (typeof v === 'string' && v.trim()) ? v.trim() : null;
+        } catch {
+            return null;
+        }
+    };
+
     const handleFileUploadWord = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        // ⬇️ Validasi ekstensi sesuai acceptExt
+        // Validasi ekstensi
         const allowed = acceptExt.split(",").map(s => s.trim().toLowerCase());
         const bad = Array.from(files).filter(f => {
             const ext = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
@@ -88,9 +108,22 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
             return;
         }
 
+        // ⬇️ WAJIB: struktur_id harus ada. Jika tidak ada → gagalkan & tampilkan alert.
+        const struktur_id = getStrukturIdFromLocalStorage();
+        if (!struktur_id) {
+            await MySwal.fire({
+                icon: "error",
+                title: "Gagal",
+                text: "Jabatan dan Dokumen Anjab Gagal Terhubung, Silakan Hapus Jabatan dan Buat Ulang",
+            });
+            clearFileInput();
+            return;
+        }
+
         const formData = new FormData();
         for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
         formData.append('id_jabatan', id);
+        formData.append('struktur_id', struktur_id); // kirim ke backend
 
         setIsLoading(true);
         try {

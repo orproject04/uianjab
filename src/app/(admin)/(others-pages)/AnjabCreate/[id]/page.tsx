@@ -11,7 +11,7 @@ const MySwal = withReactContent(Swal);
 
 export default function AnjabCreateByIdPage() {
     const router = useRouter();
-    const { id } = useParams<{ id?: string }>() ?? {}; // segmen terakhir URL → dipakai sebagai slug saat create
+    const { id } = useParams<{ id?: string }>() ?? {}; // segmen terakhir URL → slug dash
     const [saving, setSaving] = useState(false);
 
     const namaRef = useRef<HTMLInputElement>(null);
@@ -21,16 +21,36 @@ export default function AnjabCreateByIdPage() {
         e.preventDefault();
         const form = e.currentTarget as any;
 
-        // slug diambil dari segmen terakhir URL (mis: setjen-depmin)
+        // slug dash (contoh: "setjen-depmin")
         const slugRaw = String(id || "").trim();
 
-        const payload = {
+        // ===== Ambil struktur_id dari localStorage (WAJIB) =====
+        let struktur_id: string | undefined;
+        try {
+            const key = `so:${slugRaw}`; // hanya 2 segmen terakhir, pakai '-'
+            const got = localStorage.getItem(key);
+            if (got && typeof got === "string" && got.trim()) struktur_id = got.trim();
+        } catch {
+            // abaikan error storage
+        }
+
+        if (!struktur_id) {
+            await MySwal.fire({
+                icon: "error",
+                title: "Gagal",
+                text: "Jabatan dan Dokumen Anjab Gagal Terhubung, Silakan Edit Jabatan atau Hapus Jabatan lalu Buat Ulang",
+            });
+            return;
+        }
+
+        const payload: any = {
             nama_jabatan: String(form.nama_jabatan.value || "").trim(),
             kode_jabatan: String(form.kode_jabatan.value || "").trim(),
-            slug: slugRaw, // simpan ke DB
+            slug: slugRaw,
             ikhtisar_jabatan: String(form.ikhtisar_jabatan.value || "").trim() || null,
             kelas_jabatan: String(form.kelas_jabatan.value || "").trim() || null,
             prestasi_diharapkan: String(form.prestasi_diharapkan.value || "").trim() || null,
+            struktur_id, // WAJIB
         };
 
         if (!payload.nama_jabatan || !payload.kode_jabatan) {
@@ -52,6 +72,17 @@ export default function AnjabCreateByIdPage() {
             });
 
             const json = await res.json().catch(() => ({}));
+
+            // Jika 400 terkait struktur_id → tampilkan pesan khusus
+            if (res.status === 400 && json?.error && String(json.error).toLowerCase().includes("struktur")) {
+                await MySwal.fire({
+                    icon: "error",
+                    title: "Gagal",
+                    text: "Jabatan dan Dokumen Anjab Gagal Terhubung, Silakan Hapus Jabatan dan Buat Ulang",
+                });
+                return;
+            }
+
             if (!res.ok || json?.ok === false) {
                 const msg =
                     json?.error ||
@@ -64,23 +95,16 @@ export default function AnjabCreateByIdPage() {
                 return;
             }
 
-            // Ambil id & slug dari respons (backend sebaiknya return {ok:true, data:{id, slug, ...}})
             const createdId: string | undefined = json?.data?.id;
             const createdSlugRaw: string = (json?.data?.slug || slugRaw || "").trim();
-
-            // Bentuk slug untuk URL edit: "setjen-depmin" → "setjen/depmin"
             const slugForUrl = createdSlugRaw.replace(/-/g, "/");
 
-            // Simpan ID supaya halaman edit bisa langsung pakai untuk query DB
             try {
-                if (createdId) {
-                    // simpan mapping di kedua format slug (slash & dash) biar aman
-                    if (slugForUrl) {
-                        localStorage.setItem(`${slugForUrl}`, createdId);
-                    }
+                if (createdId && slugForUrl) {
+                    localStorage.setItem(`${slugForUrl}`, createdId);
                 }
             } catch {
-                // ignore storage error (private mode, quota, dsb)
+                // ignore
             }
 
             await MySwal.fire({
@@ -118,26 +142,14 @@ export default function AnjabCreateByIdPage() {
             </div>
 
             <form onSubmit={onSubmit} className="space-y-5">
-                {/* Nama di atas */}
                 <div>
                     <label className="block text-sm font-medium mb-1">Nama Jabatan *</label>
-                    <input
-                        ref={namaRef}
-                        name="nama_jabatan"
-                        className="w-full rounded border px-3 py-2"
-                        required
-                    />
+                    <input ref={namaRef} name="nama_jabatan" className="w-full rounded border px-3 py-2" required />
                 </div>
 
-                {/* Kode di bawah */}
                 <div>
                     <label className="block text-sm font-medium mb-1">Kode Jabatan *</label>
-                    <input
-                        ref={kodeRef}
-                        name="kode_jabatan"
-                        className="w-full rounded border px-3 py-2"
-                        required
-                    />
+                    <input ref={kodeRef} name="kode_jabatan" className="w-full rounded border px-3 py-2" required />
                 </div>
 
                 <div>
@@ -157,17 +169,10 @@ export default function AnjabCreateByIdPage() {
                 </div>
 
                 <div className="pt-2 flex items-center gap-3">
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="rounded bg-green-600 text-white px-4 py-2 disabled:opacity-60"
-                    >
+                    <button type="submit" disabled={saving} className="rounded bg-green-600 text-white px-4 py-2 disabled:opacity-60">
                         {saving ? "Membuat..." : "Buat"}
                     </button>
-                    <Link
-                        href={id ? `/Anjab/${encodeURIComponent(String(id))}` : `/Anjab`}
-                        className="rounded border px-4 py-2"
-                    >
+                    <Link href={id ? `/Anjab/${encodeURIComponent(String(id))}` : `/Anjab`} className="rounded border px-4 py-2">
                         Batal
                     </Link>
                 </div>

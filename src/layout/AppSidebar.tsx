@@ -17,9 +17,9 @@ import { apiFetch } from "@/lib/apiFetch";
 type APIRow = {
   id: string;
   parent_id: string | null;
-  nama_jabatan: string;     // ⬅️ backend baru
+  nama_jabatan: string;
   slug: string;
-  unit_kerja: string | null; // ⬅️ backend baru
+  unit_kerja: string | null;
   level: number;
   order_index: number;
 };
@@ -27,10 +27,10 @@ type APIRow = {
 /** ====== TIPE INTERNAL ====== */
 type SubNavItem = {
   id: string;
-  name: string;             // mapping dari nama_jabatan
+  name: string;
   slug: string;
   unit_kerja?: string | null;
-  path: string;             // "Anjab/<slug>/<child-slug>"
+  path: string; // "Anjab/<slug>/<child-slug>"
   subItems?: SubNavItem[];
 };
 
@@ -60,9 +60,9 @@ const AppSidebar: React.FC = () => {
   const [editFor, setEditFor] = useState<SubNavItem | null>(null);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
-  const [editOrder, setEditOrder] = useState<string>(""); // string agar bisa kosong total
+  const [editOrder, setEditOrder] = useState<string>("");
   const [editParentId, setEditParentId] = useState<string | "">("");
-  const [editUnitKerja, setEditUnitKerja] = useState<string>(""); // ⬅️ baru
+  const [editUnitKerja, setEditUnitKerja] = useState<string>("");
   const [parentOptions, setParentOptions] = useState<Array<{ id: string | ""; label: string }>>([]);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -71,22 +71,23 @@ const AppSidebar: React.FC = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [addParentFor, setAddParentFor] = useState<SubNavItem | null>(null);
   const [addName, setAddName] = useState("Unit Baru");
-  const [addSlug, setAddSlug] = useState("unit-baru");
-  const [addOrder, setAddOrder] = useState<string>(""); // string agar bisa kosong total
-  const [addUnitKerja, setAddUnitKerja] = useState<string>(""); // ⬅️ baru
+  const [addSlug, setAddSlug] = useState("unitbaru");
+  const [addOrder, setAddOrder] = useState<string>("");
+  const [addUnitKerja, setAddUnitKerja] = useState<string>("");
   const [addErr, setAddErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
 
   // ====== UTIL ======
-  const toSlug = (s: string) =>
-      (s || "unit")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/\p{Diacritic}/gu, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "")
-          .slice(0, 48) || "unit";
+  const toSlug = (s: string) => {
+    if (!s) return "unit";
+    // 1) Jika ada huruf kapital → ambil kapitalnya saja, lalu lowercase (acronym)
+    const caps = (s.match(/[A-Z]/g) || []).join("").toLowerCase();
+    if (caps) return caps;
+    // 2) Jika tidak ada kapital (user ketik manual) → bersihkan ke huruf a-z saja
+    const lettersOnly = s.toLowerCase().replace(/[^a-z]/g, "");
+    return lettersOnly || "unit";
+  };
 
   const buildTreeFromFlat = (rows: APIRow[]): SubNavItem[] => {
     const children = new Map<string | null, APIRow[]>();
@@ -122,6 +123,42 @@ const AppSidebar: React.FC = () => {
     return roots.map((r) => buildNode(r, null));
   };
 
+  // ====== LOCAL STORAGE MAPPING (2 segmen terakhir) ======
+  const pathSegments = (fullPath: string) =>
+      fullPath.replace(/^Anjab\/?/, "").replace(/^\/+/, "").split("/").filter(Boolean);
+
+  // "Anjab/a/b/c" -> "b-c" ; "Anjab/a" -> "a"
+  const lastTwoDashFromPath = (fullPath: string) => {
+    const segs = pathSegments(fullPath);
+    const lastTwo = segs.slice(-2);
+    return lastTwo.join("-");
+  };
+
+  // Helpers find node dan subtree
+  function findNodeById(id: string, items: SubNavItem[]): SubNavItem | null {
+    for (const it of items) {
+      if (it.id === id) return it;
+      if (it.subItems?.length) {
+        const f = findNodeById(id, it.subItems);
+        if (f) return f;
+      }
+    }
+    return null;
+  }
+  function collectDescendantNodes(node: SubNavItem): SubNavItem[] {
+    const out: SubNavItem[] = [];
+    const walk = (n: SubNavItem) => {
+      if (n.subItems?.length) {
+        for (const c of n.subItems) {
+          out.push(c);
+          walk(c);
+        }
+      }
+    };
+    walk(node);
+    return out;
+  }
+
   const loadData = useCallback(async () => {
     setLoadingAnjab(true);
     setAnjabError(null);
@@ -152,7 +189,7 @@ const AppSidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { icon: <GridIcon />, name: "Homepage", path: "/", subItems: [] },
     { name: "Anjab", icon: <ListIcon />, subItems: anjabSubs },
-    ...(isAdmin ? [{ name: "Struktur Organisasi", icon: <GroupIcon />, path: "/StrukturOrganisasi", subItems: [] }] : []),
+    { name: "Struktur Organisasi", icon: <GroupIcon />, path: "/StrukturOrganisasi", subItems: [] }
   ];
   const othersItems: NavItem[] = [];
 
@@ -223,7 +260,7 @@ const AppSidebar: React.FC = () => {
     });
   };
 
-  // ====== DELETE (SweetAlert2) ======
+  // ====== DELETE ======
   const handleDeleteNode = async (node: SubNavItem) => {
     const resSwal = await Swal.fire({
       title: "Hapus Node?",
@@ -252,7 +289,6 @@ const AppSidebar: React.FC = () => {
     if (!res.ok) throw new Error("Gagal memuat pilihan parent");
     const flat: APIRow[] = await res.json();
 
-    // adjacency
     const byParent = new Map<string | null, APIRow[]>();
     for (const r of flat) {
       const arr = byParent.get(r.parent_id) || [];
@@ -268,7 +304,6 @@ const AppSidebar: React.FC = () => {
       byParent.set(k, arr);
     }
 
-    // descendants of current → skip
     const descendants = new Set<string>();
     (function collect(id: string) {
       const kids = byParent.get(id) || [];
@@ -280,7 +315,6 @@ const AppSidebar: React.FC = () => {
       }
     })(currentId);
 
-    // preorder from roots
     const options: Array<{ id: string | ""; label: string }> = [];
     const pushTree = (parentKey: string | null, depth: number) => {
       const kids = byParent.get(parentKey) || [];
@@ -324,8 +358,8 @@ const AppSidebar: React.FC = () => {
           const { opts, currentParent, currentOrder, currentUnitKerja } = await fetchParentOptions(node.id);
           setParentOptions(opts);
           setEditParentId(currentParent);
-          setEditOrder(currentOrder === "0" ? "0" : currentOrder); // tetap string
-          setEditUnitKerja(currentUnitKerja || ""); // ⬅️ baru
+          setEditOrder(currentOrder === "0" ? "0" : currentOrder);
+          setEditUnitKerja(currentUnitKerja || "");
 
           setShowEdit(true);
         } catch (e: any) {
@@ -338,12 +372,14 @@ const AppSidebar: React.FC = () => {
   const submitEdit = useCallback(async () => {
     if (!editFor) return;
     const id = editFor.id;
-    const nama_jabatan = editName.trim();
+
+    // gunakan "name" (bukan nama_jabatan)
+    const name = editName.trim();
     const slug = editSlug.trim();
     const parent_id = editParentId === "" ? null : editParentId;
     const unit_kerja = editUnitKerja.trim() || null;
 
-    if (!nama_jabatan) {
+    if (!name) {
       setSaveErr("Nama tidak boleh kosong.");
       return;
     }
@@ -352,8 +388,8 @@ const AppSidebar: React.FC = () => {
       return;
     }
 
-    // payload: hanya sertakan order_index bila TIDAK kosong
-    const body: any = { nama_jabatan, slug, parent_id, unit_kerja };
+    // kirim "name" agar backend mengenali
+    const body: any = { name, slug, parent_id, unit_kerja };
     if (editOrder.trim() !== "") {
       const parsed = Number(editOrder);
       if (!Number.isFinite(parsed)) {
@@ -373,6 +409,47 @@ const AppSidebar: React.FC = () => {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menyimpan (${res.status})`);
+
+      // (sisanya tetap persis seperti punyamu)
+      try {
+        const curNode = editFor && findNodeById(editFor.id, anjabSubs);
+        if (curNode) {
+          const oldPath = curNode.path;
+          const oldKeySelf = `so:${lastTwoDashFromPath(oldPath)}`;
+
+          let parentPathNew = "Anjab";
+          if (editParentId) {
+            const parentNode = findNodeById(String(editParentId), anjabSubs);
+            if (parentNode) parentPathNew = parentNode.path;
+          }
+          const newPath = `${parentPathNew}/${slug}`;
+          const newKeySelf = `so:${lastTwoDashFromPath(newPath)}`;
+
+          if (oldKeySelf !== newKeySelf) {
+            const val = localStorage.getItem(oldKeySelf) || editFor.id;
+            if (val) localStorage.setItem(newKeySelf, val);
+            try { localStorage.removeItem(oldKeySelf); } catch {}
+          } else {
+            localStorage.setItem(oldKeySelf, editFor.id);
+          }
+
+          const descendants = collectDescendantNodes(curNode);
+          for (const d of descendants) {
+            const oldDescPath = d.path;
+            const rel = oldDescPath.slice(oldPath.length);
+            const newDescPath = `${newPath}${rel}`;
+
+            const oldDescKey = `so:${lastTwoDashFromPath(oldDescPath)}`;
+            const newDescKey = `so:${lastTwoDashFromPath(newDescPath)}`;
+            if (oldDescKey === newDescKey) continue;
+
+            const v = localStorage.getItem(oldDescKey) || d.id;
+            if (v) localStorage.setItem(newDescKey, v);
+            try { localStorage.removeItem(oldDescKey); } catch {}
+          }
+        }
+      } catch {}
+
       setShowEdit(false);
       await loadData();
       await Swal.fire({ icon: "success", title: "Tersimpan", timer: 1000, showConfirmButton: false });
@@ -381,16 +458,16 @@ const AppSidebar: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, loadData]);
+  }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, loadData, anjabSubs]);
 
   // ====== ADD CHILD ======
   const openAddModal = (parent: SubNavItem) => {
     setAddParentFor(parent);
     setAddErr(null);
     setAddName("Unit Baru");
-    setAddSlug("unit-baru");
-    setAddOrder(""); // kosong default
-    setAddUnitKerja(""); // ⬅️ baru
+    setAddSlug("unitbaru");
+    setAddOrder("");
+    setAddUnitKerja("");
     setSlugTouched(false);
     setShowAdd(true);
   };
@@ -431,6 +508,18 @@ const AppSidebar: React.FC = () => {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menambah (${res.status})`);
+
+      // === Simpan mapping localStorage untuk child baru (2 segmen terakhir) ===
+      try {
+        const newId: string | undefined = json?.node?.id;
+        if (newId && addParentFor) {
+          const parentPath = addParentFor.path; // "Anjab/...."
+          const newPath = `${parentPath}/${slug}`;
+          const key = `so:${lastTwoDashFromPath(newPath)}`;
+          localStorage.setItem(key, newId);
+        }
+      } catch {}
+
       setShowAdd(false);
       await loadData();
       await Swal.fire({ icon: "success", title: "Child ditambah", timer: 1000, showConfirmButton: false });
@@ -443,7 +532,7 @@ const AppSidebar: React.FC = () => {
 
   // ====== Node actions menu (⋯) ======
   const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({ node }) => {
-    if (!isAdmin) return null; // hanya admin
+    if (!isAdmin) return null;
     const [open, setOpen] = useState(false);
     const btnRef = useRef<HTMLButtonElement | null>(null);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -600,18 +689,14 @@ const AppSidebar: React.FC = () => {
                             title="Expand/Collapse"
                         >
                           <ChevronDownIcon
-                              className={`w-4 h-4 transition-transform duration-300 ${
-                                  isNestedOpen ? "rotate-180" : ""
-                              }`}
+                              className={`w-4 h-4 transition-transform duration-300 ${isNestedOpen ? "rotate-180" : ""}`}
                           />
                         </button>
                         <NodeActionsButton node={subItem} />
                       </div>
                       <div
                           className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                              isNestedOpen
-                                  ? "max-h-[50000px] opacity-100 scale-y-100"
-                                  : "max-h-0 opacity-0 scale-y-95"
+                              isNestedOpen ? "max-h-[50000px] opacity-100 scale-y-100" : "max-h-0 opacity-0 scale-y-95"
                           }`}
                       >
                         {renderSubItems(subItem.subItems ?? [], level + 1)}
@@ -672,18 +757,12 @@ const AppSidebar: React.FC = () => {
                             <>
                       <span className="menu-item-text">
                         {nav.name}
-                        {isAnjab && loadingAnjab && (
-                            <span className="ml-2 text-xs text-gray-400">(loading…)</span>
-                        )}
-                        {isAnjab && anjabError && (
-                            <span className="ml-2 text-xs text-red-500">({anjabError})</span>
-                        )}
+                        {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
+                        {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
                       </span>
                               <ChevronDownIcon
                                   className={`ml-auto w-5 h-5 transition-transform duration-300 ${
-                                      openSubmenu?.type === menuType && openSubmenu.index === index
-                                          ? "rotate-180 text-brand-500"
-                                          : ""
+                                      openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-500" : ""
                                   }`}
                               />
                             </>
@@ -713,9 +792,7 @@ const AppSidebar: React.FC = () => {
                         }`}
                     >
                       <span>{nav.icon}</span>
-                      {(isExpanded || isHovered || isMobileOpen) && (
-                          <span className="menu-item-text">{nav.name}</span>
-                      )}
+                      {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
                     </Link>
                 )}
               </li>
@@ -754,6 +831,23 @@ const AppSidebar: React.FC = () => {
       });
     });
   }, [pathname, anjabSubs]);
+
+  // ====== NEW: Seed semua mapping localStorage untuk admin ======
+  useEffect(() => {
+    if (!isAdmin || !anjabSubs.length) return;
+    try {
+      const seed = (nodes: SubNavItem[]) => {
+        for (const n of nodes) {
+          const key = `so:${lastTwoDashFromPath(n.path)}`;
+          localStorage.setItem(key, n.id);
+          if (n.subItems?.length) seed(n.subItems);
+        }
+      };
+      seed(anjabSubs);
+    } catch {
+      // abaikan error storage (mode private/quota)
+    }
+  }, [isAdmin, anjabSubs]);
 
   if (meLoading) return null;
 
@@ -849,7 +943,7 @@ const AppSidebar: React.FC = () => {
                         type="number"
                         className="w-full border rounded px-3 py-2"
                         value={editOrder}
-                        onChange={(e) => setEditOrder(e.target.value)} // simpan string apa adanya
+                        onChange={(e) => setEditOrder(e.target.value)}
                         placeholder="Kosongkan untuk auto"
                     />
                   </div>
@@ -941,7 +1035,7 @@ const AppSidebar: React.FC = () => {
                         type="number"
                         className="w-full border rounded px-3 py-2"
                         value={addOrder}
-                        onChange={(e) => setAddOrder(e.target.value)} // string agar bisa kosong
+                        onChange={(e) => setAddOrder(e.target.value)}
                         placeholder="Kosongkan untuk auto"
                     />
                   </div>
