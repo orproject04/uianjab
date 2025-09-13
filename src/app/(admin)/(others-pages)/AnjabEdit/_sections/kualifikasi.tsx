@@ -2,16 +2,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-import Link from "next/link";
-import {apiFetch} from "@/lib/apiFetch";
+import { apiFetch } from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
 type Kualifikasi = {
-    id_kualifikasi?: number;
-    id_jabatan: string;
+    id_jabatan: string; // alias dari API (jabatan_id AS id_jabatan), biarkan kompatibel
     pendidikan_formal: string[] | null;
     diklat_penjenjangan: string[] | null;
     diklat_teknis: string[] | null;
@@ -36,7 +35,6 @@ function ArrayInput({
     const [items, setItems] = useState<string[]>(defaultItems);
     const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
-    // sinkronkan saat defaultItems berubah (mis. setelah fetch)
     useEffect(() => {
         setItems(defaultItems ?? []);
     }, [defaultItems]);
@@ -66,19 +64,15 @@ function ArrayInput({
             inputsRef.current[focusIdx]?.focus();
         }, 0);
     }
-
     function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>, i: number) {
-        // Enter → tambah baris baru (kecuali Shift+Enter)
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             addItem(i);
         }
-        // Ctrl/Cmd+Backspace pada input kosong → hapus baris
         if ((e.ctrlKey || e.metaKey) && e.key === "Backspace" && items[i] === "") {
             e.preventDefault();
             removeItem(i);
         }
-        // Ctrl/Cmd+ArrowUp/Down → fokus pindah
         if ((e.ctrlKey || e.metaKey) && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
             e.preventDefault();
             const nextIndex = e.key === "ArrowUp" ? Math.max(0, i - 1) : Math.min(items.length - 1, i + 1);
@@ -89,7 +83,6 @@ function ArrayInput({
     return (
         <div>
             <label className="block text-sm font-medium mb-2">{label}</label>
-
             <div className="space-y-2">
                 {items.map((v, i) => (
                     <div key={i} className="flex gap-2">
@@ -122,8 +115,6 @@ function ArrayInput({
                         </button>
                     </div>
                 ))}
-
-                {/* tombol tambah baris saat list kosong / tambah di akhir */}
                 <button
                     type="button"
                     onClick={() => addItem()}
@@ -132,57 +123,96 @@ function ArrayInput({
                     + Tambah
                 </button>
             </div>
-
-            {/* Hidden input → kirim sebagai JSON agar mudah diparse di onSubmit */}
+            {/* Hidden input sebagai JSON agar mudah diparse */}
             <input type="hidden" name={name} value={JSON.stringify(items)} />
         </div>
     );
 }
 
-/** ===== Page Section: Kualifikasi ===== */
+/** ===== Section: Kualifikasi (disamakan perilaku & struktur) ===== */
 export default function KualifikasiForm({
-                                            id,
                                             viewerPath,
                                         }: {
-    id: string;
     viewerPath: string;
 }) {
+    const [resolvedId, setResolvedId] = useState<string>(""); // dibaca dari localStorage
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [data, setData] = useState<Kualifikasi | null>(null);
+    const [lastError, setLastError] = useState<string | null>(null);
+    const [storageInfo, setStorageInfo] = useState<{ storageKey: string; exists: boolean; value: string }>({
+        storageKey: "",
+        exists: false,
+        value: "",
+    });
+
     const firstFocus = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (!id) {
-            setLoading(false);
-            return;
+    // resolve dari localStorage (key = 2 segmen terakhir viewerPath)
+    function resolveFromStorage(vpath: string) {
+        const storageKey = vpath.split("/").filter(Boolean).slice(-2).join("/");
+        try {
+            const raw = localStorage.getItem(storageKey);
+            return { storageKey, exists: raw !== null, value: raw ?? "" };
+        } catch {
+            return { storageKey, exists: false, value: "" };
         }
+    }
+
+    // 1) resolve sekali saat mount / viewerPath berubah
+    useEffect(() => {
+        const info = resolveFromStorage(viewerPath);
+        setStorageInfo(info);
+        setResolvedId(info.value);
+        setLastError(null);
+    }, [viewerPath]);
+
+    // 2) fetcher tunggal (untuk retry juga)
+    const fetchAll = async (idLike: string) => {
+        setLastError(null);
+        setLoading(true);
+        try {
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(idLike)}/kualifikasi`, { cache: "no-store" });
+            if (!res.ok) {
+                setData(null);
+                setLastError(`Gagal memuat Kualifikasi (HTTP ${res.status}).`);
+                return;
+            }
+            const json = (await res.json()) as Kualifikasi;
+            setData(json);
+            setTimeout(() => firstFocus.current?.querySelector("input")?.focus(), 0);
+        } catch {
+            setData(null);
+            setLastError("Terjadi kesalahan saat memuat data.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 3) trigger fetch berdasarkan hasil resolve
+    useEffect(() => {
         let alive = true;
         (async () => {
-            try {
-                setLoading(true);
-                const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/kualifikasi`, { cache: "no-store" });
-                if (!alive) return;
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const json = await res.json();
-                setData(json);
-                setTimeout(() => firstFocus.current?.querySelector("input")?.focus(), 0);
-            } catch (e) {
-                await MySwal.fire({ icon: "error", title: "Gagal memuat", text: "Tidak bisa memuat Kualifikasi Jabatan." });
-            } finally {
-                if (alive) setLoading(false);
+            if (!storageInfo.exists) {
+                setLoading(false);
+                setData(null);
+                setLastError("__NOT_FOUND_KEY__"); // tampilkan 2 paragraf khusus
+                return;
             }
+            if (!alive) return;
+            await fetchAll(resolvedId);
         })();
         return () => {
             alive = false;
         };
-    }, [id]);
+    }, [resolvedId, storageInfo.exists]);
 
+    // 4) submit (SweetAlert hanya saat sukses)
     async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
-        const f = e.currentTarget as any;
+        if (!resolvedId) return;
 
-        // Ambil dari hidden JSON masing-masing field
+        const f = e.currentTarget as any;
         const payload = {
             pendidikan_formal: JSON.parse(f.pendidikan_formal.value || "[]"),
             diklat_penjenjangan: JSON.parse(f.diklat_penjenjangan.value || "[]"),
@@ -193,34 +223,94 @@ export default function KualifikasiForm({
         };
 
         setSaving(true);
+        setLastError(null);
         try {
-            const res = await apiFetch(`/api/anjab/${encodeURIComponent(id)}/kualifikasi`, {
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(resolvedId)}/kualifikasi`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            const json = await res.json();
-            if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
-            setData(json.data ?? data);
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || (json as any)?.error) {
+                setLastError((json as any)?.error || `Gagal menyimpan (HTTP ${res.status}).`);
+                return;
+            }
             await MySwal.fire({ icon: "success", title: "Tersimpan", text: "Kualifikasi Jabatan berhasil disimpan." });
-        } catch (e) {
-            await MySwal.fire({ icon: "error", title: "Gagal menyimpan", text: String(e) });
+            // sinkron ringan
+            setData((prev) =>
+                prev
+                    ? {
+                        ...prev,
+                        pendidikan_formal: payload.pendidikan_formal,
+                        diklat_penjenjangan: payload.diklat_penjenjangan,
+                        diklat_teknis: payload.diklat_teknis,
+                        diklat_fungsional: payload.diklat_fungsional,
+                        pengalaman_kerja: payload.pengalaman_kerja,
+                    }
+                    : prev
+            );
+        } catch {
+            setLastError("Terjadi kesalahan saat menyimpan.");
         } finally {
             setSaving(false);
         }
     }
 
-    if (!id) {
+    // 5) retry resolve & fetch
+    const retry = () => {
+        const info = resolveFromStorage(viewerPath);
+        setStorageInfo(info);
+        setResolvedId(info.value);
+        setLastError(null);
+    };
+
+    // === UI konsisten (error text-only + tombol Coba lagi/Kembali) ===
+    if (!storageInfo.exists || lastError) {
+        const isMissingKey = lastError === "__NOT_FOUND_KEY__";
         return (
-            <div className="p-6 text-center">
-                <p>Slug tidak valid.</p>
-                <Link href="/Anjab" className="text-blue-600 underline">Kembali</Link>
+            <div className="p-6 space-y-3">
+                {isMissingKey ? (
+                    <>
+                        <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                        <p className="text-sm text-gray-600">
+                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu kembali ke
+                            halaman ini.
+                        </p>
+                    </>
+                ) : (
+                    <p className="text-red-600">{lastError}</p>
+                )}
+                <div className="flex items-center gap-3">
+                    <button className="rounded border px-3 py-1.5" onClick={retry}>
+                        Coba lagi
+                    </button>
+                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+                        Kembali
+                    </Link>
+                </div>
             </div>
         );
     }
-    if (loading) return <div className="p-6">Memuat…</div>;
-    if (!data) return <div className="p-6 text-red-600">Data tidak ditemukan.</div>;
 
+    if (loading) return <div className="p-6">Memuat…</div>;
+    if (!data) {
+        return (
+            <div className="p-6 space-y-3">
+                <p className="text-red-600">Data tidak ditemukan.</p>
+                {lastError && <p className="text-sm text-gray-600">Detail: {lastError}</p>}
+                <div className="flex items-center gap-3">
+                    <button className="rounded border px-3 py-1.5" onClick={retry}>
+                        Coba lagi
+                    </button>
+                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+                        Kembali
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    // === Form ===
     return (
         <form onSubmit={onSubmit} className="space-y-6">
             <div ref={firstFocus}>
@@ -262,11 +352,7 @@ export default function KualifikasiForm({
             />
 
             <div className="pt-2 flex items-center gap-3">
-                <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-60"
-                >
+                <button type="submit" disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-60">
                     {saving ? "Menyimpan..." : "Simpan"}
                 </button>
                 <Link href={`/Anjab/${viewerPath}`} className="rounded border px-4 py-2">

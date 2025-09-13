@@ -27,20 +27,20 @@ export async function POST(req: NextRequest) {
         const results: any[] = [];
         const scriptPath = path.resolve(process.cwd(), 'scripts', 'ekstrakanjab.py');
 
-        // 1) Buat temp dir unik per request (pakai OS temp atau folder proyek)
-        const sessionTmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'anjab-')); // contoh: C:\Users\...\AppData\Local\Temp\anjab-XXXX
+        // 1) Buat temp dir unik per request
+        const sessionTmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'anjab-'));
 
         try {
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
 
-                // 2) Bangun nama file unik (hindari nama asli yang sama)
+                // 2) Bangun nama file unik
                 const ext = path.extname(file.name) || '.doc';
-                const base = path.basename(file.name, ext).replace(/[^\w\-]+/g, '_'); // sanitize ringan
+                const base = path.basename(file.name, ext).replace(/[^\w\-]+/g, '_');
                 const unique = crypto.randomUUID();
                 const tempDocPath = path.join(sessionTmpDir, `${base}-${unique}${ext}`);
 
-                // 3) Tulis file dengan retry kecil untuk menghindari EBUSY/EPERM sesaat
+                // 3) Tulis file (retry kecil)
                 const buffer = Buffer.from(await file.arrayBuffer());
                 await writeWithRetry(tempDocPath, buffer);
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
                     python.on('error', reject);
                 });
 
-                // 4) Hapus file tmp (kalau masih locked, coba lagi)
+                // 4) Hapus file tmp
                 await safeUnlink(tempDocPath);
 
                 if (exitCode !== 0 || !stdoutData) {
@@ -88,28 +88,30 @@ export async function POST(req: NextRequest) {
                     try {
                         await client.query('BEGIN');
 
-                        // --- INSERT ke semua tabel (kode Anda yang lama, dipertahankan) ---
-                        await client.query(
+                        // === PERUBAHAN: tidak set kolom id; simpan id_jabatan ke kolom slug; ambil UUID via RETURNING id ===
+                        const insJabatan = await client.query(
                             `INSERT INTO jabatan
-               (id_jabatan, nama_jabatan, kode_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+               (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, slug, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
+               RETURNING id`,
                             [
-                                id_jabatan,
-                                nama_jabatan,
                                 kode_jabatan,
+                                nama_jabatan,
                                 ikhtisar_jabatan || '',
                                 kelas_jabatan || '',
                                 prestasi_yang_diharapkan || '',
+                                id_jabatan, // <- ditaruh di kolom slug
                             ],
                         );
+                        const jabatanUUID: string = insJabatan.rows[0].id; // UUID auto-generate
 
                         await client.query(
-                            `INSERT INTO unit_kerja (id_jabatan,
-                                       jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional,
-                                       created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())`,
+                            `INSERT INTO unit_kerja (jabatan_id,
+                                                     jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional,
+                                                     created_at, updated_at)
+                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())`,
                             [
-                                id_jabatan,
+                                jabatanUUID,
                                 unit_kerja['JPT Utama'] || '',
                                 unit_kerja['JPT Madya'] || '',
                                 unit_kerja['JPT Pratama'] || '',
@@ -132,18 +134,22 @@ export async function POST(req: NextRequest) {
                             diklat_fungsional = [],
                         } = pendidikan_dan_pelatihan;
 
+                        const pendidikan_formal_arr = Array.isArray(pendidikan_formal)
+                            ? pendidikan_formal
+                            : (typeof pendidikan_formal === 'string' && pendidikan_formal.trim() !== '' ? [pendidikan_formal] : []);
+
                         await client.query(
-                            `INSERT INTO kualifikasi_jabatan (id_jabatan,
-                                                pendidikan_formal, diklat_penjenjangan, diklat_teknis, diklat_fungsional, pengalaman_kerja,
-                                                created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+                            `INSERT INTO kualifikasi_jabatan (jabatan_id,
+                                                              pendidikan_formal, diklat_penjenjangan, diklat_teknis, diklat_fungsional, pengalaman_kerja,
+                                                              created_at, updated_at)
+                             VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
                             [
-                                id_jabatan,
-                                pendidikan_formal,
+                                jabatanUUID,
+                                pendidikan_formal_arr,
                                 diklat_penjenjangan,
                                 diklat_teknis,
                                 diklat_fungsional,
-                                pengalaman_kerja,
+                                Array.isArray(pengalaman_kerja) ? pengalaman_kerja : [],
                             ],
                         );
 
@@ -160,13 +166,13 @@ export async function POST(req: NextRequest) {
                             const kebutuhan_pegawai = tugas.kebutuhan_pegawai ? parseInt(tugas.kebutuhan_pegawai) : null;
 
                             const resTugas = await client.query(
-                                `INSERT INTO tugas_pokok (id_jabatan,
-                                          nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
-                                          waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai,
-                                          created_at, updated_at)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()) RETURNING id_tugas`,
+                                `INSERT INTO tugas_pokok (jabatan_id,
+                                                          nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
+                                                          waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai,
+                                                          created_at, updated_at)
+                                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()) RETURNING id`,
                                 [
-                                    id_jabatan,
+                                    jabatanUUID,
                                     nomor_tugas,
                                     uraian,
                                     hasil_kerja,
@@ -177,12 +183,13 @@ export async function POST(req: NextRequest) {
                                 ],
                             );
 
-                            const id_tugas = resTugas.rows[0].id_tugas;
+                            const tugas_id = resTugas.rows[0].id;
+
                             for (const tahap of tahapan) {
                                 await client.query(
-                                    `INSERT INTO tahapan_uraian_tugas (id_tugas, id_jabatan, tahapan, created_at, updated_at)
-                   VALUES ($1,$2,$3,NOW(),NOW())`,
-                                    [id_tugas, id_jabatan, tahap],
+                                    `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
+                                     VALUES ($1,$2,$3,NOW(),NOW())`,
+                                    [tugas_id, jabatanUUID, tahap],
                                 );
                             }
                         }
@@ -192,86 +199,86 @@ export async function POST(req: NextRequest) {
                             const hasil_kerja_arr = Array.isArray(hasil.hasil_kerja) ? hasil.hasil_kerja : [];
                             const satuan_hasil_arr = Array.isArray(hasil.satuan_hasil) ? hasil.satuan_hasil : [];
                             await client.query(
-                                `INSERT INTO hasil_kerja (id_jabatan, hasil_kerja, satuan_hasil, created_at, updated_at)
-                 VALUES ($1,$2,$3,NOW(),NOW())`,
-                                [id_jabatan, hasil_kerja_arr, satuan_hasil_arr],
+                                `INSERT INTO hasil_kerja (jabatan_id, hasil_kerja, satuan_hasil, created_at, updated_at)
+                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                [jabatanUUID, hasil_kerja_arr, satuan_hasil_arr],
                             );
                         }
 
                         const bahanKerjaList = item.bahan_kerja || [];
                         for (const bahan of bahanKerjaList) {
                             await client.query(
-                                `INSERT INTO bahan_kerja (id_jabatan, bahan_kerja, penggunaan_dalam_tugas, created_at, updated_at)
-                 VALUES ($1,$2,$3,NOW(),NOW())`,
-                                [id_jabatan, bahan.bahan_kerja || [], bahan.penggunaan_dalam_tugas || []],
+                                `INSERT INTO bahan_kerja (jabatan_id, bahan_kerja, penggunaan_dalam_tugas, created_at, updated_at)
+                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                [jabatanUUID, bahan.bahan_kerja || [], bahan.penggunaan_dalam_tugas || []],
                             );
                         }
 
                         const perangkatKerjaList = item.perangkat_kerja || [];
                         for (const perangkat of perangkatKerjaList) {
                             await client.query(
-                                `INSERT INTO perangkat_kerja (id_jabatan, perangkat_kerja, penggunaan_untuk_tugas, created_at, updated_at)
-                 VALUES ($1,$2,$3,NOW(),NOW())`,
-                                [id_jabatan, perangkat.perangkat_kerja || [], perangkat.penggunaan_untuk_tugas || []],
+                                `INSERT INTO perangkat_kerja (jabatan_id, perangkat_kerja, penggunaan_untuk_tugas, created_at, updated_at)
+                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                [jabatanUUID, perangkat.perangkat_kerja || [], perangkat.penggunaan_untuk_tugas || []],
                             );
                         }
 
                         const tanggungJawabList = item.tanggung_jawab || [];
                         for (const tj of tanggungJawabList) {
                             await client.query(
-                                `INSERT INTO tanggung_jawab (id_jabatan, uraian_tanggung_jawab, created_at, updated_at)
-                 VALUES ($1,$2,NOW(),NOW())`,
-                                [id_jabatan, tj.uraian || ''],
+                                `INSERT INTO tanggung_jawab (jabatan_id, uraian_tanggung_jawab, created_at, updated_at)
+                                 VALUES ($1,$2,NOW(),NOW())`,
+                                [jabatanUUID, tj.uraian || ''],
                             );
                         }
 
                         const wewenangList = item.wewenang || [];
                         for (const w of wewenangList) {
                             await client.query(
-                                `INSERT INTO wewenang (id_jabatan, uraian_wewenang, created_at, updated_at)
-                 VALUES ($1,$2,NOW(),NOW())`,
-                                [id_jabatan, w.uraian || ''],
+                                `INSERT INTO wewenang (jabatan_id, uraian_wewenang, created_at, updated_at)
+                                 VALUES ($1,$2,NOW(),NOW())`,
+                                [jabatanUUID, w.uraian || ''],
                             );
                         }
 
                         const korelasiList = item.korelasi_jabatan || [];
                         for (const k of korelasiList) {
                             await client.query(
-                                `INSERT INTO korelasi_jabatan (id_jabatan, jabatan_terkait, unit_kerja_instansi, dalam_hal, created_at, updated_at)
-                 VALUES ($1,$2,$3,$4,NOW(),NOW())`,
-                                [id_jabatan, k.jabatan || '', k.unit_kerja_instansi || '', k.dalam_hal || []],
+                                `INSERT INTO korelasi_jabatan (jabatan_id, jabatan_terkait, unit_kerja_instansi, dalam_hal, created_at, updated_at)
+                                 VALUES ($1,$2,$3,$4,NOW(),NOW())`,
+                                [jabatanUUID, k.jabatan || '', k.unit_kerja_instansi || '', k.dalam_hal || []],
                             );
                         }
 
                         const kondisiList = item.kondisi_lingkungan_kerja || [];
                         for (const kondisi of kondisiList) {
                             await client.query(
-                                `INSERT INTO kondisi_lingkungan_kerja (id_jabatan, aspek, faktor, created_at, updated_at)
-                 VALUES ($1,$2,$3,NOW(),NOW())`,
-                                [id_jabatan, kondisi.aspek || '', kondisi.faktor || ''],
+                                `INSERT INTO kondisi_lingkungan_kerja (jabatan_id, aspek, faktor, created_at, updated_at)
+                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                [jabatanUUID, kondisi.aspek || '', kondisi.faktor || ''],
                             );
                         }
 
                         const risikoList = item.risiko_bahaya || [];
                         for (const risiko of risikoList) {
                             await client.query(
-                                `INSERT INTO risiko_bahaya (id_jabatan, nama_risiko, penyebab, created_at, updated_at)
-                 VALUES ($1,$2,$3,NOW(),NOW())`,
-                                [id_jabatan, risiko.nama_risiko || '', risiko.penyebab || ''],
+                                `INSERT INTO risiko_bahaya (jabatan_id, nama_risiko, penyebab, created_at, updated_at)
+                                 VALUES ($1,$2,$3,NOW(),NOW())`,
+                                [jabatanUUID, risiko.nama_risiko || '', risiko.penyebab || ''],
                             );
                         }
 
                         const syarat = item.syarat_jabatan || {};
                         await client.query(
-                            `INSERT INTO syarat_jabatan (id_jabatan, keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
-                                           kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb,
-                                           kondisi_fisik_pb, kondisi_fisik_tampilan, kondisi_fisik_keadaan, fungsi_pekerja,
-                                           created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,
-                       $7,$8,$9,$10,$11,$12,$13,$14,
-                       NOW(),NOW())`,
+                            `INSERT INTO syarat_jabatan (jabatan_id, keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
+                                                         kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb,
+                                                         kondisi_fisik_pb, kondisi_fisik_tampilan, kondisi_fisik_keadaan, fungsi_pekerja,
+                                                         created_at, updated_at)
+                             VALUES ($1,$2,$3,$4,$5,$6,
+                                     $7,$8,$9,$10,$11,$12,$13,$14,
+                                     NOW(),NOW())`,
                             [
-                                id_jabatan,
+                                jabatanUUID,
                                 syarat.keterampilan_kerja || [],
                                 syarat.bakat_kerja || [],
                                 syarat.temperamen_kerja || [],
@@ -289,7 +296,7 @@ export async function POST(req: NextRequest) {
                         );
 
                         await client.query('COMMIT');
-                        results.push({ file: file.name, status: 'success', id_jabatan });
+                        results.push({ file: file.name, status: 'success', id_jabatan }); // tetap sama seperti sebelumnya
                     } catch (err) {
                         await client.query('ROLLBACK');
                         console.error(`❌ Error insert data untuk ${file.name}:`, err);
@@ -317,10 +324,9 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// Helpers
+// Helpers (tidak diubah)
 async function writeWithRetry(filePath: string, data: Buffer, maxTry = 3) {
     let attempt = 0;
-    // kecilkan jeda supaya responsif
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     while (true) {
         try {
@@ -329,7 +335,7 @@ async function writeWithRetry(filePath: string, data: Buffer, maxTry = 3) {
         } catch (e: any) {
             if ((e.code === 'EBUSY' || e.code === 'EPERM') && attempt < maxTry - 1) {
                 attempt++;
-                await sleep(100 * attempt); // backoff linier
+                await sleep(100 * attempt);
                 continue;
             }
             throw e;
@@ -341,13 +347,12 @@ async function safeUnlink(filePath: string) {
     try {
         await fs.unlink(filePath);
     } catch (e: any) {
-        // kalau masih ke-lock, coba ulang sebentar lalu paksa hapus saat rm sessionTmpDir
         if (e.code === 'EBUSY' || e.code === 'EPERM') {
             await new Promise((r) => setTimeout(r, 150));
             try {
                 await fs.unlink(filePath);
             } catch {
-                // diam: rm(sessionTmpDir) di finally akan membersihkan
+                // diam
             }
         }
     }

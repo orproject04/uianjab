@@ -62,6 +62,36 @@ export default function InformasiJabatanPage() {
     const [pdfSrc, setPdfSrc] = useState<string | null>(null);
     const [status, setStatus] = useState<Status>("idle");
 
+    // === Tambahan: resolve UUID jabatan dari slug (2 segmen terakhir) & simpan ke localStorage ===
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            if (!id) return;
+            try {
+                // Asumsi endpoint GET /api/anjab/[slug] mengembalikan JSON yang memuat kolom id (uuid jabatan)
+                const res = await apiFetch(`/api/anjab/${encodedId}/uuid`, { method: "GET", cache: "no-store" });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Ambil UUID dengan fallback aman
+                const createdId =
+                    data?.id ??
+                    null;
+
+                if (!cancelled && createdId && typeof window !== "undefined") {
+                    // Key = dua segmen terakhir (nilai `id`)
+                    const slugForUrl = id.replace(/-/g, "/");
+                    localStorage.setItem(slugForUrl, String(createdId));
+                }
+            } catch {
+                // diamkan bila gagal; tidak mengganggu alur utama
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [id, encodedId]);
+
     // Ambil PDF (GET) → blob → objectURL
     useEffect(() => {
         let alive = true;

@@ -1,25 +1,25 @@
-// src/components/sidebar/AppSidebar.tsx
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { createPortal } from "react-dom";
-import Swal from "sweetalert2";
+import { usePathname } from "next/navigation";
 
 import { useSidebar } from "../context/SidebarContext";
 import { GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
 import { useMe } from "@/context/MeContext";
-import {apiFetch} from "@/lib/apiFetch";
+import { createPortal } from "react-dom";
+import Swal from "sweetalert2";
+import { apiFetch } from "@/lib/apiFetch";
 
 /** ====== TIPE API (flat) ====== */
 type APIRow = {
   id: string;
   parent_id: string | null;
-  name: string;
+  nama_jabatan: string;     // ⬅️ backend baru
   slug: string;
+  unit_kerja: string | null; // ⬅️ backend baru
   level: number;
   order_index: number;
 };
@@ -27,10 +27,10 @@ type APIRow = {
 /** ====== TIPE INTERNAL ====== */
 type SubNavItem = {
   id: string;
-  name: string;
+  name: string;             // mapping dari nama_jabatan
   slug: string;
-  path: string;                 // "Anjab/<slug>/<child-slug>"
-  order_index: number;
+  unit_kerja?: string | null;
+  path: string;             // "Anjab/<slug>/<child-slug>"
   subItems?: SubNavItem[];
 };
 
@@ -44,10 +44,41 @@ type NavItem = {
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
-  const router = useRouter();
   const { isAdmin, loading: meLoading } = useMe();
 
-  // ====== SLUGIFY (identik dgn halaman GoJS) ======
+  // ====== STATE data anjab ======
+  const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
+  const [loadingAnjab, setLoadingAnjab] = useState<boolean>(false);
+  const [anjabError, setAnjabError] = useState<string | null>(null);
+
+  // ====== STATE menu & dropdown ======
+  const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
+  const [openNestedSubmenus, setOpenNestedSubmenus] = useState<Record<string, boolean>>({});
+
+  // ====== STATE: Edit modal ======
+  const [showEdit, setShowEdit] = useState(false);
+  const [editFor, setEditFor] = useState<SubNavItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSlug, setEditSlug] = useState("");
+  const [editOrder, setEditOrder] = useState<string>(""); // string agar bisa kosong total
+  const [editParentId, setEditParentId] = useState<string | "">("");
+  const [editUnitKerja, setEditUnitKerja] = useState<string>(""); // ⬅️ baru
+  const [parentOptions, setParentOptions] = useState<Array<{ id: string | ""; label: string }>>([]);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // ====== STATE: Add Child modal ======
+  const [showAdd, setShowAdd] = useState(false);
+  const [addParentFor, setAddParentFor] = useState<SubNavItem | null>(null);
+  const [addName, setAddName] = useState("Unit Baru");
+  const [addSlug, setAddSlug] = useState("unit-baru");
+  const [addOrder, setAddOrder] = useState<string>(""); // string agar bisa kosong total
+  const [addUnitKerja, setAddUnitKerja] = useState<string>(""); // ⬅️ baru
+  const [addErr, setAddErr] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(false);
+
+  // ====== UTIL ======
   const toSlug = (s: string) =>
       (s || "unit")
           .toLowerCase()
@@ -57,16 +88,6 @@ const AppSidebar: React.FC = () => {
           .replace(/(^-|-$)/g, "")
           .slice(0, 48) || "unit";
 
-  // ====== STATE data anjab ======
-  const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
-  const [loadingAnjab, setLoadingAnjab] = useState<boolean>(false);
-  const [anjabError, setAnjabError] = useState<string | null>(null);
-
-  // ====== STATE menu ======
-  const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
-  const [openNestedSubmenus, setOpenNestedSubmenus] = useState<Record<string, boolean>>({});
-
-  /** ====== Build tree dari flat (slug chain) ====== */
   const buildTreeFromFlat = (rows: APIRow[]): SubNavItem[] => {
     const children = new Map<string | null, APIRow[]>();
     for (const r of rows) {
@@ -74,19 +95,33 @@ const AppSidebar: React.FC = () => {
       arr.push(r);
       children.set(r.parent_id, arr);
     }
+    // urut per parent: order_index ASC, lalu nama ASC
+    for (const [k, arr] of children.entries()) {
+      arr.sort(
+          (a, b) =>
+              (a.order_index ?? 0) - (b.order_index ?? 0) ||
+              a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
+      );
+      children.set(k, arr);
+    }
     const buildNode = (node: APIRow, parentPath: string | null): SubNavItem => {
       const path = parentPath ? `${parentPath}/${node.slug}` : `Anjab/${node.slug}`;
       const kids = children.get(node.id) || [];
       const subItems = kids.map((k) => buildNode(k, path));
-      return subItems.length
-          ? { id: node.id, name: node.name, slug: node.slug, path, order_index: node.order_index, subItems }
-          : { id: node.id, name: node.name, slug: node.slug, path, order_index: node.order_index };
+      const base: SubNavItem = {
+        id: node.id,
+        name: node.nama_jabatan,
+        slug: node.slug,
+        unit_kerja: node.unit_kerja ?? null,
+        path,
+      };
+      if (subItems.length) base.subItems = subItems;
+      return base;
     };
     const roots = children.get(null) || [];
     return roots.map((r) => buildNode(r, null));
   };
 
-  /** load data */
   const loadData = useCallback(async () => {
     setLoadingAnjab(true);
     setAnjabError(null);
@@ -108,10 +143,12 @@ const AppSidebar: React.FC = () => {
       await loadData();
       if (cancelled) return;
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [loadData]);
 
-  /** ====== NAV ITEMS ====== */
+  // ====== NAV items ======
   const navItems: NavItem[] = [
     { icon: <GridIcon />, name: "Homepage", path: "/", subItems: [] },
     { name: "Anjab", icon: <ListIcon />, subItems: anjabSubs },
@@ -119,18 +156,15 @@ const AppSidebar: React.FC = () => {
   ];
   const othersItems: NavItem[] = [];
 
-  /** ====== ACTIVE HELPERS ====== */
-  const isExactActive = useCallback((path?: string) => {
-    if (!path) return false;
-    const norm = `/${String(path).replace(/^\/+/, "")}`;
-    return pathname === norm;
-  }, [pathname]);
-
-  const isDescendantActive = useCallback((path?: string) => {
-    if (!path) return false;
-    const norm = `/${String(path).replace(/^\/+/, "")}`;
-    return pathname === norm || pathname.startsWith(norm + "/");
-  }, [pathname]);
+  // ====== ACTIVE helpers ======
+  const isExactActive = useCallback(
+      (path?: string) => {
+        if (!path) return false;
+        const norm = `/${String(path).replace(/^\/+/, "")}`;
+        return pathname === norm;
+      },
+      [pathname]
+  );
 
   const findItemByPath = (path: string, items: SubNavItem[]): SubNavItem | null => {
     for (const item of items) {
@@ -189,189 +223,227 @@ const AppSidebar: React.FC = () => {
     });
   };
 
-  /** ====== SweetAlert helper ====== */
-  const swalLoading = (title = "Memproses…") =>
-      Swal.fire({ title, allowOutsideClick: false, allowEscapeKey: false, didOpen: () => Swal.showLoading() });
-
-  /** ====== ACTIONS ====== */
-  const handleEditNode = async (node: SubNavItem) => {
-    const html = `
-      <div class="swal2-stack">
-        <label class="block text-left text-xs mb-1">Name</label>
-        <input id="swal-name" class="swal2-input" placeholder="Name" value="${node.name.replace(/"/g, "&quot;")}">
-        <label class="block text-left text-xs mb-1">Slug</label>
-        <input id="swal-slug" class="swal2-input" placeholder="slug" value="${node.slug.replace(/"/g, "&quot;")}">
-        <label class="block text-left text-xs mb-1">Order index</label>
-        <input id="swal-order" type="number" min="0" class="swal2-input" placeholder="0" value="${node.order_index}">
-      </div>
-    `;
-
-    let slugTouched = false;
-
-    const res = await Swal.fire({
-      title: "Edit node",
-      html,
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: "Simpan",
-      cancelButtonText: "Batal",
-      didOpen: () => {
-        const nameEl = document.getElementById("swal-name") as HTMLInputElement | null;
-        const slugEl = document.getElementById("swal-slug") as HTMLInputElement | null;
-        if (!nameEl || !slugEl) return;
-
-        nameEl.addEventListener("input", () => {
-          if (!slugTouched) slugEl.value = toSlug(nameEl.value);
-        });
-        slugEl.addEventListener("input", () => {
-          slugTouched = true;
-          slugEl.value = toSlug(slugEl.value);
-        });
-      },
-      preConfirm: () => {
-        const name = (document.getElementById("swal-name") as HTMLInputElement)?.value?.trim();
-        const rawSlug = (document.getElementById("swal-slug") as HTMLInputElement)?.value?.trim();
-        const orderStr = (document.getElementById("swal-order") as HTMLInputElement)?.value?.trim();
-        const order_index = Number.isFinite(Number(orderStr)) ? Number(orderStr) : NaN;
-
-        const slug = toSlug(rawSlug || name || "");
-
-        if (!name) { Swal.showValidationMessage("Nama wajib diisi"); return; }
-        if (!slug) { Swal.showValidationMessage("Slug wajib diisi"); return; }
-        if (!Number.isFinite(order_index) || order_index < 0) {
-          Swal.showValidationMessage("Order index harus angka ≥ 0");
-          return;
-        }
-        return { name, slug, order_index };
-      },
-    });
-
-    if (!res.isConfirmed || !res.value) return;
-    const payload = res.value as { name: string; slug: string; order_index: number };
-
-    swalLoading("Menyimpan…");
-    try {
-      const resp = await apiFetch(`/api/struktur-organisasi?id=${encodeURIComponent(node.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data?.ok === false) throw new Error(data?.error || `Gagal (${resp.status})`);
-      await loadData();
-      Swal.fire({ icon: "success", title: "Perubahan tersimpan", timer: 1200, showConfirmButton: false });
-    } catch (err: any) {
-      Swal.fire({ icon: "error", title: "Gagal menyimpan", text: err?.message || "Terjadi kesalahan." });
-    }
-  };
-
-  const handleAddChild = async (parent: SubNavItem) => {
-    const html = `
-      <div class="swal2-stack">
-        <label class="block text-left text-xs mb-1">Name</label>
-        <input id="swal-name" class="swal2-input" placeholder="Name" value="">
-        <label class="block text-left text-xs mb-1">Slug</label>
-        <input id="swal-slug" class="swal2-input" placeholder="slug" value="">
-        <label class="block text-left text-xs mb-1">Order index</label>
-        <input id="swal-order" type="number" min="0" class="swal2-input" placeholder="(kosong=auto)">
-        <p class="text-xs text-gray-500 mt-2">Jika order index dikosongkan, backend akan otomatis mengisi ke posisi paling akhir.</p>
-      </div>
-    `;
-
-    let slugTouched = false;
-
-    const res = await Swal.fire({
-      title: `Tambah child untuk "${parent.name}"`,
-      html,
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: "Tambah",
-      cancelButtonText: "Batal",
-      didOpen: () => {
-        const nameEl = document.getElementById("swal-name") as HTMLInputElement | null;
-        const slugEl = document.getElementById("swal-slug") as HTMLInputElement | null;
-        if (!nameEl || !slugEl) return;
-
-        nameEl.addEventListener("input", () => {
-          if (!slugTouched) slugEl.value = toSlug(nameEl.value);
-        });
-        slugEl.addEventListener("input", () => {
-          slugTouched = true;
-          slugEl.value = toSlug(slugEl.value);
-        });
-      },
-      preConfirm: () => {
-        const name = (document.getElementById("swal-name") as HTMLInputElement)?.value?.trim();
-        const rawSlug = (document.getElementById("swal-slug") as HTMLInputElement)?.value?.trim();
-        const orderStr = (document.getElementById("swal-order") as HTMLInputElement)?.value?.trim();
-
-        const slug = toSlug(rawSlug || name || "");
-        const order_index = orderStr === "" ? null : Number(orderStr);
-
-        if (!name) { Swal.showValidationMessage("Nama wajib diisi"); return; }
-        if (!slug) { Swal.showValidationMessage("Slug wajib diisi"); return; }
-        if (order_index !== null && (!Number.isFinite(order_index) || order_index < 0)) {
-          Swal.showValidationMessage("Order index harus angka ≥ 0 atau kosongkan");
-          return;
-        }
-        return { name, slug, order_index };
-      },
-    });
-
-    if (!res.isConfirmed || !res.value) return;
-    const payload = res.value as { name: string; slug: string; order_index: number | null };
-
-    swalLoading("Menambah…");
-    try {
-      const resp = await apiFetch(`/api/struktur-organisasi`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parent_id: parent.id,
-          name: payload.name,
-          slug: payload.slug,
-          order_index: payload.order_index, // boleh null → backend auto last
-        }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data?.ok === false) throw new Error(data?.error || `Gagal (${resp.status})`);
-
-      await loadData();
-      setOpenNestedSubmenus((prev) => ({ ...prev, [parent.path]: true }));
-      Swal.fire({ icon: "success", title: "Child ditambahkan", timer: 1200, showConfirmButton: false });
-    } catch (err: any) {
-      Swal.fire({ icon: "error", title: "Gagal menambah", text: err?.message || "Terjadi kesalahan." });
-    }
-  };
-
+  // ====== DELETE (SweetAlert2) ======
   const handleDeleteNode = async (node: SubNavItem) => {
-    const resConfirm = await Swal.fire({
-      title: "Hapus node ini?",
-      html: `"<b>${node.name}</b>" beserta seluruh subtree akan dihapus.`,
+    const resSwal = await Swal.fire({
+      title: "Hapus Node?",
+      html: `Hapus <b>${node.name}</b> beserta seluruh subtree? Tindakan ini tidak bisa dibatalkan.`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Hapus",
+      confirmButtonText: "Ya, hapus!",
       cancelButtonText: "Batal",
-      confirmButtonColor: "#ef4444",
-      focusCancel: true,
-      reverseButtons: true,
+      confirmButtonColor: "#dc2626",
     });
-    if (!resConfirm.isConfirmed) return;
+    if (!resSwal.isConfirmed) return;
 
-    swalLoading("Menghapus…");
-    try {
-      const resp = await apiFetch(`/api/struktur-organisasi?id=${encodeURIComponent(node.id)}`, { method: "DELETE" });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data?.ok === false) throw new Error(data?.error || `Gagal (${resp.status})`);
-      await loadData();
-      Swal.fire({ icon: "success", title: "Berhasil dihapus", text: `${data?.deleted ?? 0} record terhapus.`, timer: 1400, showConfirmButton: false });
-    } catch (err: any) {
-      Swal.fire({ icon: "error", title: "Gagal menghapus", text: err?.message || "Terjadi kesalahan." });
+    const res = await apiFetch(`/api/struktur-organisasi?id=${encodeURIComponent(node.id)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const t = await res.json().catch(() => ({}));
+      await Swal.fire({ icon: "error", title: "Gagal", text: t?.error || `Gagal menghapus (${res.status})` });
+      return;
     }
+    await loadData();
+    await Swal.fire({ icon: "success", title: "Terhapus", timer: 1200, showConfirmButton: false });
   };
 
-  /** ====== BTN ⋯ (portal + fixed) — hanya render jika admin ====== */
+  // ====== EDIT ======
+  const fetchParentOptions = useCallback(async (currentId: string) => {
+    const res = await apiFetch("/api/struktur-organisasi", { cache: "no-store" });
+    if (!res.ok) throw new Error("Gagal memuat pilihan parent");
+    const flat: APIRow[] = await res.json();
+
+    // adjacency
+    const byParent = new Map<string | null, APIRow[]>();
+    for (const r of flat) {
+      const arr = byParent.get(r.parent_id) || [];
+      arr.push(r);
+      byParent.set(r.parent_id, arr);
+    }
+    for (const [k, arr] of byParent.entries()) {
+      arr.sort(
+          (a, b) =>
+              (a.order_index ?? 0) - (b.order_index ?? 0) ||
+              a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
+      );
+      byParent.set(k, arr);
+    }
+
+    // descendants of current → skip
+    const descendants = new Set<string>();
+    (function collect(id: string) {
+      const kids = byParent.get(id) || [];
+      for (const c of kids) {
+        if (!descendants.has(c.id)) {
+          descendants.add(c.id);
+          collect(c.id);
+        }
+      }
+    })(currentId);
+
+    // preorder from roots
+    const options: Array<{ id: string | ""; label: string }> = [];
+    const pushTree = (parentKey: string | null, depth: number) => {
+      const kids = byParent.get(parentKey) || [];
+      for (const node of kids) {
+        if (node.id === currentId || descendants.has(node.id)) continue;
+        options.push({
+          id: node.id,
+          label: `${"— ".repeat(depth)}${node.nama_jabatan}`,
+        });
+        pushTree(node.id, depth + 1);
+      }
+    };
+    pushTree(null, 0);
+
+    const opts: Array<{ id: string | ""; label: string }> = [
+      { id: "", label: "(Tanpa parent / Root)" },
+      ...options,
+    ];
+
+    const current = flat.find((f) => f.id === currentId);
+    const currentParent = current?.parent_id ?? "";
+    const currentOrder = current?.order_index ?? "";
+    const currentUnitKerja = current?.unit_kerja ?? "";
+
+    return {
+      opts,
+      currentParent,
+      currentOrder: String(currentOrder),
+      currentUnitKerja: String(currentUnitKerja ?? ""),
+    };
+  }, []);
+
+  const openEditModal = useCallback(
+      async (node: SubNavItem) => {
+        try {
+          setSaveErr(null);
+          setEditFor(node);
+          setEditName(node.name);
+          setEditSlug(node.slug);
+
+          const { opts, currentParent, currentOrder, currentUnitKerja } = await fetchParentOptions(node.id);
+          setParentOptions(opts);
+          setEditParentId(currentParent);
+          setEditOrder(currentOrder === "0" ? "0" : currentOrder); // tetap string
+          setEditUnitKerja(currentUnitKerja || ""); // ⬅️ baru
+
+          setShowEdit(true);
+        } catch (e: any) {
+          await Swal.fire({ icon: "error", title: "Oops", text: e?.message || "Gagal membuka editor" });
+        }
+      },
+      [fetchParentOptions]
+  );
+
+  const submitEdit = useCallback(async () => {
+    if (!editFor) return;
+    const id = editFor.id;
+    const nama_jabatan = editName.trim();
+    const slug = editSlug.trim();
+    const parent_id = editParentId === "" ? null : editParentId;
+    const unit_kerja = editUnitKerja.trim() || null;
+
+    if (!nama_jabatan) {
+      setSaveErr("Nama tidak boleh kosong.");
+      return;
+    }
+    if (!slug) {
+      setSaveErr("Slug tidak boleh kosong.");
+      return;
+    }
+
+    // payload: hanya sertakan order_index bila TIDAK kosong
+    const body: any = { nama_jabatan, slug, parent_id, unit_kerja };
+    if (editOrder.trim() !== "") {
+      const parsed = Number(editOrder);
+      if (!Number.isFinite(parsed)) {
+        setSaveErr("Order index tidak valid.");
+        return;
+      }
+      body.order_index = parsed;
+    }
+
+    try {
+      setSaving(true);
+      setSaveErr(null);
+      const res = await apiFetch(`/api/struktur-organisasi/node/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menyimpan (${res.status})`);
+      setShowEdit(false);
+      await loadData();
+      await Swal.fire({ icon: "success", title: "Tersimpan", timer: 1000, showConfirmButton: false });
+    } catch (e: any) {
+      setSaveErr(e?.message || "Gagal menyimpan perubahan.");
+    } finally {
+      setSaving(false);
+    }
+  }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, loadData]);
+
+  // ====== ADD CHILD ======
+  const openAddModal = (parent: SubNavItem) => {
+    setAddParentFor(parent);
+    setAddErr(null);
+    setAddName("Unit Baru");
+    setAddSlug("unit-baru");
+    setAddOrder(""); // kosong default
+    setAddUnitKerja(""); // ⬅️ baru
+    setSlugTouched(false);
+    setShowAdd(true);
+  };
+
+  const submitAdd = useCallback(async () => {
+    if (!addParentFor) return;
+    const parent_id = addParentFor.id;
+    const nama_jabatan = addName.trim();
+    const slug = addSlug.trim();
+    const unit_kerja = addUnitKerja.trim() || null;
+
+    if (!nama_jabatan) {
+      setAddErr("Nama tidak boleh kosong.");
+      return;
+    }
+    if (!slug) {
+      setAddErr("Slug tidak boleh kosong.");
+      return;
+    }
+
+    const body: any = { parent_id, nama_jabatan, slug, unit_kerja };
+    if (addOrder.trim() !== "") {
+      const parsed = Number(addOrder);
+      if (!Number.isFinite(parsed)) {
+        setAddErr("Order index tidak valid.");
+        return;
+      }
+      body.order_index = parsed;
+    }
+
+    try {
+      setAdding(true);
+      setAddErr(null);
+      const res = await apiFetch("/api/struktur-organisasi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menambah (${res.status})`);
+      setShowAdd(false);
+      await loadData();
+      await Swal.fire({ icon: "success", title: "Child ditambah", timer: 1000, showConfirmButton: false });
+    } catch (e: any) {
+      setAddErr(e?.message || "Gagal menambah child.");
+    } finally {
+      setAdding(false);
+    }
+  }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, loadData]);
+
+  // ====== Node actions menu (⋯) ======
   const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({ node }) => {
+    if (!isAdmin) return null; // hanya admin
     const [open, setOpen] = useState(false);
     const btnRef = useRef<HTMLButtonElement | null>(null);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -387,13 +459,17 @@ const AppSidebar: React.FC = () => {
 
       let left = r.right - menuW;
       left = Math.max(8, Math.min(left, window.innerWidth - 8 - menuW));
+
       const flipUp = window.innerHeight - r.bottom < menuH + 12;
       const top = flipUp ? r.top - gap - menuH : r.bottom + gap;
 
       setPos({ top, left });
     }, []);
 
-    const stop = (e: React.SyntheticEvent) => { e.preventDefault(); e.stopPropagation(); };
+    const trap = (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
 
     useEffect(() => {
       if (!open) return;
@@ -415,16 +491,17 @@ const AppSidebar: React.FC = () => {
       };
     }, [open, placeMenu]);
 
-    if (!isAdmin) return null; // ⬅️ inti: sembunyikan jika bukan admin
-
     return (
         <>
           <button
               ref={btnRef}
               type="button"
-              onPointerDown={stop}
-              onMouseDown={stop}
-              onClick={(e) => { stop(e); setOpen(v => !v); }}
+              onPointerDown={trap}
+              onMouseDown={trap}
+              onClick={(e) => {
+                trap(e);
+                setOpen((v) => !v);
+              }}
               className="relative z-50 p-1 rounded hover:bg-gray-100 text-gray-500"
               aria-label="Node actions"
               title="Aksi"
@@ -432,48 +509,67 @@ const AppSidebar: React.FC = () => {
             ⋯
           </button>
 
-          {open && createPortal(
-              <div
-                  ref={menuRef}
-                  style={{ position: "fixed", top: pos.top, left: pos.left, width: 176 }}
-                  className="rounded-xl border border-gray-200 bg-white shadow-lg z-[1000] text-sm overflow-hidden"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => { setOpen(false); handleEditNode(node); }}
-                    className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700"
-                >
-                  Edit node
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => { setOpen(false); handleAddChild(node); }}
-                    className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700"
-                >
-                  Tambah child
-                </button>
-                <div className="h-px bg-gray-100" />
-                <button
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => { setOpen(false); handleDeleteNode(node); }}
-                    className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50"
-                >
-                  Hapus (beserta subtree)
-                </button>
-              </div>,
-              document.body
-          )}
+          {open &&
+              createPortal(
+                  <div
+                      ref={menuRef}
+                      style={{ position: "fixed", top: pos.top, left: pos.left, width: 176 }}
+                      className="rounded-xl border border-gray-200 bg-white shadow-lg z-[1000] text-sm overflow-hidden"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                        }}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          setOpen(false);
+                          await openEditModal(node);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700"
+                    >
+                      Edit node
+                    </button>
+                    <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setOpen(false);
+                          openAddModal(node);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700"
+                    >
+                      Tambah child
+                    </button>
+                    <div className="h-px bg-gray-100" />
+                    <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setOpen(false);
+                          handleDeleteNode(node);
+                        }}
+                        className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50"
+                    >
+                      Hapus (beserta subtree)
+                    </button>
+                  </div>,
+                  document.body
+              )}
         </>
     );
   };
 
-  /** ====== RENDERERS ====== */
+  // ====== Renderers ======
   const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
       <ul className={`mt-2 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
         {subItems.map((subItem) => {
@@ -493,24 +589,29 @@ const AppSidebar: React.FC = () => {
                                     ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
                                     : "menu-dropdown-item-inactive"
                             }`}
+                            title={subItem.unit_kerja || undefined}
                         >
                           {subItem.name}
                         </Link>
                         <button
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleNestedSubmenu(subItem.path); }}
+                            onClick={() => toggleNestedSubmenu(subItem.path)}
                             className="ml-2 p-1 hover:bg-gray-100 rounded"
                             aria-label="toggle"
                             title="Expand/Collapse"
                         >
                           <ChevronDownIcon
-                              className={`w-4 h-4 transition-transform duration-300 ${isNestedOpen ? "rotate-180" : ""}`}
+                              className={`w-4 h-4 transition-transform duration-300 ${
+                                  isNestedOpen ? "rotate-180" : ""
+                              }`}
                           />
                         </button>
-                        {isAdmin && <NodeActionsButton node={subItem} />}{/* ⬅️ hanya admin */}
+                        <NodeActionsButton node={subItem} />
                       </div>
                       <div
                           className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                              isNestedOpen ? "max-h-[50000px] opacity-100 scale-y-100" : "max-h-0 opacity-0 scale-y-95"
+                              isNestedOpen
+                                  ? "max-h-[50000px] opacity-100 scale-y-100"
+                                  : "max-h-0 opacity-0 scale-y-95"
                           }`}
                       >
                         {renderSubItems(subItem.subItems ?? [], level + 1)}
@@ -525,10 +626,11 @@ const AppSidebar: React.FC = () => {
                                   ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
                                   : "menu-dropdown-item-inactive"
                           }`}
+                          title={subItem.unit_kerja || undefined}
                       >
                         {subItem.name}
                       </Link>
-                      {isAdmin && <NodeActionsButton node={subItem} />}{/* ⬅️ hanya admin */}
+                      <NodeActionsButton node={subItem} />
                     </div>
                 )}
               </li>
@@ -548,16 +650,17 @@ const AppSidebar: React.FC = () => {
                 {hasChildren ? (
                     <>
                       <button
-                          onClick={() => setOpenSubmenu((prev) => {
-                            const same = prev?.type === menuType && prev.index === index;
-                            if (same) {
-                              setOpenSubmenu(null);
-                              setOpenNestedSubmenus({});
-                              return null;
-                            }
-                            setOpenNestedSubmenus({});
-                            return { type: menuType, index };
-                          })}
+                          onClick={() =>
+                              setOpenSubmenu((prev) => {
+                                const same = prev?.type === menuType && prev.index === index;
+                                if (same) {
+                                  setOpenNestedSubmenus({});
+                                  return null;
+                                }
+                                setOpenNestedSubmenus({});
+                                return { type: menuType, index };
+                              })
+                          }
                           className={`menu-item group ${
                               openSubmenu?.type === menuType && openSubmenu.index === index
                                   ? "menu-item-active bg-purple-100 text-purple-700 font-semibold"
@@ -569,12 +672,18 @@ const AppSidebar: React.FC = () => {
                             <>
                       <span className="menu-item-text">
                         {nav.name}
-                        {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
-                        {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
+                        {isAnjab && loadingAnjab && (
+                            <span className="ml-2 text-xs text-gray-400">(loading…)</span>
+                        )}
+                        {isAnjab && anjabError && (
+                            <span className="ml-2 text-xs text-red-500">({anjabError})</span>
+                        )}
                       </span>
                               <ChevronDownIcon
                                   className={`ml-auto w-5 h-5 transition-transform duration-300 ${
-                                      openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-500" : ""
+                                      openSubmenu?.type === menuType && openSubmenu.index === index
+                                          ? "rotate-180 text-brand-500"
+                                          : ""
                                   }`}
                               />
                             </>
@@ -597,12 +706,6 @@ const AppSidebar: React.FC = () => {
                 ) : (
                     <Link
                         href={nav.path || "/"}
-                        onClick={() => {
-                          if (nav.name !== "Anjab") {
-                            setOpenSubmenu(null);
-                            setOpenNestedSubmenus({});
-                          }
-                        }}
                         className={`menu-item group ${
                             isExactActive(nav.path)
                                 ? "menu-item-active bg-purple-100 text-purple-700 font-semibold"
@@ -610,7 +713,9 @@ const AppSidebar: React.FC = () => {
                         }`}
                     >
                       <span>{nav.icon}</span>
-                      {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
+                      {(isExpanded || isHovered || isMobileOpen) && (
+                          <span className="menu-item-text">{nav.name}</span>
+                      )}
                     </Link>
                 )}
               </li>
@@ -653,44 +758,213 @@ const AppSidebar: React.FC = () => {
   if (meLoading) return null;
 
   return (
-      <aside
-          className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
-              isExpanded || isMobileOpen ? "w-[350px]" : isHovered ? "w-[350px]" : "w-[90px]"
-          } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
-          onMouseEnter={() => !isExpanded && setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
-          <Link href="/">
-            {isExpanded || isHovered || isMobileOpen ? (
-                <>
-                  <Image className="dark:hidden" src="/images/logo/full-logo.svg" alt="Logo" width={150} height={40} />
-                  <Image className="hidden dark:block" src="/images/logo/full-logo-white.svg" alt="Logo" width={150} height={40} />
-                </>
-            ) : (
-                <Image src="/images/logo/setjen.svg" alt="Logo" width={32} height={32} />
-            )}
-          </Link>
-        </div>
+      <>
+        <aside
+            className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
+                isExpanded || isMobileOpen ? "w-[350px]" : isHovered ? "w-[350px]" : "w-[90px]"
+            } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+            onMouseEnter={() => !isExpanded && setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+            <Link href="/">
+              {isExpanded || isHovered || isMobileOpen ? (
+                  <>
+                    <Image className="dark:hidden" src="/images/logo/full-logo.svg" alt="Logo" width={150} height={40} />
+                    <Image
+                        className="hidden dark:block"
+                        src="/images/logo/full-logo-white.svg"
+                        alt="Logo"
+                        width={150}
+                        height={40}
+                    />
+                  </>
+              ) : (
+                  <Image src="/images/logo/setjen.svg" alt="Logo" width={32} height={32} />
+              )}
+            </Link>
+          </div>
 
-        <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
-          <nav className="mb-6">
-            <div className="flex flex-col gap-4">
-              <div>
-                <h2
-                    className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                        !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-                    }`}
-                >
-                  {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}
-                </h2>
-                {renderMenuItems(navItems, "main")}
+          <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+            <nav className="mb-6">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h2
+                      className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
+                          !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+                      }`}
+                  >
+                    {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}
+                  </h2>
+                  {renderMenuItems(navItems, "main")}
+                </div>
+              </div>
+            </nav>
+            {(isExpanded || isHovered || isMobileOpen) && <SidebarWidget />}
+          </div>
+        </aside>
+
+        {/* ===== Modal Edit Node ===== */}
+        {showEdit && editFor && (
+            <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center">
+              <div className="bg-white rounded-xl p-4 w-full max-w-lg shadow-lg">
+                <h3 className="text-lg font-semibold mb-3">Edit Node</h3>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="text-sm block mb-1">Nama</label>
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        value={editName}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setEditName(v);
+                          if (!editSlug) setEditSlug(toSlug(v));
+                        }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Slug</label>
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        value={editSlug}
+                        onChange={(e) => setEditSlug(toSlug(e.target.value))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Unit Kerja</label>
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        value={editUnitKerja}
+                        onChange={(e) => setEditUnitKerja(e.target.value)}
+                        placeholder="Opsional"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Order index</label>
+                    <input
+                        type="number"
+                        className="w-full border rounded px-3 py-2"
+                        value={editOrder}
+                        onChange={(e) => setEditOrder(e.target.value)} // simpan string apa adanya
+                        placeholder="Kosongkan untuk auto"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Parent</label>
+                    <select
+                        className="w-full border rounded px-3 py-2"
+                        value={editParentId}
+                        onChange={(e) => setEditParentId(e.target.value as any)}
+                    >
+                      {parentOptions.map((o) => (
+                          <option key={String(o.id)} value={o.id as any}>
+                            {o.label}
+                          </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Memindahkan node juga memindahkan seluruh subtree ke parent baru.
+                    </p>
+                  </div>
+                </div>
+
+                {saveErr && <div className="mt-2 text-sm text-red-600">{saveErr}</div>}
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="px-3 py-1.5 rounded bg-gray-200" onClick={() => setShowEdit(false)}>
+                    Batal
+                  </button>
+                  <button
+                      className="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-60"
+                      disabled={saving}
+                      onClick={submitEdit}
+                  >
+                    {saving ? "Menyimpan…" : "Simpan"}
+                  </button>
+                </div>
               </div>
             </div>
-          </nav>
-          {(isExpanded || isHovered || isMobileOpen) && <SidebarWidget />}
-        </div>
-      </aside>
+        )}
+
+        {/* ===== Modal Tambah Child ===== */}
+        {showAdd && addParentFor && (
+            <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center">
+              <div className="bg-white rounded-xl p-4 w-full max-w-lg shadow-lg">
+                <h3 className="text-lg font-semibold mb-3">Tambah Child untuk: {addParentFor.name}</h3>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="text-sm block mb-1">Nama</label>
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        value={addName}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setAddName(v);
+                          if (!slugTouched) setAddSlug(toSlug(v));
+                        }}
+                        autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Slug</label>
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        value={addSlug}
+                        onChange={(e) => {
+                          setAddSlug(toSlug(e.target.value));
+                          setSlugTouched(true);
+                        }}
+                        placeholder="mis. depmin-okk"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Unit Kerja</label>
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        value={addUnitKerja}
+                        onChange={(e) => setAddUnitKerja(e.target.value)}
+                        placeholder="Opsional"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm block mb-1">Order index</label>
+                    <input
+                        type="number"
+                        className="w-full border rounded px-3 py-2"
+                        value={addOrder}
+                        onChange={(e) => setAddOrder(e.target.value)} // string agar bisa kosong
+                        placeholder="Kosongkan untuk auto"
+                    />
+                  </div>
+                </div>
+
+                {addErr && <div className="mt-2 text-sm text-red-600">{addErr}</div>}
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="px-3 py-1.5 rounded bg-gray-200" onClick={() => setShowAdd(false)}>
+                    Batal
+                  </button>
+                  <button
+                      className="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-60"
+                      disabled={adding}
+                      onClick={submitAdd}
+                  >
+                    {adding ? "Menyimpan…" : "Simpan"}
+                  </button>
+                </div>
+              </div>
+            </div>
+        )}
+      </>
   );
 };
 

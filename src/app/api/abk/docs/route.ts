@@ -6,21 +6,28 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import pool from "@/lib/db";
-import {getUserFromReq, hasRole} from "@/lib/auth";
+import { getUserFromReq, hasRole } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
+
         const formData = await req.formData();
         const files = formData.getAll("files") as File[];
-        const id_jabatan = formData.get("id_jabatan") as string | null;
+        const id_jabatan = formData.get("id_jabatan") as string | null; // nama field kiriman tetap
 
         if (!id_jabatan) {
             return NextResponse.json({ message: "id_jabatan wajib dikirim" }, { status: 400 });
         }
+
+        // (Opsional) validasi UUID agar match dengan skema baru (UUID)
+        if (!isValidUuid(id_jabatan)) {
+            return NextResponse.json({ message: "id_jabatan harus UUID yang valid" }, { status: 400 });
+        }
+
         if (!files.length) {
             return NextResponse.json({ message: "Tidak ada file yang dikirim" }, { status: 400 });
         }
@@ -54,7 +61,7 @@ export async function POST(req: NextRequest) {
                     python.on("error", reject);
                 });
 
-                // Hapus file tmp (kalau masih locked, biarkan rm(sessionTmpDir) di finally yang bersih-bersih)
+                // Hapus file tmp (kalau masih locked, biarkan rm(sessionTmpDir) di finally)
                 await safeUnlink(tempDocPath);
 
                 if (exitCode !== 0 || !stdoutData) {
@@ -78,38 +85,46 @@ export async function POST(req: NextRequest) {
                     try {
                         await client.query("BEGIN");
 
-                        // Ambil data lama untuk validasi jumlah baris
+                        // ⬇⬇⬇ PERUBAHAN PENTING: kolom FK kini 'jabatan_id' (bukan 'id_jabatan')
                         const { rows: existing } = await client.query(
-                            "SELECT nomor_tugas FROM tugas_pokok WHERE id_jabatan = $1 ORDER BY nomor_tugas ASC",
+                            "SELECT nomor_tugas FROM tugas_pokok WHERE jabatan_id = $1 ORDER BY nomor_tugas ASC",
                             [id_jabatan]
                         );
 
                         if (existing.length !== tugas_pokok.length) {
-                            return NextResponse.json({ message: `Jumlah tugas_pokok di Anjab (${existing.length}) tidak sama dengan tugas_pokok di ABK yang diunggah (${tugas_pokok.length})`, error: "Bad Request"  }, { status: 400 });
+                            await client.query("ROLLBACK");
+                            return NextResponse.json(
+                                {
+                                    message: `Jumlah tugas_pokok di Anjab (${existing.length}) tidak sama dengan tugas_pokok di ABK yang diunggah (${tugas_pokok.length})`,
+                                    error: "Bad Request",
+                                },
+                                { status: 400 }
+                            );
                         }
 
                         // Update by nomor_tugas (urutannya mengikuti existing)
                         for (let i = 0; i < tugas_pokok.length; i++) {
                             const t = tugas_pokok[i];
 
-                            const jumlah_hasil = t.beban_kerja ? parseInt(t.beban_kerja) : null;
-                            const waktu_penyelesaian_jam = t.waktu_penyelesaian ? parseInt(t.waktu_penyelesaian) : null;
-                            const waktu_efektif = t.waktu_kerja_efektif ? parseInt(t.waktu_kerja_efektif) : null;
+                            const jumlah_hasil = toIntOrNull(t?.beban_kerja);
+                            const waktu_penyelesaian_jam = toIntOrNull(t?.waktu_penyelesaian);
+                            const waktu_efektif = toIntOrNull(t?.waktu_kerja_efektif);
 
                             // pegawai_dibutuhkan bisa mengandung koma desimal
                             const kebutuhan_pegawai =
-                                typeof t.pegawai_dibutuhkan === "string"
-                                    ? parseFloat(t.pegawai_dibutuhkan.replace(",", "."))
-                                    : t.pegawai_dibutuhkan ?? null;
+                                typeof t?.pegawai_dibutuhkan === "string"
+                                    ? toFloatOrNull(t.pegawai_dibutuhkan.replace(",", "."))
+                                    : t?.pegawai_dibutuhkan ?? null;
 
+                            // ⬇⬇⬇ PERUBAHAN PENTING: gunakan 'jabatan_id' di WHERE
                             await client.query(
                                 `UPDATE tugas_pokok
-                   SET jumlah_hasil = $1,
-                       waktu_penyelesaian_jam = $2,
-                       waktu_efektif = $3,
-                       kebutuhan_pegawai = $4,
-                       updated_at = NOW()
-                 WHERE id_jabatan = $5 AND nomor_tugas = $6`,
+                                 SET jumlah_hasil = $1,
+                                     waktu_penyelesaian_jam = $2,
+                                     waktu_efektif = $3,
+                                     kebutuhan_pegawai = $4,
+                                     updated_at = NOW()
+                                 WHERE jabatan_id = $5 AND nomor_tugas = $6`,
                                 [
                                     jumlah_hasil,
                                     waktu_penyelesaian_jam,
@@ -151,6 +166,28 @@ export async function POST(req: NextRequest) {
 }
 
 /* ===== Helpers ===== */
+
+function isValidUuid(v: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+}
+
+function toIntOrNull(val: unknown): number | null {
+    if (typeof val === "number") return Number.isFinite(val) ? Math.trunc(val) : null;
+    if (typeof val === "string" && val.trim() !== "") {
+        const n = parseInt(val, 10);
+        return Number.isNaN(n) ? null : n;
+    }
+    return null;
+}
+
+function toFloatOrNull(val: unknown): number | null {
+    if (typeof val === "number") return Number.isFinite(val) ? val : null;
+    if (typeof val === "string" && val.trim() !== "") {
+        const n = parseFloat(val);
+        return Number.isNaN(n) ? null : n;
+    }
+    return null;
+}
 
 async function writeWithRetry(filePath: string, data: Buffer, maxTry = 3) {
     let attempt = 0;

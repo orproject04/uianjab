@@ -20,9 +20,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         }
         const {id} = await ctx.params; // <-- await!
         const {rows} = await pool.query(
-            `SELECT id_jabatan, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
+            `SELECT id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
              FROM jabatan
-             WHERE id_jabatan = $1`,
+             WHERE id = $1`,
             [id]
         );
         if (!rows.length) return NextResponse.json({error: "Not Found"}, {status: 404});
@@ -61,15 +61,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  kelas_jabatan=COALESCE($4, ''),
                  prestasi_diharapkan=COALESCE($5, ''),
                  updated_at=NOW()
-             WHERE id_jabatan = $6`,
+             WHERE id = $6`,
             [kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, id]
         );
         if (!rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
 
         const {rows} = await pool.query(
-            `SELECT id_jabatan, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
+            `SELECT id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
              FROM jabatan
-             WHERE id_jabatan = $1`,
+             WHERE id = $1`,
             [id]
         );
         return NextResponse.json({ok: true, data: rows[0]});

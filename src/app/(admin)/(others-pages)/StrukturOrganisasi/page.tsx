@@ -11,7 +11,7 @@ const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), { ssr
 type APIRow = {
     id: string;
     parent_id: string | null;
-    name: string;
+    nama_jabatan: string;
     slug: string;
     level: number;
     order_index: number;
@@ -20,14 +20,14 @@ type APIRow = {
 type D3Node = {
     _id: string;
     _slug: string;
-    name: string;
+    nama_jabatan: string;
     children?: D3Node[];
     _collapsed?: boolean;
 };
 
 // --- util: bungkus teks menjadi beberapa baris ---
-function wrapText(name: string, maxChars = 20): string[] {
-    const words = (name || "").split(/\s+/);
+function wrapText(nama_jabatan: string, maxChars = 20): string[] {
+    const words = (nama_jabatan || "").split(/\s+/);
     const lines: string[] = [];
     let line = "";
     for (const w of words) {
@@ -49,7 +49,7 @@ function wrapText(name: string, maxChars = 20): string[] {
         }
     }
     if (line) lines.push(line);
-    return lines.length ? lines : [name];
+    return lines.length ? lines : [nama_jabatan];
 }
 
 export default function StrukturOrganisasiPage() {
@@ -125,7 +125,7 @@ export default function StrukturOrganisasiPage() {
         }
     };
 
-    // flat -> tree (urut child by order_index, fallback name)
+    // flat -> tree (urut child by order_index, fallback nama_jabatan)
     const roots = useMemo<D3Node[]>(() => {
         if (!rows.length) return [];
         const byParent = new Map<string | null, APIRow[]>();
@@ -135,13 +135,13 @@ export default function StrukturOrganisasiPage() {
             byParent.set(r.parent_id, arr);
         }
         for (const [k, arr] of byParent.entries()) {
-            arr.sort((a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, "id"));
+            arr.sort((a, b) => a.order_index - b.order_index || a.nama_jabatan.localeCompare(b.nama_jabatan, "id"));
             byParent.set(k, arr);
         }
         const build = (n: APIRow): D3Node => ({
             _id: n.id,
             _slug: n.slug,
-            name: n.name,
+            nama_jabatan: n.nama_jabatan,
             _collapsed: false,
             children: (byParent.get(n.id) || []).map(build),
         });
@@ -153,7 +153,7 @@ export default function StrukturOrganisasiPage() {
     const filteredRoots = useMemo<D3Node[]>(() => {
         if (!lcFilter) return roots;
         const match = (n: D3Node) =>
-            n.name.toLowerCase().includes(lcFilter) || n._slug.toLowerCase().includes(lcFilter);
+            n.nama_jabatan.toLowerCase().includes(lcFilter) || n._slug.toLowerCase().includes(lcFilter);
 
         const walk = (n: D3Node): D3Node | null => {
             const kids = n.children?.map(walk).filter(Boolean) as D3Node[] | undefined;
@@ -165,7 +165,7 @@ export default function StrukturOrganisasiPage() {
 
     // data untuk react-d3-tree
     const toRD3 = (n: D3Node): any => ({
-        name: n.name,
+        name: n.nama_jabatan,
         collapsed: n._collapsed,
         children: n.children?.map(toRD3),
         __meta: { id: n._id, slug: n._slug },

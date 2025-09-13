@@ -23,8 +23,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         if (!user || !hasRole(user, ["admin"])) {
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
-        const {id, id_hasil} = await ctx.params;
+        const {id, id_hasil} = await ctx.params; // id = jabatan_id (UUID), id_hasil = hasil_kerja.id (SERIAL int)
+
         const hid = Number(id_hasil);
+        if (!Number.isFinite(hid)) {
+            return NextResponse.json({error: "Invalid id_hasil"}, {status: 400});
+        }
+
         const json = await req.json().catch(() => ({}));
         const p = PatchSchema.safeParse(json);
         if (!p.success) {
@@ -48,16 +53,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         const q = `UPDATE hasil_kerja
                    SET ${fields.join(", ")},
                        updated_at=NOW()
-                   WHERE id_jabatan = $${fields.length + 1}
-                     AND id_hasil = $${fields.length + 2}`;
+                   WHERE jabatan_id = $${fields.length + 1}
+                     AND id = $${fields.length + 2}`;
         const up = await pool.query(q, values);
         if (!up.rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
 
         const {rows} = await pool.query(
-            `SELECT id_hasil, id_jabatan, hasil_kerja, satuan_hasil, created_at, updated_at
+            `SELECT id, jabatan_id, hasil_kerja, satuan_hasil, created_at, updated_at
              FROM hasil_kerja
-             WHERE id_jabatan = $1
-               AND id_hasil = $2`,
+             WHERE jabatan_id = $1
+               AND id = $2`,
             [id, hid]
         );
         return NextResponse.json({ok: true, data: rows[0]});
@@ -75,11 +80,18 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
         }
         const {id, id_hasil} = await ctx.params;
         const hid = Number(id_hasil);
-        const del = await pool.query(`DELETE
-                                      FROM hasil_kerja
-                                      WHERE id_jabatan = $1
-                                        AND id_hasil = $2`, [id, hid]);
+        if (!Number.isFinite(hid)) {
+            return NextResponse.json({error: "Invalid id_hasil"}, {status: 400});
+        }
+
+        const del = await pool.query(
+            `DELETE FROM hasil_kerja
+             WHERE jabatan_id = $1
+               AND id = $2`,
+            [id, hid]
+        );
         if (!del.rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
+
         return NextResponse.json({ok: true});
     } catch (e) {
         console.error("[hasil-kerja][DELETE]", e);

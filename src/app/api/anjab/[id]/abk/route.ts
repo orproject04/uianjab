@@ -16,9 +16,9 @@ export async function GET(
 
         const { id } = await ctx.params;
 
-        // 🔹 Step 1: cek apakah ada tugas_pokok untuk id_jabatan
+        // 🔹 Step 1: cek apakah ada tugas_pokok untuk jabatan_id
         const { rows: allRows } = await pool.query(
-            `SELECT id_tugas, nomor_tugas FROM tugas_pokok WHERE id_jabatan = $1`,
+            `SELECT id, nomor_tugas FROM tugas_pokok WHERE jabatan_id = $1`,
             [id]
         );
 
@@ -43,16 +43,16 @@ export async function GET(
         // 🔹 Step 2: cek incomplete rows
         const { rows: incomplete } = await pool.query(
             `
-                SELECT id_tugas, nomor_tugas
+                SELECT id, nomor_tugas
                 FROM tugas_pokok
-                WHERE id_jabatan = $1
+                WHERE jabatan_id = $1
                   AND (
                     jumlah_hasil IS NULL
                         OR waktu_penyelesaian_jam IS NULL
                         OR waktu_efektif IS NULL
                         OR kebutuhan_pegawai IS NULL
                     )
-                ORDER BY COALESCE(nomor_tugas, 999999), id_tugas
+                ORDER BY COALESCE(nomor_tugas, 999999), id
                     LIMIT 5
             `,
             [id]

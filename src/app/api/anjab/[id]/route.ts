@@ -1,7 +1,7 @@
 // app/api/anjab/[id]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
-import {getAnjabById} from "@/lib/anjab-queries";
+import {getAnjabByIdOrSlug} from "@/lib/anjab-queries";
 import {getUserFromReq, hasRole} from "@/lib/auth";
 
 type Params = { id: string };
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
         }
 
         const {id} = await ctx.params; // ⬅️ WAJIB await (Next.js 15+)
-        const data = await getAnjabById(id);
+        const data = await getAnjabByIdOrSlug(id);
         if (!data) {
             return NextResponse.json({error: "Data Tidak Ditemukan"}, {status: 404});
         }
@@ -53,7 +53,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> })
         const {id} = await ctx.params; // ⬅️ WAJIB await
         const del = await pool.query(`DELETE
                                       FROM jabatan
-                                      WHERE id_jabatan = $1`, [id]);
+                                      WHERE id = $1`, [id]);
 
         if (del.rowCount === 0) {
             return NextResponse.json({error: "Not Found"}, {status: 404});

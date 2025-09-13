@@ -1,6 +1,6 @@
 // app/api/anjab/[id]/pdf/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getAnjabById } from "@/lib/anjab-queries";
+import { getAnjabByIdOrSlug } from "@/lib/anjab-queries";
 import { buildAnjabHtml } from "@/lib/anjab-pdf-template";
 import { getUserFromReq } from "@/lib/auth";
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         }
 
         const { id } = await ctx.params;
-        const data = await getAnjabById(id);
+        const data = await getAnjabByIdOrSlug(id);
         if (!data) {
             return NextResponse.json({ error: "Data Tidak Ditemukan" }, { status: 404 });
         }

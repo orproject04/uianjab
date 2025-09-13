@@ -19,36 +19,45 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     try {
         const user = getUserFromReq(_req);
         if (!user) {
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
-        const {id} = await ctx.params;
-        const {rows} = await pool.query(
-            `SELECT id_jabatan,
-                    jpt_utama,
-                    jpt_madya,
-                    jpt_pratama,
-                    administrator,
-                    pengawas,
-                    pelaksana,
-                    jabatan_fungsional
+        const { id } = await ctx.params;
+        const { rows } = await pool.query(
+            `SELECT
+                 jabatan_id,
+                 jpt_utama,
+                 jpt_madya,
+                 jpt_pratama,
+                 administrator,
+                 pengawas,
+                 pelaksana,
+                 jabatan_fungsional
              FROM unit_kerja
-             WHERE id_jabatan = $1 LIMIT 1`,
+             WHERE jabatan_id = $1
+                 LIMIT 1`,
             [id]
         );
 
         if (!rows.length) {
-            return NextResponse.json({
-                id_jabatan: id,
-                jpt_utama: "", jpt_madya: "", jpt_pratama: "",
-                administrator: "", pengawas: "", pelaksana: "",
-                jabatan_fungsional: "",
-            }, {
-                headers: {
-                    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    "Pragma": "no-cache",
-                    "Expires": "0",
+            return NextResponse.json(
+                {
+                    id_jabatan: id,
+                    jpt_utama: "",
+                    jpt_madya: "",
+                    jpt_pratama: "",
+                    administrator: "",
+                    pengawas: "",
+                    pelaksana: "",
+                    jabatan_fungsional: "",
                 },
-            });
+                {
+                    headers: {
+                        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
+                    },
+                }
+            );
         }
 
         return NextResponse.json(rows[0], {
@@ -60,7 +69,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         });
     } catch (e) {
         console.error("[unit-kerja][GET] error:", e);
-        return NextResponse.json({error: "General Error"}, {status: 500});
+        return NextResponse.json({ error: "General Error" }, { status: 500 });
     }
 }
 
@@ -69,15 +78,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
-        const {id} = await ctx.params;
+        const { id } = await ctx.params;
         const json = await req.json().catch(() => ({}));
         const parsed = UnitKerjaSchema.safeParse(json);
         if (!parsed.success) {
             return NextResponse.json(
-                {error: "Validasi gagal", detail: parsed.error.flatten()},
-                {status: 400}
+                { error: "Validasi gagal", detail: parsed.error.flatten() },
+                { status: 400 }
             );
         }
 
@@ -92,7 +101,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             upsert = true,
         } = parsed.data;
 
-        // coba UPDATE dulu
+        // coba UPDATE dulu (kolom FK: jabatan_id)
         const up = await pool.query(
             `UPDATE unit_kerja
              SET jpt_utama=$1,
@@ -103,41 +112,43 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  pelaksana=$6,
                  jabatan_fungsional=$7,
                  updated_at=NOW()
-             WHERE id_jabatan = $8`,
+             WHERE jabatan_id = $8`,
             [jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional, id]
         );
 
         if (up.rowCount === 0) {
             if (!upsert) {
-                return NextResponse.json({error: "Data belum ada, dan upsert=false"}, {status: 404});
+                return NextResponse.json({ error: "Data belum ada, dan upsert=false" }, { status: 404 });
             }
-            // insert baru
+            // insert baru (kolom FK: jabatan_id)
             await pool.query(
                 `INSERT INTO unit_kerja
-                 (id_jabatan, jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional,
+                 (jabatan_id, jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional,
                   created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
                 [id, jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional]
             );
         }
 
-        // kirim data terbaru
-        const {rows} = await pool.query(
-            `SELECT id_jabatan,
-                    jpt_utama,
-                    jpt_madya,
-                    jpt_pratama,
-                    administrator,
-                    pengawas,
-                    pelaksana,
-                    jabatan_fungsional
+        // kirim data terbaru (alias agar kompatibel dengan klien lama)
+        const { rows } = await pool.query(
+            `SELECT
+                 jabatan_id,
+                 jpt_utama,
+                 jpt_madya,
+                 jpt_pratama,
+                 administrator,
+                 pengawas,
+                 pelaksana,
+                 jabatan_fungsional
              FROM unit_kerja
-             WHERE id_jabatan = $1 LIMIT 1`,
+             WHERE jabatan_id = $1
+                 LIMIT 1`,
             [id]
         );
-        return NextResponse.json({ok: true, data: rows[0]});
+        return NextResponse.json({ ok: true, data: rows[0] });
     } catch (e) {
         console.error("[unit-kerja][PATCH] error:", e);
-        return NextResponse.json({error: "General Error"}, {status: 500});
+        return NextResponse.json({ error: "General Error" }, { status: 500 });
     }
 }
