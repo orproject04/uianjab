@@ -56,7 +56,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         if (!rows.length) {
             return NextResponse.json(
                 {
-                    id_jabatan: id,
+                    jabatan_id: id,
                     jpt_utama: "",
                     jpt_madya: "",
                     jpt_pratama: "",

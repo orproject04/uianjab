@@ -9,7 +9,7 @@ import { apiFetch } from "@/lib/apiFetch";
 const MySwal = withReactContent(Swal);
 
 type UnitKerja = {
-    id_jabatan: string; // alias dari API (jabatan_id AS id_jabatan)
+    jabatan_id: string; // alias dari API (jabatan_id AS id_jabatan)
     jpt_utama: string;
     jpt_madya: string;
     jpt_pratama: string;

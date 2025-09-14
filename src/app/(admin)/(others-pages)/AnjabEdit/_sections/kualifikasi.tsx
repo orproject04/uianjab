@@ -10,7 +10,7 @@ import { apiFetch } from "@/lib/apiFetch";
 const MySwal = withReactContent(Swal);
 
 type Kualifikasi = {
-    id_jabatan: string; // alias dari API (jabatan_id AS id_jabatan), biarkan kompatibel
+    jabatan_id: string; // alias dari API (jabatan_id AS id_jabatan), biarkan kompatibel
     pendidikan_formal: string[] | null;
     diklat_penjenjangan: string[] | null;
     diklat_teknis: string[] | null;

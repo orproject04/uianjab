@@ -59,7 +59,7 @@ export async function GET(
         }
 
         const safeIso = updatedAt.toISOString().replace(/[:.]/g, "-");
-        const cacheFile = `${data.id_jabatan}-${safeIso}.pdf`;
+        const cacheFile = `${data.id}-${safeIso}.pdf`;
         const cachePath = path.join(CACHE_DIR, cacheFile);
 
         // coba load dari cache
@@ -69,7 +69,7 @@ export async function GET(
                 status: 200,
                 headers: {
                     "Content-Type": "application/pdf",
-                    "Content-Disposition": `inline; filename="Anjab-${data.nama_jabatan}.pdf"`,
+                    "Content-Disposition": `inline; filename="Anjab ${data.nama_jabatan}.pdf"`,
                 },
             });
         } catch {
@@ -98,7 +98,7 @@ export async function GET(
             status: 200,
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `inline; filename="Anjab-${data.nama_jabatan}.pdf"`,
+                "Content-Disposition": `inline; filename="Anjab ${data.nama_jabatan}.pdf"`,
             },
         });
     } catch (err) {

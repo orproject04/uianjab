@@ -10,7 +10,7 @@ import { apiFetch } from "@/lib/apiFetch";
 const MySwal = withReactContent(Swal);
 
 type Jabatan = {
-    id_jabatan: string;
+    id: string;
     kode_jabatan: string | null;
     nama_jabatan: string | null;
     ikhtisar_jabatan: string | null;

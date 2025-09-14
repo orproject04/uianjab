@@ -1,21 +1,24 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import {useRef, useState} from 'react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
-import { FileJson, Loader2 } from 'lucide-react';
-import { apiFetch } from "@/lib/apiFetch";
-import { usePathname } from 'next/navigation';
+import {FileJson, Loader2} from 'lucide-react';
+import {apiFetch} from "@/lib/apiFetch";
+import {usePathname} from 'next/navigation';
 
 const MySwal = withReactContent(Swal);
 
+// Ganti sesuai rute backend barumu
+const UPLOAD_ENDPOINT = '/api/anjab/docs';
+
 interface WordAnjabProps {
-    id: string;
+    id: string; // (tidak dipakai untuk upload tunggal ini, disimpan saja jika dibutuhkan nanti)
     /** Batasi ekstensi yang boleh diunggah. Default ".doc,.docx". */
     acceptExt?: string;
 }
 
-export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabProps) {
+export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps) {
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pathname = usePathname();
@@ -62,7 +65,28 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
         });
     };
 
-    // Ambil 2 segmen terakhir setelah /AnjabEdit/jabatan/... → gabung '-' → key: so:<slug-dash>
+    // Ambil 2 segmen terakhir setelah "/anjab/..." → gabung '-' → jadi slug
+    const getSlugFromPath = (): string | null => {
+        try {
+            const path = String(pathname || "");
+            const parts = path.split('/').filter(Boolean);
+            const idx = parts.findIndex(p => p.toLowerCase() === 'anjab');
+            const tail = idx >= 0 ? parts.slice(idx + 1) : [];
+            const lastTwo = tail.slice(-2);
+            if (lastTwo.length === 0) return null;
+            // normalisasi sederhana
+            const slugDash = lastTwo
+                .map(s => s.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]+/g, ''))
+                .filter(Boolean)
+                .join('-')
+                .replace(/-+/g, '-');
+            return slugDash || null;
+        } catch {
+            return null;
+        }
+    };
+
+    // Ambil struktur_id yang kamu simpan di localStorage (key: so:<slug-join>)
     const getStrukturIdFromLocalStorage = (): string | null => {
         try {
             const path = String(pathname || "");
@@ -83,6 +107,17 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
     const handleFileUploadWord = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
+
+        // Batasi maksimal 1 file
+        if (files.length > 1) {
+            await MySwal.fire({
+                icon: "error",
+                title: "Maksimal 1 file",
+                text: "Silakan pilih hanya satu file untuk diunggah.",
+            });
+            clearFileInput();
+            return;
+        }
 
         // Validasi ekstensi
         const allowed = acceptExt.split(",").map(s => s.trim().toLowerCase());
@@ -108,7 +143,7 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
             return;
         }
 
-        // ⬇️ WAJIB: struktur_id harus ada. Jika tidak ada → gagalkan & tampilkan alert.
+        // Wajib: struktur_id harus ada
         const struktur_id = getStrukturIdFromLocalStorage();
         if (!struktur_id) {
             await MySwal.fire({
@@ -120,16 +155,43 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
             return;
         }
 
+        // Wajib: slug untuk backend (dipakai deteksi duplikat)
+        const slug = getSlugFromPath();
+        if (!slug) {
+            await MySwal.fire({
+                icon: "error",
+                title: "Gagal",
+                text: "Slug tidak bisa ditentukan dari URL.",
+            });
+            clearFileInput();
+            return;
+        }
+
+        // Siapkan FormData untuk 1 file
         const formData = new FormData();
-        for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
-        formData.append('id_jabatan', id);
-        formData.append('struktur_id', struktur_id); // kirim ke backend
+        formData.append('file', files[0]);      // ✅ hanya satu file
+        formData.append('slug', slug);          // ✅ wajib untuk backend
+        formData.append('struktur_id', struktur_id); // ✅ opsional, tapi kita kirim
 
         setIsLoading(true);
         try {
-            const res = await apiFetch('/api/anjab/docs', { method: 'POST', body: formData });
-            const result = await res.json();
-            await showResultModal(res.ok, result.message || (res.ok ? 'Upload berhasil' : 'Gagal'));
+            const res = await apiFetch(UPLOAD_ENDPOINT, {method: 'POST', body: formData});
+            const result = await res.json().catch(() => ({} as any));
+
+            if (res.ok) {
+                // Backend sukses → tampilkan detail jabatan_id, slug, struktur_id
+                const details = `
+          <ul class="list-disc pl-5">
+            ${result.jabatan_id ? `<li><b>jabatan_id:</b> <code>${result.jabatan_id}</code></li>` : ''}
+            ${result.slug ? `<li><b>slug:</b> <code>${result.slug}</code></li>` : ''}
+            ${result.struktur_id ? `<li><b>struktur_id:</b> <code>${result.struktur_id}</code></li>` : ''}
+          </ul>
+        `;
+                await showResultModal(true, result.message || 'Upload berhasil', details);
+            } else {
+                // Tampilkan pesan error dari server, termasuk 409 "Slug sudah pernah dipakai"
+                await showResultModal(false, result.error || `Gagal mengunggah (${res.status})`);
+            }
         } catch (err) {
             console.error(err);
             await showResultModal(false, 'Gagal mengirim ke server.');
@@ -141,11 +203,12 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
 
     return (
         <div className="mx-auto p-4 bg-white rounded-xl border">
-            <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 transition">
+            <label
+                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 transition">
                 {isLoading ? (
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-2" />
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-2"/>
                 ) : (
-                    <FileJson className="w-10 h-10 text-purple-500 mb-2" />
+                    <FileJson className="w-10 h-10 text-purple-500 mb-2"/>
                 )}
                 <p className="text-gray-600 font-medium">Pilih file Word</p>
                 <p className="text-xs text-gray-500 mt-1">Hanya {acceptExt} yang diperbolehkan</p>
@@ -153,7 +216,7 @@ export default function WordAnjab({ id, acceptExt = ".doc,.docx" }: WordAnjabPro
                     ref={fileInputRef}
                     type="file"
                     accept={acceptExt}
-                    multiple
+                    multiple={false}              // ✅ hanya 1 file
                     onChange={handleFileUploadWord}
                     className="hidden"
                 />

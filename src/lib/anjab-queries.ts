@@ -2,7 +2,7 @@
 import pool from "@/lib/db";
 
 export type AnjabRow = {
-    id_jabatan: string; // j.id (UUID)
+    id: string; // j.id (UUID)
     kode_jabatan: string | null;
     nama_jabatan: string;
     ikhtisar_jabatan: string | null;
@@ -68,7 +68,7 @@ const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const SELECT_ANJAB = (whereClause: string) => `
-    SELECT j.id                                         AS id_jabatan,
+    SELECT j.id,
            j.kode_jabatan,
            j.nama_jabatan,
            j.ikhtisar_jabatan,
