@@ -3,10 +3,36 @@ import {NextRequest, NextResponse} from "next/server";
 import {getAnjabByIdOrSlug} from "@/lib/anjab-queries";
 import {buildAnjabHtml} from "@/lib/anjab-pdf-template";
 import {getUserFromReq} from "@/lib/auth";
+import puppeteer, {Browser} from "puppeteer";
+import fs from "fs/promises";
+import path from "path";
 
-export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+// Singleton browser (hemat waktu launch)
+let browserPromise: Promise<Browser> | null = null;
+
+async function getBrowser(): Promise<Browser> {
+    if (!browserPromise) {
+        browserPromise = puppeteer.launch({
+            headless: "new",
+            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+    }
+    return browserPromise;
+}
+
+// Folder cache
+const CACHE_DIR = path.join(process.cwd(), "storage", "pdf-cache");
+
+async function ensureCacheDir() {
+    await fs.mkdir(CACHE_DIR, {recursive: true});
+}
+
+export async function GET(
+    req: NextRequest,
+    ctx: { params: Promise<{ id: string }> }
+) {
     try {
-        // 🔑 pastikan user login (boleh role "user" maupun "admin")
+        // 🔐 pastikan user login
         const user = getUserFromReq(req);
         if (!user) {
             return NextResponse.json({error: "Unauthorized"}, {status: 401});
@@ -18,29 +44,61 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             return NextResponse.json({error: "Data Tidak Ditemukan"}, {status: 404});
         }
 
-        // ✅ generate HTML → PDF
-        const html = buildAnjabHtml(data);
-        const puppeteer = await import("puppeteer");
-        const browser = await puppeteer.launch({headless: "new"});
-        const page = await browser.newPage();
-        await page.setContent(html, {waitUntil: "networkidle0"});
+        await ensureCacheDir();
 
-        const pdfBuffer = await page.pdf({
-            format: "A4",
-            printBackground: true,
+        // ✅ pastikan updated_at valid
+        let updatedAtRaw = (data as any).updated_at;
+        let updatedAt: Date;
+        if (updatedAtRaw) {
+            updatedAt = new Date(updatedAtRaw);
+            if (isNaN(updatedAt.getTime())) {
+                updatedAt = new Date();
+            }
+        } else {
+            updatedAt = new Date();
+        }
+
+        const safeIso = updatedAt.toISOString().replace(/[:.]/g, "-");
+        const cacheFile = `${data.id_jabatan}-${safeIso}.pdf`;
+        const cachePath = path.join(CACHE_DIR, cacheFile);
+
+        // coba load dari cache
+        try {
+            const pdfBuffer = await fs.readFile(cachePath);
+            return new Response(pdfBuffer, {
+                status: 200,
+                headers: {
+                    "Content-Type": "application/pdf",
+                    "Content-Disposition": `inline; filename="Anjab-${data.nama_jabatan}.pdf"`,
+                },
+            });
+        } catch {
+            // cache miss → lanjut generate
+        }
+
+        // generate html → pdf
+        const html = buildAnjabHtml(data);
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+
+        await page.setRequestInterception(true);
+        page.on("request", (r) => {
+            if (["image", "stylesheet", "font"].includes(r.resourceType())) r.abort();
+            else r.continue();
         });
 
-        await browser.close();
+        await page.setContent(html, {waitUntil: "load"});
+        const pdfBuffer = await page.pdf({format: "A4", printBackground: true});
+        await page.close();
+
+        // simpan ke cache
+        await fs.writeFile(cachePath, pdfBuffer);
 
         return new Response(pdfBuffer, {
             status: 200,
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `inline; filename="Anjab ${data.nama_jabatan}.pdf"`,
-                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-                "Content-Length": String(pdfBuffer.length),
+                "Content-Disposition": `inline; filename="Anjab-${data.nama_jabatan}.pdf"`,
             },
         });
     } catch (err) {

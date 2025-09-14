@@ -356,16 +356,16 @@ export function buildAnjabHtml(data: any): string {
       </thead>
       <tbody>
           ${data.perangkat_kerja
-    .map(
-        (item, index) => `
+        .map(
+            (item, index) => `
                 <tr>
                   <td style="text-align: center">${index + 1}.</td>
                   <td>${renderTableList(item.perangkat_kerja)}</td>
                   <td>${renderTableList(item.penggunaan_untuk_tugas)}</td>
                 </tr>
               `
-    )
-    .join("")}
+        )
+        .join("")}
       </tbody>
     </table>
   </div>
