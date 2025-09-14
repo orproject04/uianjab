@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
              WHERE id = $1::uuid`,
             [id]
         );
-        if (!rows.length) return NextResponse.json({error: "Not Found"}, {status: 404});
+        if (!rows.length) return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
 
         return NextResponse.json(rows[0], {
             headers: {
@@ -92,7 +92,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
              WHERE id = $6::uuid`,
             [kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, id]
         );
-        if (!rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
+        if (!rowCount) return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
 
         const {rows} = await pool.query(
             `SELECT id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan

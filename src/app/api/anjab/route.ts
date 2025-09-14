@@ -100,9 +100,7 @@ export async function POST(req: NextRequest) {
           ikhtisar_jabatan,
           kelas_jabatan,
           prestasi_diharapkan,
-          struktur_id,
-          created_at,
-          updated_at
+          struktur_id
             `,
             [
                 kode_jabatan,

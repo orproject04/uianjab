@@ -1,3 +1,4 @@
+// src/app/api/syarat-jabatan/[id]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {z} from "zod";
@@ -44,17 +45,27 @@ const SyaratSchema = z.object({
     upsert: z.boolean().optional(),
 });
 
-// GET: satu baris atau default kosong
+async function jabatanExists(id: string): Promise<boolean> {
+    const q = await pool.query<{ exists: boolean }>(
+        "SELECT EXISTS(SELECT 1 FROM jabatan WHERE id = $1::uuid) AS exists",
+        [id]
+    );
+    return !!q.rows[0]?.exists;
+}
+
+// GET
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
         const user = getUserFromReq(_req);
         if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
 
-        const {id} = await ctx.params; // jabatan_id
-
-        // Early validation UUID
+        const {id} = await ctx.params;
         if (!isUuid(id)) {
             return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
         }
 
         const {rows} = await pool.query(
@@ -72,9 +83,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
                     kondisi_fisik_pb,
                     kondisi_fisik_tampilan,
                     kondisi_fisik_keadaan,
-                    fungsi_pekerja,
-                    created_at,
-                    updated_at
+                    fungsi_pekerja
              FROM syarat_jabatan
              WHERE jabatan_id = $1::uuid
        LIMIT 1`,
@@ -84,7 +93,6 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         if (!rows.length) {
             return NextResponse.json(
                 {
-                    id: null,
                     jabatan_id: id,
                     keterampilan_kerja: [],
                     bakat_kerja: [],
@@ -122,7 +130,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     }
 }
 
-// PATCH: partial update + upsert
+// PATCH
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     let client;
     let txBegan = false;
@@ -132,11 +140,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
-        const {id} = await ctx.params; // jabatan_id
-
-        // Early validation UUID
+        const {id} = await ctx.params;
         if (!isUuid(id)) {
             return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
         }
 
         const json = await req.json().catch(() => ({}));
@@ -149,7 +159,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         client = await pool.connect();
 
-        // Cek eksistensi
         const {rows} = await client.query(
             `SELECT id
              FROM syarat_jabatan
@@ -167,6 +176,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                 return NextResponse.json({error: "Belum ada record dan upsert=false"}, {status: 404});
             }
 
+            // ⬇⬇⬇ RETURNING tanpa created_at/updated_at
             const ins = await client.query(
                 `INSERT INTO syarat_jabatan
                  (jabatan_id,
@@ -178,7 +188,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  VALUES ($1::uuid, $2, $3, $4, $5, $6,
                          $7, $8, $9, $10, $11, $12, $13,
                          $14,
-                         NOW(), NOW()) RETURNING *`,
+                         NOW(), NOW()) RETURNING id, jabatan_id, keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
+                   kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
+                   kondisi_fisik_tampilan, kondisi_fisik_keadaan, fungsi_pekerja`,
                 [
                     id,
                     data.keterampilan_kerja ?? [],
@@ -241,11 +253,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         }
 
         values.push(id);
+        // ⬇⬇⬇ RETURNING tanpa created_at/updated_at
         const q = `UPDATE syarat_jabatan
                    SET ${fields.join(", ")},
                        updated_at=NOW()
                    WHERE jabatan_id = $${values.length}::uuid
-               RETURNING *`;
+               RETURNING id, jabatan_id, keterampilan_kerja, bakat_kerja, temperamen_kerja, minat_kerja, upaya_fisik,
+                         kondisi_fisik_jenkel, kondisi_fisik_umur, kondisi_fisik_tb, kondisi_fisik_bb, kondisi_fisik_pb,
+                         kondisi_fisik_tampilan, kondisi_fisik_keadaan, fungsi_pekerja`;
         const up = await client.query(q, values);
         await client.query("COMMIT");
         txBegan = false;
@@ -260,7 +275,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         return NextResponse.json({ok: true, data: r});
     } catch (e: any) {
-        // Map error umum
         if (client && txBegan) {
             try {
                 await client.query("ROLLBACK");

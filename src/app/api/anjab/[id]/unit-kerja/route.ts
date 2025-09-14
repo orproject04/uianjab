@@ -1,4 +1,4 @@
-// app/api/unit-kerja/[id]/route.ts (atau sesuai path Anda)
+// app/api/unit-kerja/[id]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {z} from "zod";
@@ -16,26 +16,35 @@ const UnitKerjaSchema = z.object({
 });
 
 // Helper: cek UUID v1–v5
-const UUID_RE =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isUuid(s: string) {
     return UUID_RE.test(s);
 }
 
-// GET: ambil satu baris unit_kerja (atau objek kosong bila belum ada)
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+async function jabatanExists(id: string): Promise<boolean> {
+    const q = await pool.query<{ exists: boolean }>(
+        "SELECT EXISTS(SELECT 1 FROM jabatan WHERE id = $1::uuid) AS exists",
+        [id],
+    );
+    return !!q.rows[0]?.exists;
+}
+
+// GET: ambil satu baris unit_kerja (atau objek kosong bila belum ada), tapi id wajib ada di "jabatan"
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
-        const user = getUserFromReq(_req);
-        if (!user) {
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
-        }
+        const user = getUserFromReq(req);
+        if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
 
         const {id} = await ctx.params;
 
-        // Early validation UUID
         if (!isUuid(id)) {
             return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
+        // ✅ Pastikan id jabatan ada
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
         }
 
         const {rows} = await pool.query(
@@ -50,9 +59,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
              FROM unit_kerja
              WHERE jabatan_id = $1::uuid
        LIMIT 1`,
-            [id]
+            [id],
         );
 
+        // Jika belum ada baris di unit_kerja → kembalikan default kosong (tetap 200)
         if (!rows.length) {
             return NextResponse.json(
                 {
@@ -71,7 +81,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
                         Pragma: "no-cache",
                         Expires: "0",
                     },
-                }
+                },
             );
         }
 
@@ -83,7 +93,6 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
             },
         });
     } catch (e: any) {
-        // Map cast error UUID dari PostgreSQL
         if (e?.code === "22P02") {
             return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
         }
@@ -92,7 +101,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     }
 }
 
-// PATCH: update atau upsert
+// PATCH: update atau upsert; namun hanya lanjut jika id ada di "jabatan"
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
         const user = getUserFromReq(req);
@@ -102,9 +111,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         const {id} = await ctx.params;
 
-        // Early validation UUID
         if (!isUuid(id)) {
             return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+        }
+
+        // ✅ Pastikan id jabatan ada
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
         }
 
         const json = await req.json().catch(() => ({}));
@@ -112,7 +125,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         if (!parsed.success) {
             return NextResponse.json(
                 {error: "Validasi gagal", detail: parsed.error.flatten()},
-                {status: 400}
+                {status: 400},
             );
         }
 
@@ -139,7 +152,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  jabatan_fungsional=$7,
                  updated_at=NOW()
              WHERE jabatan_id = $8::uuid`,
-            [jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional, id]
+            [jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional, id],
         );
 
         if (up.rowCount === 0) {
@@ -152,7 +165,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  (jabatan_id, jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional,
                   created_at, updated_at)
                  VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
-                [id, jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional]
+                [id, jpt_utama, jpt_madya, jpt_pratama, administrator, pengawas, pelaksana, jabatan_fungsional],
             );
         }
 
@@ -168,16 +181,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
              FROM unit_kerja
              WHERE jabatan_id = $1::uuid
        LIMIT 1`,
-            [id]
+            [id],
         );
+
         return NextResponse.json({ok: true, data: rows[0]});
     } catch (e: any) {
-        // 22P02 = invalid_text_representation (mis. cast ke uuid gagal)
         if (e?.code === "22P02") {
             return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
         }
-        // 23503 = foreign_key_violation (kalau jabatan_id refer ke jabatan yang tidak ada)
         if (e?.code === "23503") {
+            // kalau FK jabatan_id tidak valid (harusnya tertangkap oleh jabatanExists, tapi jaga-jaga)
             return NextResponse.json({error: "jabatan_id tidak ditemukan (FK violation)"}, {status: 400});
         }
         console.error("[unit-kerja][PATCH] error:", e);
