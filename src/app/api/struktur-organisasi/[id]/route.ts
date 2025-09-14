@@ -1,4 +1,4 @@
-// src/app/api/struktur-organisasi/node/[id]/route.ts
+// src/app/api/struktur-organisasi/[id]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 
@@ -44,7 +44,7 @@ export async function PATCH(
 
         await client.query("BEGIN");
 
-        // 1) Ambil node saat ini (termasuk slug sekarang)
+        // 1) Ambil node saat ini
         const curRes = await client.query(
             "SELECT id, parent_id, level, slug FROM struktur_organisasi WHERE id = $1::uuid",
             [id]
@@ -55,28 +55,24 @@ export async function PATCH(
         }
         const cur = curRes.rows[0] as { id: string; parent_id: string | null; level: number; slug: string };
 
-        // Parent & slug yang akan berlaku SETELAH operasi ini
-        const newParentId = wantParent ? parent_id! : cur.parent_id; // bisa null
+        const newParentId = wantParent ? parent_id! : cur.parent_id;
         const effParent = newParentId;
         const effSlug = slug ?? cur.slug;
 
-        // 2) Validasi parent (self / descendant / exist)
+        // 2) Validasi parent (exist / bukan descendant / bukan diri sendiri)
         if (wantParent) {
             if (newParentId === id) {
                 await client.query("ROLLBACK");
                 return NextResponse.json({error: "parent_id tidak boleh diri sendiri"}, {status: 400});
             }
             if (newParentId) {
-                // parent harus ada
-                const p = await client.query(
-                    "SELECT id, level FROM struktur_organisasi WHERE id = $1::uuid",
-                    [newParentId]
-                );
+                const p = await client.query("SELECT id, level FROM struktur_organisasi WHERE id = $1::uuid", [
+                    newParentId,
+                ]);
                 if (p.rowCount === 0) {
                     await client.query("ROLLBACK");
                     return NextResponse.json({error: "parent_id tidak ditemukan"}, {status: 400});
                 }
-                // parent bukan descendant
                 const sub = await client.query(
                     `
                         WITH RECURSIVE subtree AS (SELECT id
@@ -123,7 +119,7 @@ export async function PATCH(
             }
         }
 
-        // 4) Hitung level baru & update parent (jika diminta)
+        // 4) Update parent (kalau diminta) + perbarui level subtree bila berubah
         if (wantParent) {
             let newLevel: number;
             if (newParentId) {
@@ -153,7 +149,7 @@ export async function PATCH(
                         FROM struktur_organisasi c
                                  JOIN subtree s ON c.parent_id = s.id )
                         UPDATE struktur_organisasi t
-                        SET level      = t.level + $2,
+                        SET level = t.level + $2,
                             updated_at = NOW()
                         WHERE t.id IN (SELECT id FROM subtree WHERE id <> $3::uuid)
                     `,
@@ -162,7 +158,7 @@ export async function PATCH(
             }
         }
 
-        // 5) Update field sederhana
+        // 5) Update field lain
         const fields: string[] = [];
         const values: any[] = [];
         const setIf = (col: string, val: unknown) => {
@@ -187,7 +183,7 @@ export async function PATCH(
             await client.query(q, values);
         }
 
-        // 6) Rebuild slug jabatan untuk seluruh subtree (ambil 2 segmen terakhir)
+        // 6) Rebuild slug jabatan (2 segmen terakhir) untuk seluruh subtree
         await rebuildJabatanSlugsForSubtreeLast2(client, id);
 
         await client.query("COMMIT");
@@ -197,7 +193,6 @@ export async function PATCH(
         });
         console.error("[struktur-organisasi][PATCH]", e);
         if (e?.code === "23505") {
-            // fallback bila race condition
             return NextResponse.json(
                 {error: "Slug sudah dipakai di parent yang sama"},
                 {status: 409}
@@ -212,6 +207,53 @@ export async function PATCH(
     }
 }
 
+export async function DELETE(
+    _req: NextRequest,
+    ctx: { params: Promise<{ id: string }> }
+) {
+    try {
+        const {id} = await ctx.params;
+        if (!isUuid(id)) {
+            return NextResponse.json({error: "id harus UUID"}, {status: 400});
+        }
+
+        // pastikan ada
+        const exists = await pool.query<{ exists: boolean }>(
+            `SELECT EXISTS(SELECT 1 FROM struktur_organisasi WHERE id = $1::uuid) AS exists`,
+            [id]
+        );
+        if (!exists.rows[0]?.exists) {
+            return NextResponse.json({error: "Node tidak ditemukan"}, {status: 404});
+        }
+
+        // hapus node + seluruh subtree
+        const {rowCount} = await pool.query(
+            `
+                WITH RECURSIVE subtree AS (SELECT id
+                                           FROM struktur_organisasi
+                                           WHERE id = $1::uuid
+                UNION ALL
+                SELECT c.id
+                FROM struktur_organisasi c
+                         JOIN subtree s ON c.parent_id = s.id )
+                DELETE
+                FROM struktur_organisasi
+                WHERE id IN (SELECT id FROM subtree)
+            `,
+            [id]
+        );
+
+        return NextResponse.json({ok: true, deleted: rowCount ?? 0});
+    } catch (e: any) {
+        if (e?.code === "22P02") {
+            return NextResponse.json({error: "id harus UUID"}, {status: 400});
+        }
+        console.error(e);
+        return NextResponse.json({error: "Internal error"}, {status: 500});
+    }
+}
+
+/** Helper: rebuild slug jabatan berdasarkan 2 segmen terakhir jalur struktur */
 async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
     await client.query(
         `
@@ -225,7 +267,7 @@ async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
     upwalk AS (
       SELECT s.id AS node_id, s.id AS anc_id, s.slug AS anc_slug, s.level AS anc_level, s.parent_id
       FROM subtree s
-    UNION ALL
+      UNION ALL
       SELECT u.node_id, p.id, p.slug, p.level, p.parent_id
       FROM upwalk u
       JOIN struktur_organisasi p ON p.id = u.parent_id
@@ -235,10 +277,7 @@ async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
       SELECT
         node_id,
         NULLIF(
-          regexp_replace(
-            replace(lower(trim(anc_slug)), ' ', '-'),
-            '[^a-z0-9-]+', '', 'g'
-          ),
+          regexp_replace(replace(lower(trim(anc_slug)), ' ', '-'), '[^a-z0-9-]+', '', 'g'),
           ''
         ) AS part,
         anc_level

@@ -14,7 +14,6 @@ type Row = {
     order_index: number | null;
 };
 
-// ---- Helpers ----
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
@@ -71,12 +70,10 @@ export async function GET(req: NextRequest) {
                 `,
                 [root_id]
             );
-
-            // ← sukses: langsung array (tanpa ok:true)
             return NextResponse.json(rows);
         }
 
-        // Semua root, urut pre-order
+        // semua pohon (root → preorder)
         const {rows} = await pool.query<Row>(
             `
                 WITH RECURSIVE tree AS (SELECT id,
@@ -107,7 +104,6 @@ export async function GET(req: NextRequest) {
             `
         );
 
-        // ← sukses: langsung array (tanpa ok:true)
         return NextResponse.json(rows);
     } catch (e) {
         console.error(e);
@@ -178,12 +174,11 @@ export async function POST(req: NextRequest) {
                     SELECT COALESCE (MAX (order_index) + 1, 0)
                     FROM struktur_organisasi
                     WHERE parent_id IS NOT DISTINCT FROM (SELECT id FROM parent)
-                    )
-                    ) AS ord
+                    )) AS ord
                     ), ins AS (
                 INSERT
                 INTO struktur_organisasi (parent_id, nama_jabatan, slug, unit_kerja, level, order_index)
-                VALUES ( (SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults) )
+                VALUES ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults))
                     RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index
                     )
                 SELECT *
@@ -202,58 +197,6 @@ export async function POST(req: NextRequest) {
         }
         if (e?.code === "22P02") {
             return NextResponse.json({error: "parent_id harus UUID"}, {status: 400});
-        }
-        console.error(e);
-        return NextResponse.json({error: "Internal error"}, {status: 500});
-    }
-}
-
-export async function DELETE(req: NextRequest) {
-    try {
-        const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
-        }
-
-        const {searchParams} = new URL(req.url);
-        const id = searchParams.get("id");
-        if (!id) {
-            return NextResponse.json({error: "id diperlukan"}, {status: 400});
-        }
-        if (!isUuid(id)) {
-            return NextResponse.json({error: "id harus UUID"}, {status: 400});
-        }
-
-        // Cek eksistensi: beri 404 kalau tidak ada
-        const exists = await pool.query<{ exists: boolean }>(
-            `SELECT EXISTS(SELECT 1 FROM struktur_organisasi WHERE id = $1::uuid) AS exists`,
-            [id]
-        );
-        if (!exists.rows[0]?.exists) {
-            return NextResponse.json({error: "Node tidak ditemukan"}, {status: 404});
-        }
-
-        // Hapus node + semua turunannya
-        const {rowCount} = await pool.query(
-            `
-                WITH RECURSIVE subtree AS (SELECT id
-                                           FROM struktur_organisasi
-                                           WHERE id = $1::uuid
-                UNION ALL
-                SELECT c.id
-                FROM struktur_organisasi c
-                         JOIN subtree s ON c.parent_id = s.id )
-                DELETE
-                FROM struktur_organisasi
-                WHERE id IN (SELECT id FROM subtree)
-            `,
-            [id]
-        );
-
-        return NextResponse.json({ok: true, deleted: rowCount ?? 0});
-    } catch (e: any) {
-        if (e?.code === "22P02") {
-            return NextResponse.json({error: "id harus UUID"}, {status: 400});
         }
         console.error(e);
         return NextResponse.json({error: "Internal error"}, {status: 500});
