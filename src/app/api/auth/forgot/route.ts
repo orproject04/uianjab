@@ -6,7 +6,7 @@ import { sendMail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
     const { email } = await req.json();
-    if (!email) return Response.json({ error: "Email wajib" }, { status: 400 });
+    if (!email) return Response.json({ error: "Email wajib dikirim" }, { status: 400 });
 
     const client = await pool.connect();
     try {

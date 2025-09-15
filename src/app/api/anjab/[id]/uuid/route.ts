@@ -11,12 +11,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         // Auth wajib login
         const user = getUserFromReq(req);
         if (!user) {
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+            return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
         }
 
         const {id} = await ctx.params;
         if (!id || typeof id !== "string") {
-            return NextResponse.json({error: "Bad Request: id (slug/uuid) wajib diisi"}, {status: 400});
+            return NextResponse.json({error: "Bad Request: id (slug / uuid) wajib diisi"}, {status: 400});
         }
 
         const isUuid = UUID_RE.test(id);
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
         if (!row) {
             return NextResponse.json(
-                {error: "Not Found"},
+                {error: "Not Found, slug / uuid tidak ditemukan"},
                 {status: 404, headers: {"Cache-Control": "no-store"}}
             );
         }

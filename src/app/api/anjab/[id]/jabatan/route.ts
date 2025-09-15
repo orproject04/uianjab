@@ -23,12 +23,12 @@ function isUuid(s: string) {
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     try {
         const user = getUserFromReq(_req);
-        if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        if (!user) return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
 
         const {id} = await ctx.params; // <-- await!
         // Lapis 1: early validation
         if (!isUuid(id)) {
-            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
 
         const {rows} = await pool.query(
@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
              WHERE id = $1::uuid`,
             [id]
         );
-        if (!rows.length) return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
+        if (!rows.length) return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
 
         return NextResponse.json(rows[0], {
             headers: {
@@ -49,7 +49,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     } catch (e: any) {
         // Lapis 2: map error cast UUID dari PostgreSQL
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         console.error(e);
         return NextResponse.json({error: "General Error"}, {status: 500});
@@ -60,13 +60,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const {id} = await ctx.params; // <-- await!
         // Early validation juga di PATCH
         if (!isUuid(id)) {
-            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
 
         const json = await req.json().catch(() => ({}));
@@ -92,7 +92,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
              WHERE id = $6::uuid`,
             [kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, id]
         );
-        if (!rowCount) return NextResponse.json({error: "Not Found (Dokumen analisis jabatan tidak ada)"}, {status: 404});
+        if (!rowCount) return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
 
         const {rows} = await pool.query(
             `SELECT id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
@@ -103,7 +103,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         return NextResponse.json({ok: true, data: rows[0]});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         console.error("PATCH error:", e);
         return NextResponse.json({error: "General Error"}, {status: 500});

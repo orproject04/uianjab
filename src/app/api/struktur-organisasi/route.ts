@@ -29,7 +29,7 @@ const CreateSchema = z.object({
 export async function GET(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
-        if (!user) return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        if (!user) return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
 
         const {searchParams} = new URL(req.url);
         const root_id = searchParams.get("root_id");
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const body = await req.json().catch(() => ({}));

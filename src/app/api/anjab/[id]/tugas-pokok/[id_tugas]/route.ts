@@ -10,6 +10,14 @@ const UUID_RE =
 const isUuid = (s: string) => UUID_RE.test(s);
 const isIntId = (s: string) => /^\d+$/.test(s);
 
+async function jabatanExists(id: string): Promise<boolean> {
+    const q = await pool.query<{ exists: boolean }>(
+        "SELECT EXISTS(SELECT 1 FROM jabatan WHERE id = $1::uuid) AS exists",
+        [id]
+    );
+    return !!q.rows[0]?.exists;
+}
+
 const toNum = (v: any): number | null => (v == null ? null : Number(v));
 const normalizeRow = (r: any) => ({
     id: Number(r.id), // INT
@@ -54,14 +62,19 @@ export async function PATCH(
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const {id, id_tugas} = await ctx.params; // UUID, INT
         if (!isUuid(id) || !isIntId(id_tugas)) {
-            return NextResponse.json({error: "Invalid id(s): id must be UUID, id_tugas must be int"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID, id_tugas harus angka"}, {status: 400});
         }
         const tugasId = Number(id_tugas);
+
+        // ✅ pastikan jabatan ada
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
+        }
 
         const json = await req.json().catch(() => ({}));
         const p = PatchSchema.safeParse(json);
@@ -98,7 +111,7 @@ export async function PATCH(
             if (!up.rowCount) {
                 await client.query("ROLLBACK");
                 began = false;
-                return NextResponse.json({error: "Not Found"}, {status: 404});
+                return NextResponse.json({error: "Not Found, (Tugas Pokok tidak ditemukan)"}, {status: 404});
             }
         }
 
@@ -145,7 +158,7 @@ export async function PATCH(
             [id, tugasId]
         );
         if (!rows.length) {
-            return NextResponse.json({error: "Not Found"}, {status: 404});
+            return NextResponse.json({error: "Not Found, (Tugas Pokok tidak ditemukan)"}, {status: 404});
         }
 
         return NextResponse.json({ok: true, data: normalizeRow(rows[0])});
@@ -157,10 +170,10 @@ export async function PATCH(
             }
         }
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         if (e?.code === "23503") {
-            return NextResponse.json({error: "FK violation (jabatan_id/tugas_id)"}, {status: 400});
+            return NextResponse.json({error: "jabatan_id / tugas_id tidak ditemukan"}, {status: 400});
         }
         console.error("[tugas-pokok][PATCH]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
@@ -176,14 +189,19 @@ export async function DELETE(
     try {
         const user = getUserFromReq(_req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const {id, id_tugas} = await ctx.params; // UUID, INT
         if (!isUuid(id) || !isIntId(id_tugas)) {
-            return NextResponse.json({error: "Invalid id(s): id must be UUID, id_tugas must be int"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID, id_tugas harus angka"}, {status: 400});
         }
         const tugasId = Number(id_tugas);
+
+        // ✅ pastikan jabatan ada
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
+        }
 
         const del = await pool.query(
             `DELETE
@@ -193,14 +211,14 @@ export async function DELETE(
         );
 
         if (!del.rowCount) {
-            return NextResponse.json({error: "Not Found"}, {status: 404});
+            return NextResponse.json({error: "Not Found, (Tugas Pokok tidak ditemukan)"}, {status: 404});
         }
 
-        // tahapan_uraian_tugas.tugas_id ON DELETE CASCADE -> tahapan ikut terhapus
+        // tahapan_uraian_tugas.tugas_id ON DELETE CASCADE → tahapan ikut terhapus
         return NextResponse.json({ok: true});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid id (must be a UUID)"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         console.error("[tugas-pokok][DELETE]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});

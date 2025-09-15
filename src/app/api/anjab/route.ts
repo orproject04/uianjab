@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         // AUTH
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         // VALIDASI BODY
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
             );
         }
         if (e?.message === "UNAUTHORIZED") {
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+            return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
         }
         console.error("[api/anjab][POST] error:", e);
         return NextResponse.json({error: "General Error"}, {status: 500});

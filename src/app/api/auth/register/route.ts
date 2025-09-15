@@ -7,7 +7,7 @@ import { sendMail } from "@/lib/email";
 export async function POST(req: NextRequest) {
     try {
         const { email, password, full_name } = await req.json();
-        if (!email || !password) return Response.json({ error: "Email & password wajib" }, { status: 400 });
+        if (!email || !password) return Response.json({ error: "Email & password wajib dikirim" }, { status: 400 });
         if (password.length < 8) return Response.json({ error: "Password minimal 8 karakter" }, { status: 400 });
 
         const { rows: exist } = await pool.query(`SELECT 1 FROM user_anjab WHERE email=$1`, [email]);

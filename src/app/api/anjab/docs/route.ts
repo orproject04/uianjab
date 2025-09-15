@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
         // 🔐 hanya admin
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const formData = await req.formData();

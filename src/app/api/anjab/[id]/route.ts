@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
     try {
         const user = getUserFromReq(req);
         if (!user) {
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+            return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
         }
 
         const {id} = await ctx.params; // Next.js 15+: wajib await
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
     } catch (e: any) {
         // Jika e.code = '22P02', kemungkinan dari CAST/::uuid di dalam getAnjabByIdOrSlug (kalau ada)
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid identifier format"}, {status: 400});
+            return NextResponse.json({error: "Invalid, Format ID tidak sesuai"}, {status: 400});
         }
         console.error("[anjab][GET]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
@@ -60,7 +60,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> })
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const {id} = await ctx.params;
@@ -68,7 +68,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> })
         // Lapis 1: early validation
         if (!isUuid(id)) {
             return NextResponse.json(
-                {error: "Invalid id (must be a UUID)"},
+                {error: "Invalid, id harus UUID"},
                 {status: 400}
             );
         }
@@ -82,14 +82,14 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> })
         );
 
         if (del.rowCount === 0) {
-            return NextResponse.json({error: "Not Found"}, {status: 404});
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
         return NextResponse.json({ok: true}, {status: 200});
     } catch (e: any) {
         // Lapis 2: map error PG "invalid_text_representation" jadi 400
         if (e?.code === "22P02") {
             return NextResponse.json(
-                {error: "Invalid id (must be a UUID)"},
+                {error: "Invalid, id harus UUID"},
                 {status: 400}
             );
         }

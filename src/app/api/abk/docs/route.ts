@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden"}, {status: 403});
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
         const formData = await req.formData();
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({message: "id wajib dikirim"}, {status: 400});
         }
         if (!isValidUuid(id)) {
-            return NextResponse.json({message: "id harus UUID yang valid"}, {status: 400});
+            return NextResponse.json({message: "Invalid, id harus UUID"}, {status: 400});
         }
 
         // Ambil tepat 1 file: dukung "file" atau "files" tapi maksimal 1

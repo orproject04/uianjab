@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const refresh = headerRefresh || body?.refresh_token;
 
-    if (!refresh) return Response.json({ error: "No refresh token" }, { status: 401 });
+    if (!refresh) return Response.json({ error: "Tidak ada refresh token" }, { status: 401 });
 
     try {
         verifyRefreshToken(refresh); // cek signature & exp
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
         LIMIT 1`,
             [hashRefreshToken(refresh)]
         );
-        if (!rows.length) return Response.json({ error: "Invalid session" }, { status: 401 });
+        if (!rows.length) return Response.json({ error: "Invalid session, Silakan login kembali" }, { status: 401 });
 
         const sess = rows[0];
 
@@ -58,6 +58,6 @@ export async function POST(req: NextRequest) {
             expires_in: ACCESS_TOKEN_MAXAGE_SEC,
         }, { status: 200 });
     } catch {
-        return Response.json({ error: "Invalid refresh" }, { status: 401 });
+        return Response.json({ error: "Invalid refresh, Silakan login kembali" }, { status: 401 });
     }
 }

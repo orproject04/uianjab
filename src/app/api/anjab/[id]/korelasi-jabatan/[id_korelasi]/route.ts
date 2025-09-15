@@ -8,6 +8,14 @@ const UUID_RE =
 const isUuid = (s: string) => UUID_RE.test(s);
 const isIntId = (s: string) => /^\d+$/.test(s);
 
+async function jabatanExists(id: string): Promise<boolean> {
+    const q = await pool.query<{ exists: boolean }>(
+        "SELECT EXISTS(SELECT 1 FROM jabatan WHERE id = $1::uuid) AS exists",
+        [id]
+    );
+    return !!q.rows[0]?.exists;
+}
+
 const TextRequired = z
     .union([z.string(), z.number()])
     .transform(v => String(v).trim())
@@ -24,18 +32,20 @@ const PatchSchema = z.object({
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; id_korelasi: string }> }) {
     try {
         const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden"}, {status: 403});
+        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
 
         const {id, id_korelasi} = await ctx.params; // id = jabatan_id (UUID), id_korelasi = SERIAL
         if (!isUuid(id)) {
-            return NextResponse.json({error: "jabatan_id harus UUID"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         if (!isIntId(id_korelasi)) {
-            return NextResponse.json({error: "id_korelasi harus integer > 0"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id_korelasi harus angka"}, {status: 400});
         }
         const kid = Number(id_korelasi);
-        if (!(kid > 0)) {
-            return NextResponse.json({error: "id_korelasi harus > 0"}, {status: 400});
+
+        // ✅ cek jabatan
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
 
         const json = await req.json().catch(() => ({}));
@@ -65,10 +75,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                    WHERE jabatan_id = $${fields.length + 1}::uuid
                  AND id = $${fields.length + 2}:: int`;
         const up = await pool.query(q, values);
-        if (!up.rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
+        if (!up.rowCount) return NextResponse.json({error: "Not Found, (Korelasi Jabatan tidak ditemukan)"}, {status: 404});
 
         const {rows} = await pool.query(
-            `SELECT id, jabatan_id, jabatan_terkait, unit_kerja_instansi, dalam_hal, created_at, updated_at
+            `SELECT id, jabatan_id, jabatan_terkait, unit_kerja_instansi, dalam_hal
              FROM korelasi_jabatan
              WHERE jabatan_id = $1::uuid AND id = $2:: int`,
             [id, kid]
@@ -78,7 +88,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         return NextResponse.json({ok: true, data: r});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "jabatan_id harus UUID / id_korelasi harus int"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID, id_korelasi harus angka"}, {status: 400});
         }
         console.error("[korelasi-jabatan][PATCH]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
@@ -88,31 +98,34 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string; id_korelasi: string }> }) {
     try {
         const user = getUserFromReq(_req);
-        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden"}, {status: 403});
+        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
 
         const {id, id_korelasi} = await ctx.params;
         if (!isUuid(id)) {
-            return NextResponse.json({error: "jabatan_id harus UUID"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         if (!isIntId(id_korelasi)) {
-            return NextResponse.json({error: "id_korelasi harus integer > 0"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id_korelasi harus angka"}, {status: 400});
         }
         const kid = Number(id_korelasi);
-        if (!(kid > 0)) {
-            return NextResponse.json({error: "id_korelasi harus > 0"}, {status: 400});
+
+        // ✅ cek jabatan
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
 
         const del = await pool.query(
-            `DELETE FROM korelasi_jabatan
-       WHERE jabatan_id = $1::uuid AND id = $2::int`,
+            `DELETE
+             FROM korelasi_jabatan
+             WHERE jabatan_id = $1::uuid AND id = $2:: int`,
             [id, kid]
         );
-        if (!del.rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
+        if (!del.rowCount) return NextResponse.json({error: "Not Found, (Korelasi Jabatan tidak ditemukan)"}, {status: 404});
 
         return NextResponse.json({ok: true});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "jabatan_id harus UUID / id_korelasi harus int"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID, id_korelasi harus angka"}, {status: 400});
         }
         console.error("[korelasi-jabatan][DELETE]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});

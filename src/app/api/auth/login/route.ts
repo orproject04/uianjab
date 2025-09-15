@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     try {
         const { email, password } = await req.json();
         if (!email || !password) {
-            return Response.json({ error: "Email & password wajib" }, { status: 400 });
+            return Response.json({ error: "Email & password wajib dikirim" }, { status: 400 });
         }
 
         const { rows } = await pool.query(

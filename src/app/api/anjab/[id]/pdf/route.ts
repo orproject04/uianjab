@@ -35,7 +35,7 @@ export async function GET(
         // 🔐 pastikan user login
         const user = getUserFromReq(req);
         if (!user) {
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+            return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
         }
 
         const {id} = await ctx.params;

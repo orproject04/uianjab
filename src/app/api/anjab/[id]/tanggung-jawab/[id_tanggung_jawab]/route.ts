@@ -8,38 +8,39 @@ const UUID_RE =
 const isUuid = (s: string) => UUID_RE.test(s);
 const isIntId = (s: string) => /^\d+$/.test(s);
 
+// ✅ cek jabatan
+async function jabatanExists(id: string): Promise<boolean> {
+    const q = await pool.query<{ exists: boolean }>(
+        "SELECT EXISTS(SELECT 1 FROM jabatan WHERE id = $1::uuid) AS exists",
+        [id]
+    );
+    return !!q.rows[0]?.exists;
+}
+
 const TextField = z
     .union([z.string(), z.number()])
-    .transform(v => String(v).trim())
-    .refine(s => s.length > 0, "Uraian tanggung jawab wajib diisi.");
+    .transform((v) => String(v).trim())
+    .refine((s) => s.length > 0, "Uraian tanggung jawab wajib diisi.");
 
 const PatchSchema = z.object({uraian_tanggung_jawab: TextField.optional()});
 
-export async function PATCH(
-    req: NextRequest,
-    ctx: { params: Promise<{ id: string; id_tanggung_jawab: string }> }
-) {
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; id_tanggung_jawab: string }> }) {
     try {
         const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden"}, {status: 403});
+        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
 
-        const {id, id_tanggung_jawab} = await ctx.params; // id = UUID, id_tanggung_jawab = SERIAL
-        if (!isUuid(id)) {
-            return NextResponse.json({error: "jabatan_id harus UUID"}, {status: 400});
-        }
-        if (!isIntId(id_tanggung_jawab)) {
-            return NextResponse.json({error: "id_tanggung_jawab harus integer > 0"}, {status: 400});
-        }
+        const {id, id_tanggung_jawab} = await ctx.params;
+        if (!isUuid(id)) return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
+        if (!isIntId(id_tanggung_jawab)) return NextResponse.json({error: "Invalid, id_tanggung_jawab harus angka"}, {status: 400});
         const tid = Number(id_tanggung_jawab);
-        if (!(tid > 0)) {
-            return NextResponse.json({error: "id_tanggung_jawab harus > 0"}, {status: 400});
+
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
 
         const json = await req.json().catch(() => ({}));
         const p = PatchSchema.safeParse(json);
-        if (!p.success) {
-            return NextResponse.json({error: "Validasi gagal", detail: p.error.flatten()}, {status: 400});
-        }
+        if (!p.success) return NextResponse.json({error: "Validasi gagal", detail: p.error.flatten()}, {status: 400});
 
         const fields: string[] = [];
         const values: any[] = [];
@@ -56,10 +57,10 @@ export async function PATCH(
                    WHERE jabatan_id = $${fields.length + 1}::uuid
                  AND id = $${fields.length + 2}:: int`;
         const up = await pool.query(q, values);
-        if (!up.rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
+        if (!up.rowCount) return NextResponse.json({error: "Not Found, (Tanggung Jawab tidak ditemukan)"}, {status: 404});
 
         const {rows} = await pool.query(
-            `SELECT id, jabatan_id, uraian_tanggung_jawab, created_at, updated_at
+            `SELECT id, jabatan_id, uraian_tanggung_jawab
              FROM tanggung_jawab
              WHERE jabatan_id = $1::uuid AND id = $2:: int`,
             [id, tid]
@@ -67,31 +68,25 @@ export async function PATCH(
         return NextResponse.json({ok: true, data: rows[0]});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "jabatan_id harus UUID / id_tanggung_jawab harus int"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID, id_tanggung_jawab harus angka"}, {status: 400});
         }
         console.error("[tanggung-jawab][PATCH]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }
 
-export async function DELETE(
-    _req: NextRequest,
-    ctx: { params: Promise<{ id: string; id_tanggung_jawab: string }> }
-) {
+export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string; id_tanggung_jawab: string }> }) {
     try {
         const user = getUserFromReq(_req);
-        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden"}, {status: 403});
+        if (!user || !hasRole(user, ["admin"])) return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
 
         const {id, id_tanggung_jawab} = await ctx.params;
-        if (!isUuid(id)) {
-            return NextResponse.json({error: "jabatan_id harus UUID"}, {status: 400});
-        }
-        if (!isIntId(id_tanggung_jawab)) {
-            return NextResponse.json({error: "id_tanggung_jawab harus integer > 0"}, {status: 400});
-        }
+        if (!isUuid(id)) return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
+        if (!isIntId(id_tanggung_jawab)) return NextResponse.json({error: "Invalid, id_tanggung_jawab harus angka"}, {status: 400});
         const tid = Number(id_tanggung_jawab);
-        if (!(tid > 0)) {
-            return NextResponse.json({error: "id_tanggung_jawab harus > 0"}, {status: 400});
+
+        if (!(await jabatanExists(id))) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
 
         const del = await pool.query(
@@ -100,12 +95,12 @@ export async function DELETE(
              WHERE jabatan_id = $1::uuid AND id = $2:: int`,
             [id, tid]
         );
-        if (!del.rowCount) return NextResponse.json({error: "Not Found"}, {status: 404});
+        if (!del.rowCount) return NextResponse.json({error: "Not Found, (Tanggung Jawab tidak ditemukan)"}, {status: 404});
 
         return NextResponse.json({ok: true});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "jabatan_id harus UUID / id_tanggung_jawab harus int"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID, id_tanggung_jawab harus angka"}, {status: 400});
         }
         console.error("[tanggung-jawab][DELETE]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});

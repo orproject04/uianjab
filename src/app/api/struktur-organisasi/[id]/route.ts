@@ -1,6 +1,7 @@
 // src/app/api/struktur-organisasi/[id]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
+import {getUserFromReq, hasRole} from "@/lib/auth"; // ✅ [BARU]
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,9 +13,15 @@ export async function PATCH(
 ) {
     const client = await pool.connect();
     try {
+        // ✅ admin only
+        const user = getUserFromReq(req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+        }
+
         const {id} = await ctx.params;
         if (!isUuid(id)) {
-            return NextResponse.json({error: "id harus UUID"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
 
         const body = await req.json().catch(() => ({} as any));
@@ -39,7 +46,7 @@ export async function PATCH(
                 : String(body.parent_id)
             : undefined;
         if (wantParent && parent_id !== null && !isUuid(parent_id!)) {
-            return NextResponse.json({error: "parent_id harus UUID atau null"}, {status: 400});
+            return NextResponse.json({error: "Invalid, parent_id harus UUID atau null"}, {status: 400});
         }
 
         await client.query("BEGIN");
@@ -51,7 +58,7 @@ export async function PATCH(
         );
         if (curRes.rowCount === 0) {
             await client.query("ROLLBACK");
-            return NextResponse.json({error: "Node tidak ditemukan"}, {status: 404});
+            return NextResponse.json({error: "Invalid, Node tidak ditemukan"}, {status: 404});
         }
         const cur = curRes.rows[0] as { id: string; parent_id: string | null; level: number; slug: string };
 
@@ -63,7 +70,7 @@ export async function PATCH(
         if (wantParent) {
             if (newParentId === id) {
                 await client.query("ROLLBACK");
-                return NextResponse.json({error: "parent_id tidak boleh diri sendiri"}, {status: 400});
+                return NextResponse.json({error: "Invalid, parent_id tidak boleh diri sendiri"}, {status: 400});
             }
             if (newParentId) {
                 const p = await client.query("SELECT id, level FROM struktur_organisasi WHERE id = $1::uuid", [
@@ -71,7 +78,7 @@ export async function PATCH(
                 ]);
                 if (p.rowCount === 0) {
                     await client.query("ROLLBACK");
-                    return NextResponse.json({error: "parent_id tidak ditemukan"}, {status: 400});
+                    return NextResponse.json({error: "Invalid, parent_id tidak ditemukan"}, {status: 400});
                 }
                 const sub = await client.query(
                     `
@@ -91,7 +98,7 @@ export async function PATCH(
                 if (descendants.has(newParentId)) {
                     await client.query("ROLLBACK");
                     return NextResponse.json(
-                        {error: "parent_id tidak boleh salah satu descendant"},
+                        {error: "Invalid, parent_id tidak boleh salah satu descendant"},
                         {status: 400}
                     );
                 }
@@ -149,7 +156,7 @@ export async function PATCH(
                         FROM struktur_organisasi c
                                  JOIN subtree s ON c.parent_id = s.id )
                         UPDATE struktur_organisasi t
-                        SET level = t.level + $2,
+                        SET level      = t.level + $2,
                             updated_at = NOW()
                         WHERE t.id IN (SELECT id FROM subtree WHERE id <> $3::uuid)
                     `,
@@ -212,9 +219,15 @@ export async function DELETE(
     ctx: { params: Promise<{ id: string }> }
 ) {
     try {
+        // ✅ admin only
+        const user = getUserFromReq(_req);
+        if (!user || !hasRole(user, ["admin"])) {
+            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+        }
+
         const {id} = await ctx.params;
         if (!isUuid(id)) {
-            return NextResponse.json({error: "id harus UUID"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
 
         // pastikan ada
@@ -246,7 +259,7 @@ export async function DELETE(
         return NextResponse.json({ok: true, deleted: rowCount ?? 0});
     } catch (e: any) {
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "id harus UUID"}, {status: 400});
+            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
         console.error(e);
         return NextResponse.json({error: "Internal error"}, {status: 500});

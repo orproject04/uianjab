@@ -5,7 +5,7 @@ import { getUserFromReq } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
     const user = getUserFromReq(req);
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Unauthorized, Silakan login kembali" }, { status: 401 });
 
     // data minimal dari token (tanpa query DB)
     return NextResponse.json(
