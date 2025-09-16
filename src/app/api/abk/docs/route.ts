@@ -119,6 +119,9 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
+                // --- Tambahan: akumulator total kebutuhan_pegawai ---
+                let totalKebutuhanPegawai = 0;
+
                 // Update berdasarkan urutan existing (nomor_tugas)
                 let updated = 0;
                 for (let i = 0; i < tugas_pokok.length; i++) {
@@ -133,6 +136,11 @@ export async function POST(req: NextRequest) {
                         typeof t?.pegawai_dibutuhkan === "string"
                             ? toFloatOrNull(t.pegawai_dibutuhkan.replace(",", "."))
                             : t?.pegawai_dibutuhkan ?? null;
+
+                    // --- Tambahan: akumulasi jika valid number ---
+                    if (typeof kebutuhan_pegawai === "number" && Number.isFinite(kebutuhan_pegawai)) {
+                        totalKebutuhanPegawai += kebutuhan_pegawai;
+                    }
 
                     await client.query(
                         `
@@ -156,6 +164,18 @@ export async function POST(req: NextRequest) {
                     );
                     updated++;
                 }
+
+                // --- Tambahan: tulis total (dibulatkan) ke struktur_organisasi.kebutuhan_pegawai ---
+                const totalRounded = Math.round(totalKebutuhanPegawai);
+                await client.query(
+                    `
+                        UPDATE struktur_organisasi
+                        SET kebutuhan_pegawai = $1,
+                            updated_at        = NOW()
+                        WHERE id = (SELECT struktur_id FROM jabatan WHERE id = $2::uuid)
+                    `,
+                    [totalRounded, id]
+                );
 
                 await client.query("COMMIT");
                 return NextResponse.json({

@@ -1,4 +1,3 @@
-// src/app/api/anjab/[id]/tugas-pokok/[id_tugas]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {z} from "zod";
@@ -49,6 +48,7 @@ const PatchSchema = z.object({
     jumlah_hasil: zIntNullable.optional(),
     waktu_penyelesaian_jam: zIntNullable.optional(),
     waktu_efektif: zIntNullable.optional(),
+    // kebutuhan_pegawai dari user diabaikan → jangan dipakai
     kebutuhan_pegawai: zNumNullable.optional(),
     tahapan: z.array(z.string()).optional(), // replace-all tahapan jika dikirim
 });
@@ -95,7 +95,7 @@ export async function PATCH(
         if (p.data.jumlah_hasil !== undefined) push("jumlah_hasil", p.data.jumlah_hasil);
         if (p.data.waktu_penyelesaian_jam !== undefined) push("waktu_penyelesaian_jam", p.data.waktu_penyelesaian_jam);
         if (p.data.waktu_efektif !== undefined) push("waktu_efektif", p.data.waktu_efektif);
-        if (p.data.kebutuhan_pegawai !== undefined) push("kebutuhan_pegawai", p.data.kebutuhan_pegawai);
+        // NOTE: kebutuhan_pegawai dari user diabaikan → tidak dipush
 
         await client.query("BEGIN");
         began = true;
@@ -106,7 +106,7 @@ export async function PATCH(
                        SET ${fields.join(", ")},
                            updated_at=NOW()
                        WHERE jabatan_id = $${fields.length + 1}::uuid
-                   AND id = $${fields.length + 2}:: int`;
+                   AND id = $${fields.length + 2}::int`;
             const up = await client.query(q, values);
             if (!up.rowCount) {
                 await client.query("ROLLBACK");
@@ -127,6 +127,32 @@ export async function PATCH(
                 );
             }
         }
+
+        // ✅ Recompute kebutuhan_pegawai raw (tanpa pembulatan) untuk baris ini
+        await client.query(
+            `UPDATE tugas_pokok
+             SET kebutuhan_pegawai = CASE
+                                         WHEN COALESCE(waktu_efektif,0) > 0
+                                             THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric)
+                                             / waktu_efektif::numeric
+                                       ELSE NULL
+            END,
+                 updated_at = NOW()
+             WHERE jabatan_id = $1::uuid AND id = $2::int`,
+            [id, tugasId]
+        );
+
+        // ✅ Update kebutuhan_pegawai di struktur_organisasi (dibulatkan ke atas)
+        await client.query(
+            `UPDATE struktur_organisasi so
+             SET kebutuhan_pegawai = COALESCE(
+                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
+                      FROM tugas_pokok tp
+                      WHERE tp.jabatan_id = $1::uuid), 0),
+                 updated_at = NOW()
+             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+            [id]
+        );
 
         await client.query("COMMIT");
         began = false;
@@ -150,7 +176,7 @@ export async function PATCH(
                        ) AS tahapan
                 FROM tugas_pokok t
                          LEFT JOIN tahapan_uraian_tugas u ON u.tugas_id = t.id
-                WHERE t.jabatan_id = $1::uuid AND t.id = $2:: int
+                WHERE t.jabatan_id = $1::uuid AND t.id = $2::int
                 GROUP BY
                     t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas, t.hasil_kerja,
                     t.jumlah_hasil, t.waktu_penyelesaian_jam, t.waktu_efektif, t.kebutuhan_pegawai
@@ -206,7 +232,7 @@ export async function DELETE(
         const del = await pool.query(
             `DELETE
              FROM tugas_pokok
-             WHERE jabatan_id = $1::uuid AND id = $2:: int`,
+             WHERE jabatan_id = $1::uuid AND id = $2::int`,
             [id, tugasId]
         );
 
@@ -215,6 +241,19 @@ export async function DELETE(
         }
 
         // tahapan_uraian_tugas.tugas_id ON DELETE CASCADE → tahapan ikut terhapus
+
+        // ✅ Setelah delete, update agregat struktur_organisasi (CEIL SUM)
+        await pool.query(
+            `UPDATE struktur_organisasi so
+             SET kebutuhan_pegawai = COALESCE(
+                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
+                      FROM tugas_pokok tp
+                      WHERE tp.jabatan_id = $1::uuid), 0),
+                 updated_at = NOW()
+             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+            [id]
+        );
+
         return NextResponse.json({ok: true});
     } catch (e: any) {
         if (e?.code === "22P02") {

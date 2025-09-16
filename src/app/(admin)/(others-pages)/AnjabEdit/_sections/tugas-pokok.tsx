@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-import { apiFetch } from "@/lib/apiFetch";
+import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
 /** ====== Tipe data mengikuti backend TANPA alias ====== */
 type TugasPokok = {
-    id: string;                         // UUID string; "" untuk baris baru
-    jabatan_id: string;                 // UUID jabatan
+    id: string; // UUID string; "" untuk baris baru
+    jabatan_id: string; // UUID jabatan
     nomor_tugas: number | null;
     uraian_tugas: string;
     hasil_kerja: string[];
     jumlah_hasil: number | null;
     waktu_penyelesaian_jam: number | null;
     waktu_efektif: number | null;
-    kebutuhan_pegawai: number | null;
-    tahapan: string[];                  // diasumsikan API join-kan tahapan; kalau tidak, bisa diisi array kosong
-    _tmpKey?: string;                   // hanya untuk key React lokal
+    kebutuhan_pegawai: number | null; // DISABLE edit; auto computed
+    tahapan: string[];
+    _tmpKey?: string; // hanya untuk key React lokal
 };
 
 /** ---- Util: normalisasi aman dari API (tanpa alias) ---- */
@@ -66,11 +66,13 @@ function ArrayInput({
         setItems(next);
         onChange(next);
     }
+
     function update(i: number, v: string) {
         const next = [...items];
         next[i] = v;
         setAndEmit(next);
     }
+
     function add(after?: number) {
         const next = [...items];
         if (typeof after === "number") next.splice(after + 1, 0, "");
@@ -81,6 +83,7 @@ function ArrayInput({
             refs.current[idx]?.focus();
         }, 0);
     }
+
     function remove(i: number) {
         const next = items.filter((_, idx) => idx !== i);
         setAndEmit(next);
@@ -153,9 +156,9 @@ export default function TugasPokokForm({
         const storageKey = vpath.split("/").filter(Boolean).slice(-2).join("/");
         try {
             const raw = localStorage.getItem(storageKey);
-            return { storageKey, exists: raw !== null, value: raw ?? "" };
+            return {storageKey, exists: raw !== null, value: raw ?? ""};
         } catch {
-            return { storageKey, exists: false, value: "" };
+            return {storageKey, exists: false, value: ""};
         }
     }
 
@@ -172,7 +175,7 @@ export default function TugasPokokForm({
         setLastError(null);
         setLoading(true);
         try {
-            const res = await apiFetch(`/api/anjab/${encodeURIComponent(jabatanId)}/tugas-pokok`, { cache: "no-store" });
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(jabatanId)}/tugas-pokok`, {cache: "no-store"});
             if (!res.ok) {
                 setList([]);
                 setLastError(`Gagal memuat Tugas Pokok (HTTP ${res.status}).`);
@@ -185,7 +188,13 @@ export default function TugasPokokForm({
                     _tmpKey: `srv-${i}-${r?.id ?? Math.random().toString(36).slice(2)}`,
                 }))
                 : [];
-            setList(normalized);
+            // Pastikan kebutuhan_pegawai konsisten secara tampilan (kalau null → hitung dari 3 kolom bila memungkinkan)
+            setList(
+                normalized.map((row) => {
+                    const calc = computeKebutuhanPegawai(row.jumlah_hasil, row.waktu_penyelesaian_jam, row.waktu_efektif);
+                    return {...row, kebutuhan_pegawai: calc};
+                })
+            );
             setTimeout(() => firstRef.current?.focus(), 0);
         } catch {
             setList([]);
@@ -213,19 +222,64 @@ export default function TugasPokokForm({
         };
     }, [resolvedId, storageInfo.exists]);
 
+    function computeKebutuhanPegawai(
+        jumlah_hasil: number | null,
+        waktu_penyelesaian_jam: number | null,
+        waktu_efektif: number | null
+    ): number {
+        const j = Number(jumlah_hasil ?? 0);
+        const w = Number(waktu_penyelesaian_jam ?? 0);
+        const e = Number(waktu_efektif ?? 0);
+        if (!Number.isFinite(j) || !Number.isFinite(w) || !Number.isFinite(e) || e <= 0) return 0;
+        return (j * w) / e;
+    }
+
     function updateLocal(idx: number, patch: Partial<TugasPokok>) {
         setList((prev) => {
             const next = [...prev];
-            next[idx] = { ...next[idx], ...patch };
+            const before = next[idx];
+
+            // Jika ada perubahan di salah satu dari 3 kolom pemicu → re-calc kebutuhan_pegawai baris ini
+            const willTrigger =
+                Object.prototype.hasOwnProperty.call(patch, "jumlah_hasil") ||
+                Object.prototype.hasOwnProperty.call(patch, "waktu_penyelesaian_jam") ||
+                Object.prototype.hasOwnProperty.call(patch, "waktu_efektif");
+
+            const merged = {...before, ...patch};
+
+            if (willTrigger) {
+                merged.kebutuhan_pegawai = computeKebutuhanPegawai(
+                    merged.jumlah_hasil,
+                    merged.waktu_penyelesaian_jam,
+                    merged.waktu_efektif
+                );
+            }
+
+            next[idx] = merged;
             return next;
         });
     }
 
-    // 4) Simpan (POST/ PATCH berdasar id string non-kosong)
+    // === Total & pembulatan (auto) ===
+    const totalKebutuhan = useMemo(
+        () =>
+            (list ?? []).reduce((sum, r) => {
+                const v = typeof r.kebutuhan_pegawai === "number" && Number.isFinite(r.kebutuhan_pegawai) ? r.kebutuhan_pegawai : 0;
+                return sum + v;
+            }, 0),
+        [list]
+    );
+    const pembulatan = useMemo(() => Math.ceil(totalKebutuhan), [totalKebutuhan]);
+
+    // 4) Simpan (POST/ PATCH)
     async function saveItem(idx: number) {
         const item = list[idx];
+        // Pastikan payload pakai kebutuhan_pegawai hasil kalkulasi terakhir di client
         const clean = normalizeFromApi(item, resolvedId);
         const isEdit = typeof clean.id === "string" && clean.id.length > 0;
+
+        // Pastikan lagi kebutuhan_pegawai baris ini dihitung dari 3 kolom
+        const kp = computeKebutuhanPegawai(clean.jumlah_hasil, clean.waktu_penyelesaian_jam, clean.waktu_efektif);
 
         const payload = {
             nomor_tugas: clean.nomor_tugas,
@@ -234,7 +288,7 @@ export default function TugasPokokForm({
             jumlah_hasil: clean.jumlah_hasil,
             waktu_penyelesaian_jam: clean.waktu_penyelesaian_jam,
             waktu_efektif: clean.waktu_efektif,
-            kebutuhan_pegawai: clean.kebutuhan_pegawai,
+            kebutuhan_pegawai: kp, // ← kirim hasil kalkulasi
             tahapan: clean.tahapan,
         };
 
@@ -243,12 +297,11 @@ export default function TugasPokokForm({
 
         try {
             if (isEdit) {
-                // PATCH
                 const res = await apiFetch(
                     `/api/anjab/${encodeURIComponent(resolvedId)}/tugas-pokok/${clean.id}`,
                     {
                         method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {"Content-Type": "application/json"},
                         body: JSON.stringify(payload),
                     }
                 );
@@ -258,14 +311,19 @@ export default function TugasPokokForm({
                     return;
                 }
                 const updated = normalizeFromApi((json as any).data, resolvedId);
+                // Recompute kebutuhan_pegawai untuk konsistensi tampilan (server mungkin mengembalikan angka yang sama)
+                updated.kebutuhan_pegawai = computeKebutuhanPegawai(
+                    updated.jumlah_hasil,
+                    updated.waktu_penyelesaian_jam,
+                    updated.waktu_efektif
+                );
                 updateLocal(idx, updated);
             } else {
-                // POST
                 const res = await apiFetch(
                     `/api/anjab/${encodeURIComponent(resolvedId)}/tugas-pokok`,
                     {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {"Content-Type": "application/json"},
                         body: JSON.stringify(payload),
                     }
                 );
@@ -275,11 +333,15 @@ export default function TugasPokokForm({
                     return;
                 }
                 const created = normalizeFromApi((json as any).data, resolvedId);
-                // Pastikan UUID terpasang agar next time jadi PATCH
+                created.kebutuhan_pegawai = computeKebutuhanPegawai(
+                    created.jumlah_hasil,
+                    created.waktu_penyelesaian_jam,
+                    created.waktu_efektif
+                );
                 updateLocal(idx, created);
             }
 
-            await MySwal.fire({ icon: "success", title: "Tersimpan", text: "Tugas Pokok berhasil disimpan." });
+            await MySwal.fire({icon: "success", title: "Tersimpan", text: "Tugas Pokok berhasil disimpan."});
         } catch {
             setLastError("Terjadi kesalahan saat menyimpan.");
         } finally {
@@ -307,15 +369,15 @@ export default function TugasPokokForm({
             if (hasServerId) {
                 const res = await apiFetch(
                     `/api/anjab/${encodeURIComponent(resolvedId)}/tugas-pokok/${clean.id}`,
-                    { method: "DELETE" }
+                    {method: "DELETE"}
                 );
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok || (json as any)?.error) throw new Error((json as any)?.error || `HTTP ${res.status}`);
             }
             setList((prev) => prev.filter((_, i) => i !== idx));
-            await MySwal.fire({ icon: "success", title: "Terhapus", text: "Tugas Pokok dihapus." });
+            await MySwal.fire({icon: "success", title: "Terhapus", text: "Tugas Pokok dihapus."});
         } catch (e) {
-            await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
+            await MySwal.fire({icon: "error", title: "Gagal menghapus", text: String(e)});
         }
     }
 
@@ -333,7 +395,7 @@ export default function TugasPokokForm({
                 jumlah_hasil: null,
                 waktu_penyelesaian_jam: null,
                 waktu_efektif: null,
-                kebutuhan_pegawai: null,
+                kebutuhan_pegawai: 0, // default tampilan
                 tahapan: [],
                 _tmpKey: tmpKey,
             },
@@ -349,13 +411,13 @@ export default function TugasPokokForm({
         setLastError(null);
     };
 
-    // === UI konsisten (teks error + tombol coba lagi/kembali) ===
     if (!storageInfo.exists || lastError === "__NOT_FOUND_KEY__") {
         return (
             <div className="p-6 space-y-3">
                 <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
                 <p className="text-sm text-gray-600">
-                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu kembali ke halaman ini.
+                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu
+                    kembali ke halaman ini.
                 </p>
                 <div className="flex items-center gap-3">
                     <button className="rounded border px-3 py-1.5" onClick={retry}>
@@ -386,6 +448,30 @@ export default function TugasPokokForm({
                 </Link>
             </div>
 
+            {/* ====== 2 field ringkasan (read-only) ====== */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
+                    <input
+                        type="number"
+                        value={Number.isFinite(totalKebutuhan) ? totalKebutuhan : 0}
+                        readOnly
+                        disabled
+                        className="w-full rounded border px-3 py-2 bg-gray-100"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium mb-1">Pembulatan</label>
+                    <input
+                        type="number"
+                        value={pembulatan}
+                        readOnly
+                        disabled
+                        className="w-full rounded border px-3 py-2 bg-gray-100"
+                    />
+                </div>
+            </div>
+
             {list.length === 0 && <p className="text-gray-600">Belum ada Tugas Pokok. Klik “+ Tambah Tugas”.</p>}
 
             {list.map((row, idx) => {
@@ -399,7 +485,7 @@ export default function TugasPokokForm({
                                     type="number"
                                     value={row.nomor_tugas ?? 0}
                                     onChange={(e) =>
-                                        updateLocal(idx, { nomor_tugas: e.target.value === "" ? null : Number(e.target.value) })
+                                        updateLocal(idx, {nomor_tugas: e.target.value === "" ? null : Number(e.target.value)})
                                     }
                                     className="w-full rounded border px-3 py-2"
                                 />
@@ -410,13 +496,13 @@ export default function TugasPokokForm({
                                     type="number"
                                     value={row.jumlah_hasil ?? 0}
                                     onChange={(e) =>
-                                        updateLocal(idx, { jumlah_hasil: e.target.value === "" ? null : Number(e.target.value) })
+                                        updateLocal(idx, {jumlah_hasil: e.target.value === "" ? null : Number(e.target.value)})
                                     }
                                     className="w-full rounded border px-3 py-2"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Waktu (jam)</label>
+                                <label className="block text-sm font-medium mb-1">Waktu Penyelesaian (jam)</label>
                                 <input
                                     type="number"
                                     value={row.waktu_penyelesaian_jam ?? 0}
@@ -434,7 +520,7 @@ export default function TugasPokokForm({
                                     type="number"
                                     value={row.waktu_efektif ?? 0}
                                     onChange={(e) =>
-                                        updateLocal(idx, { waktu_efektif: e.target.value === "" ? null : Number(e.target.value) })
+                                        updateLocal(idx, {waktu_efektif: e.target.value === "" ? null : Number(e.target.value)})
                                     }
                                     className="w-full rounded border px-3 py-2"
                                 />
@@ -447,10 +533,9 @@ export default function TugasPokokForm({
                                 type="number"
                                 step="0.0001"
                                 value={row.kebutuhan_pegawai ?? 0}
-                                onChange={(e) =>
-                                    updateLocal(idx, { kebutuhan_pegawai: e.target.value === "" ? null : Number(e.target.value) })
-                                }
-                                className="w-full rounded border px-3 py-2"
+                                readOnly
+                                disabled
+                                className="w-full rounded border px-3 py-2 bg-gray-100"
                             />
                         </div>
 
@@ -459,7 +544,7 @@ export default function TugasPokokForm({
                             <textarea
                                 ref={idx === list.length - 1 ? firstRef : undefined}
                                 value={row.uraian_tugas ?? ""}
-                                onChange={(e) => updateLocal(idx, { uraian_tugas: e.target.value })}
+                                onChange={(e) => updateLocal(idx, {uraian_tugas: e.target.value})}
                                 rows={3}
                                 className="w-full rounded border px-3 py-2"
                             />
@@ -468,14 +553,14 @@ export default function TugasPokokForm({
                         <ArrayInput
                             label="Tahapan Uraian Tugas"
                             value={row.tahapan ?? []}
-                            onChange={(v) => updateLocal(idx, { tahapan: v })}
+                            onChange={(v) => updateLocal(idx, {tahapan: v})}
                             placeholder="Contoh: Mengumpulkan data …"
                         />
 
                         <ArrayInput
-                            label="Hasil Kerja (satu per baris)"
+                            label="Hasil Kerja"
                             value={row.hasil_kerja ?? []}
-                            onChange={(v) => updateLocal(idx, { hasil_kerja: v })}
+                            onChange={(v) => updateLocal(idx, {hasil_kerja: v})}
                             placeholder="Contoh: Laporan analisis …"
                         />
 

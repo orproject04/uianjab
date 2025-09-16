@@ -1,4 +1,3 @@
-// src/app/api/anjab/[id]/tugas-pokok/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {z} from "zod";
@@ -41,6 +40,7 @@ const ItemSchema = z.object({
     jumlah_hasil: zIntNullable.optional(),
     waktu_penyelesaian_jam: zIntNullable.optional(),
     waktu_efektif: zIntNullable.optional(),
+    // NOTE: kebutuhan_pegawai dari user diabaikan, akan dihitung ulang di DB
     kebutuhan_pegawai: zNumNullable.optional(),
     tahapan: z.array(z.string()).default([]),
 });
@@ -151,19 +151,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             jumlah_hasil = null,
             waktu_penyelesaian_jam = null,
             waktu_efektif = null,
-            kebutuhan_pegawai = null,
+            // kebutuhan_pegawai diabaikan
             tahapan = [],
         } = p.data;
 
         await client.query("BEGIN");
         began = true;
 
+        // insert tanpa kebutuhan_pegawai (akan dihitung ulang)
         const ins = await client.query(
             `INSERT INTO tugas_pokok
              (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
-              waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
-             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
-            [id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai]
+              waktu_penyelesaian_jam, waktu_efektif, created_at, updated_at)
+             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id`,
+            [id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif]
         );
 
         const newId: number = Number(ins.rows[0].id);
@@ -176,6 +177,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 [newId, id, t]
             );
         }
+
+        // Recompute kebutuhan_pegawai (raw, tanpa pembulatan) untuk baris baru
+        await client.query(
+            `UPDATE tugas_pokok
+             SET kebutuhan_pegawai = CASE
+                                         WHEN COALESCE(waktu_efektif,0) > 0
+                                             THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric)
+                                             / waktu_efektif::numeric
+                                       ELSE NULL
+            END,
+                 updated_at = NOW()
+             WHERE id = $1::int`,
+            [newId]
+        );
+
+        // Update kebutuhan_pegawai (dibulatkan ke atas) di struktur_organisasi
+        await client.query(
+            `UPDATE struktur_organisasi so
+             SET kebutuhan_pegawai = COALESCE(
+                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
+                      FROM tugas_pokok tp
+                      WHERE tp.jabatan_id = $1::uuid), 0),
+                 updated_at = NOW()
+             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+            [id]
+        );
 
         await client.query("COMMIT");
         began = false;
@@ -199,7 +226,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                        ) AS tahapan
                 FROM tugas_pokok t
                          LEFT JOIN tahapan_uraian_tugas u ON u.tugas_id = t.id
-                WHERE t.jabatan_id = $1::uuid AND t.id = $2:: int
+                WHERE t.jabatan_id = $1::uuid AND t.id = $2::int
                 GROUP BY
                     t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas, t.hasil_kerja,
                     t.jumlah_hasil, t.waktu_penyelesaian_jam, t.waktu_efektif, t.kebutuhan_pegawai
@@ -255,7 +282,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         await client.query("BEGIN");
         began = true;
 
-        // Hapus lama
+        // Hapus data lama (tahapan dulu, baru tugas)
         const old = await client.query(
             `SELECT id
              FROM tugas_pokok
@@ -279,13 +306,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             );
         }
 
-        // Insert baru
+        // Insert baru (tanpa kebutuhan_pegawai), lalu hitung ulang per baris
         for (const it of p.data) {
             const ins = await client.query(
                 `INSERT INTO tugas_pokok
                  (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
-                  waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
-                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
+                  waktu_penyelesaian_jam, waktu_efektif, created_at, updated_at)
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id`,
                 [
                     id,
                     it.nomor_tugas ?? null,
@@ -294,10 +321,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
                     it.jumlah_hasil ?? null,
                     it.waktu_penyelesaian_jam ?? null,
                     it.waktu_efektif ?? null,
-                    it.kebutuhan_pegawai ?? null,
                 ]
             );
             const newId: number = Number(ins.rows[0].id);
+
             for (const t of it.tahapan ?? []) {
                 await client.query(
                     `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
@@ -305,7 +332,33 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
                     [newId, id, t]
                 );
             }
+
+            // Recompute kebutuhan_pegawai (raw, tanpa pembulatan) untuk baris ini
+            await client.query(
+                `UPDATE tugas_pokok
+                 SET kebutuhan_pegawai = CASE
+                                             WHEN COALESCE(waktu_efektif,0) > 0
+                                                 THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric)
+                                                 / waktu_efektif::numeric
+                                           ELSE NULL
+                END,
+                     updated_at = NOW()
+                 WHERE id = $1::int`,
+                [newId]
+            );
         }
+
+        // Update kebutuhan_pegawai (dibulatkan ke atas) di struktur_organisasi
+        await client.query(
+            `UPDATE struktur_organisasi so
+             SET kebutuhan_pegawai = COALESCE(
+                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
+                      FROM tugas_pokok tp
+                      WHERE tp.jabatan_id = $1::uuid), 0),
+                 updated_at = NOW()
+             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+            [id]
+        );
 
         await client.query("COMMIT");
         began = false;

@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
                                                       unit_kerja,
                                                       level,
                                                       order_index,
+                                                      kebutuhan_pegawai,
                                                       ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text] ::text[] AS sort_path
                                                FROM struktur_organisasi
                                                WHERE id = $1::uuid
@@ -60,11 +61,12 @@ export async function GET(req: NextRequest) {
                            c.unit_kerja,
                            c.level,
                            c.order_index,
+                           c.kebutuhan_pegawai,
                            s.sort_path ||
                            (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
                     FROM struktur_organisasi c
                              JOIN subtree s ON c.parent_id = s.id )
-                    SELECT id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index
+                    SELECT id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai
                     FROM subtree
                     ORDER BY sort_path
                 `,
@@ -83,6 +85,7 @@ export async function GET(req: NextRequest) {
                                                unit_kerja,
                                                level,
                                                order_index,
+                                               kebutuhan_pegawai,
                                                ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text] ::text[] AS sort_path
                                         FROM struktur_organisasi
                                         WHERE parent_id IS NULL
@@ -94,11 +97,12 @@ export async function GET(req: NextRequest) {
                                                c.unit_kerja,
                                                c.level,
                                                c.order_index,
+                                               c.kebutuhan_pegawai,
                                                t.sort_path ||
                                                (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
                                         FROM struktur_organisasi c
                                                  JOIN tree t ON c.parent_id = t.id)
-                SELECT id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index
+                SELECT id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai
                 FROM tree
                 ORDER BY sort_path
             `
