@@ -1,13 +1,42 @@
-// src/app/(admin)/(others-pages)/Anjab/[[...slug]]/page.tsx
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import React, { useEffect, useMemo, useState } from "react";
+import {useParams} from "next/navigation";
+import React, {useEffect, useMemo, useState} from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
-import { apiFetch } from "@/lib/apiFetch";
+import {apiFetch} from "@/lib/apiFetch";
 
 type Status = "idle" | "loading" | "ok" | "notfound" | "error";
+
+function titleCase(s: string) {
+    return s
+        .toLowerCase()
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(" ");
+}
+
+// Parse filename dari header Content-Disposition
+function parseContentDispositionFilename(cd: string | null): string | null {
+    if (!cd) return null;
+
+    // filename*=UTF-8''encoded
+    const mStar = cd.match(/filename\*\s*=\s*([^']+)''([^;]+)/i);
+    if (mStar && mStar[2]) {
+        try {
+            return decodeURIComponent(mStar[2].trim());
+        } catch {
+            // ignore
+        }
+    }
+
+    // filename="..."/filename=...
+    const m = cd.match(/filename\s*=\s*(?:"([^"]+)"|([^;]+))/i);
+    if (m) return (m[1] || m[2] || "").trim();
+
+    return null;
+}
 
 export default function InformasiJabatanPage() {
     const params = useParams();
@@ -18,7 +47,7 @@ export default function InformasiJabatanPage() {
         let alive = true;
         (async () => {
             try {
-                const r = await apiFetch("/api/auth/me", { method: "GET", cache: "no-store" });
+                const r = await apiFetch("/api/auth/me", {method: "GET", cache: "no-store"});
                 if (!alive) return;
                 if (r.ok) {
                     const j = await r.json();
@@ -51,6 +80,13 @@ export default function InformasiJabatanPage() {
 
     const encodedId = useMemo(() => (id ? encodeURIComponent(id) : ""), [id]);
 
+    // Filename cantik fallback (kalau header tidak ada)
+    const fallbackNiceName = useMemo(() => {
+        if (!id) return "Anjab.pdf";
+        const words = id.replace(/-/g, " ");
+        return `Anjab ${titleCase(words)}.pdf`;
+    }, [id]);
+
     // href edit: pakai full path (/)
     const editHref = useMemo(() => {
         if (rawSlug.length === 0) return "#";
@@ -58,39 +94,37 @@ export default function InformasiJabatanPage() {
         return `/AnjabEdit/jabatan/${fullPath}`;
     }, [rawSlug]);
 
-    // Blob URL untuk iframe
+    // Blob URL + blob + filename
     const [pdfSrc, setPdfSrc] = useState<string | null>(null);
+    const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+    const [fileName, setFileName] = useState<string | null>(null);
     const [status, setStatus] = useState<Status>("idle");
 
     // === resolve UUID jabatan dari slug (2 segmen terakhir) & simpan ke localStorage — HANYA untuk admin ===
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            if (!id || !isAdmin) return; // <— ditambah pengecekan admin
+            if (!id || !isAdmin) return; // <— hanya admin
             try {
-                // Asumsi endpoint GET /api/anjab/[slug]/uuid mengembalikan JSON yang memuat kolom id (uuid jabatan)
-                const res = await apiFetch(`/api/anjab/${encodedId}/uuid`, { method: "GET", cache: "no-store" });
+                const res = await apiFetch(`/api/anjab/${encodedId}/uuid`, {method: "GET", cache: "no-store"});
                 if (!res.ok) return;
                 const data = await res.json();
-
-                // Ambil UUID dengan fallback aman
                 const createdId = data?.id ?? null;
-
                 if (!cancelled && createdId && typeof window !== "undefined") {
-                    // Key = dua segmen terakhir (nilai `id`)
                     const slugForUrl = id.replace(/-/g, "/");
+                    // Simpan agar komponen lain bisa baca
                     localStorage.setItem(slugForUrl, String(createdId));
                 }
             } catch {
-                // diamkan bila gagal; tidak mengganggu alur utama
+                // diamkan bila gagal
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [id, encodedId, isAdmin]); // <— depend pada isAdmin
+    }, [id, encodedId, isAdmin]);
 
-    // Ambil PDF (GET) → blob → objectURL
+    // Ambil PDF (GET) → blob → objectURL — pakai apiFetch (bawa Authorization header), TANPA cookie & TANPA ?auth
     useEffect(() => {
         let alive = true;
         let currentUrl: string | null = null;
@@ -99,6 +133,8 @@ export default function InformasiJabatanPage() {
             if (!id) {
                 if (alive) {
                     setPdfSrc(null);
+                    setPdfBlob(null);
+                    setFileName(null);
                     setStatus("notfound");
                 }
                 return;
@@ -108,22 +144,33 @@ export default function InformasiJabatanPage() {
                 if (alive) {
                     setStatus("loading");
                     setPdfSrc(null);
+                    setPdfBlob(null);
+                    setFileName(null);
                 }
 
                 const res = await apiFetch(`/api/anjab/${encodedId}/pdf`, {
                     method: "GET",
                     cache: "no-store",
+                    // (opsional) pastikan Accept PDF
+                    headers: {Accept: "application/pdf"},
                 });
 
                 if (!alive) return;
 
                 if (res.ok) {
+                    // Ambil filename dari header
+                    const cd = res.headers.get("Content-Disposition");
+                    const parsedName = parseContentDispositionFilename(cd);
+                    const niceName = parsedName || fallbackNiceName;
+
                     const blob = await res.blob();
-                    // Buat object URL untuk iframe
                     const url = URL.createObjectURL(blob);
+
                     currentUrl = url;
                     if (alive) {
+                        setPdfBlob(blob);
                         setPdfSrc(url);
+                        setFileName(niceName);
                         setStatus("ok");
                     }
                 } else if (res.status === 404) {
@@ -140,11 +187,20 @@ export default function InformasiJabatanPage() {
 
         return () => {
             alive = false;
-            if (currentUrl) {
-                URL.revokeObjectURL(currentUrl);
-            }
+            if (currentUrl) URL.revokeObjectURL(currentUrl);
         };
-    }, [id, encodedId]);
+    }, [id, encodedId, fallbackNiceName]);
+
+    // Handler unduh dengan nama file cantik
+    const handleDownload = () => {
+        if (!pdfSrc) return;
+        const a = document.createElement("a");
+        a.href = pdfSrc;                // pakai blob URL yang sama
+        a.download = fileName || fallbackNiceName; // kontrol nama file
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    };
 
     // === Tanpa slug/id ===
     if (!id) {
@@ -156,7 +212,7 @@ export default function InformasiJabatanPage() {
     }
 
     if (status === "loading" || status === "idle") {
-        return <p style={{ padding: 20 }}>Loading...</p>;
+        return <p style={{padding: 20}}>Loading...</p>;
     }
 
     // === NOT FOUND / ERROR
@@ -202,7 +258,7 @@ export default function InformasiJabatanPage() {
                         )}
                     </p>
                     <p className="text-sm text-gray-600">
-                        Silakan memilih antara <b>mengunggah dokumen Anjab berformat .doc</b> (tidak mendukung .docx)
+                        Silakan memilih antara <b>mengunggah dokumen Anjab berformat .doc </b>
                         atau <b>membuat Anjab secara manual</b>.
                     </p>
                 </div>
@@ -212,9 +268,9 @@ export default function InformasiJabatanPage() {
                     <div className="border rounded-lg p-4">
                         <h3 className="font-medium mb-2 text-center">Upload Dokumen Anjab (.doc)</h3>
                         <p className="text-sm text-gray-600 mb-3">
-                            Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk <b>{id}</b>. <i>.docx tidak didukung.</i>
+                            Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk <b>{id}</b>.
                         </p>
-                        <WordAnjab id={id} acceptExt=".doc" />
+                        <WordAnjab id={id}/>
                     </div>
 
                     {/* Buat Manual */}
@@ -237,10 +293,10 @@ export default function InformasiJabatanPage() {
         );
     }
 
-    // === OK → tampilkan PDF dari blob; non-admin tidak melihat tombol Edit
+    // === OK → tampilkan PDF dari blob; SEDIAKAN tombol "Unduh" (download attribute) agar nama file sesuai
     return (
         <>
-            {/* Bar atas tipis */}
+            {/* Bar atas */}
             <div
                 style={{
                     padding: 12,
@@ -252,14 +308,25 @@ export default function InformasiJabatanPage() {
                 }}
             >
                 {pdfSrc && (
-                    <a
-                        href={pdfSrc}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded border px-3 py-1.5 hover:bg-gray-50"
-                    >
-                        Buka di halaman baru
-                    </a>
+                    <>
+                        {/* Buka di tab baru (viewer bawaan mungkin tetap pakai nama default) */}
+                        <a
+                            href={pdfSrc}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded border px-3 py-1.5 hover:bg-gray-50"
+                        >
+                            Full Screen
+                        </a>
+
+                        {/* Tombol Unduh: memastikan nama file = header/fallback */}
+                        <button
+                            onClick={handleDownload}
+                            className="rounded bg-emerald-600 text-white px-3 py-1.5 hover:bg-emerald-700"
+                        >
+                            Unduh PDF
+                        </button>
+                    </>
                 )}
 
                 {isAdmin && (
@@ -273,7 +340,7 @@ export default function InformasiJabatanPage() {
             </div>
 
             {/* iframe full viewport height */}
-            <div style={{ width: "100%", height: "100dvh" }}>
+            <div style={{width: "100%", height: "100dvh"}}>
                 {pdfSrc ? (
                     <iframe
                         src={pdfSrc}

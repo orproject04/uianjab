@@ -9,16 +9,20 @@ import {usePathname} from 'next/navigation';
 
 const MySwal = withReactContent(Swal);
 
-// Ganti sesuai rute backend barumu
+// Endpoint backend Anda
 const UPLOAD_ENDPOINT = '/api/anjab/docs';
 
+// Accept yang robust: ekstensi + MIME
+const DEFAULT_ACCEPT =
+    ".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 interface WordAnjabProps {
-    id: string; // (tidak dipakai untuk upload tunggal ini, disimpan saja jika dibutuhkan nanti)
-    /** Batasi ekstensi yang boleh diunggah. Default ".doc,.docx". */
+    id: string; // disimpan untuk kebutuhan lain
+    /** Batasi ekstensi yang boleh diunggah. Default termasuk .doc, .docx dan MIME terkait. */
     acceptExt?: string;
 }
 
-export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps) {
+export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabProps) {
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pathname = usePathname();
@@ -65,7 +69,7 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
         });
     };
 
-    // Ambil 2 segmen terakhir setelah "/anjab/..." → gabung '-' → jadi slug
+    // --- Helpers slug & struktur_id (tetap) ---
     const getSlugFromPath = (): string | null => {
         try {
             const path = String(pathname || "");
@@ -74,7 +78,6 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
             const tail = idx >= 0 ? parts.slice(idx + 1) : [];
             const lastTwo = tail.slice(-2);
             if (lastTwo.length === 0) return null;
-            // normalisasi sederhana
             const slugDash = lastTwo
                 .map(s => s.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]+/g, ''))
                 .filter(Boolean)
@@ -86,7 +89,6 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
         }
     };
 
-    // Ambil struktur_id yang kamu simpan di localStorage (key: so:<slug-join>)
     const getStrukturIdFromLocalStorage = (): string | null => {
         try {
             const path = String(pathname || "");
@@ -104,11 +106,46 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
         }
     };
 
+    // --- Validasi .doc / .docx yang robust ---
+    const parseAccept = (accept: string) => {
+        const items = accept.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        const exts = new Set<string>();
+        const mimes = new Set<string>();
+        for (const it of items) {
+            if (it.startsWith('.')) exts.add(it);
+            else if (it.includes('/')) mimes.add(it);
+        }
+        // pastikan keduanya ada walaupun caller hanya memberi ekstensi
+        if (!exts.size) {
+            exts.add('.doc');
+            exts.add('.docx');
+        }
+        if (!mimes.size) {
+            mimes.add('application/msword');
+            mimes.add('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        }
+        return {exts, mimes};
+    };
+
+    const getExt = (filename: string): string => {
+        const i = filename.lastIndexOf('.');
+        if (i < 0) return ''; // tidak ada ekstensi
+        return filename.slice(i).toLowerCase();
+    };
+
+    const isAllowedWordFile = (f: File, exts: Set<string>, mimes: Set<string>) => {
+        const ext = getExt(f.name);
+        const mime = (f.type || '').toLowerCase(); // bisa kosong di beberapa browser
+        // lolos jika: ekstensinya cocok ATAU MIME cocok
+        return (exts.has(ext)) || (mime && mimes.has(mime));
+    };
+
+    // --- Handler upload ---
     const handleFileUploadWord = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        // Batasi maksimal 1 file
+        // Maks 1 file
         if (files.length > 1) {
             await MySwal.fire({
                 icon: "error",
@@ -119,25 +156,23 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
             return;
         }
 
-        // Validasi ekstensi
-        const allowed = acceptExt.split(",").map(s => s.trim().toLowerCase());
-        const bad = Array.from(files).filter(f => {
-            const ext = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
-            return !allowed.includes(ext);
-        });
-        if (bad.length) {
+        // Validasi ekstensi/MIME
+        const {exts, mimes} = parseAccept(acceptExt);
+        const f = files[0];
+        if (!isAllowedWordFile(f, exts, mimes)) {
             await MySwal.fire({
                 icon: "error",
-                title: "Ekstensi tidak didukung",
-                html: `<p>File berikut tidak didukung: </p>
-               <ul class="text-left list-disc pl-5">${bad.map(b => `<li>${b.name}</li>`).join("")}</ul>
-               <p class="mt-2">Hanya ${allowed.join(" ")} yang diperbolehkan.</p>`,
+                title: "Ekstensi/MIME tidak didukung",
+                html: `
+          <p>File: <b>${f.name}</b></p>
+          <p class="mt-2">Hanya <code>.doc</code> / <code>.docx</code> yang diperbolehkan.</p>
+        `,
             });
             clearFileInput();
             return;
         }
 
-        const confirmed = await showConfirmModal(Array.from(files).map(f => f.name));
+        const confirmed = await showConfirmModal([f.name]);
         if (!confirmed) {
             clearFileInput();
             return;
@@ -155,7 +190,7 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
             return;
         }
 
-        // Wajib: slug untuk backend (dipakai deteksi duplikat)
+        // Wajib: slug untuk backend (deteksi duplikat)
         const slug = getSlugFromPath();
         if (!slug) {
             await MySwal.fire({
@@ -167,11 +202,11 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
             return;
         }
 
-        // Siapkan FormData untuk 1 file
+        // Kirim FormData
         const formData = new FormData();
-        formData.append('file', files[0]);      // ✅ hanya satu file
-        formData.append('slug', slug);          // ✅ wajib untuk backend
-        formData.append('struktur_id', struktur_id); // ✅ opsional, tapi kita kirim
+        formData.append('file', f);
+        formData.append('slug', slug);
+        formData.append('struktur_id', struktur_id);
 
         setIsLoading(true);
         try {
@@ -179,7 +214,6 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
             const result = await res.json().catch(() => ({} as any));
 
             if (res.ok) {
-                // Backend sukses → tampilkan detail jabatan_id, slug, struktur_id
                 const details = `
           <ul class="list-disc pl-5">
             ${result.jabatan_id ? `<li><b>jabatan_id:</b> <code>${result.jabatan_id}</code></li>` : ''}
@@ -189,7 +223,6 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
         `;
                 await showResultModal(true, result.message || 'Upload berhasil', details);
             } else {
-                // Tampilkan pesan error dari server, termasuk 409 "Slug sudah pernah dipakai"
                 await showResultModal(false, result.error || `Gagal mengunggah (${res.status})`);
             }
         } catch (err) {
@@ -211,12 +244,12 @@ export default function WordAnjab({id, acceptExt = ".doc,.docx"}: WordAnjabProps
                     <FileJson className="w-10 h-10 text-purple-500 mb-2"/>
                 )}
                 <p className="text-gray-600 font-medium">Pilih file Word</p>
-                <p className="text-xs text-gray-500 mt-1">Hanya {acceptExt} yang diperbolehkan</p>
+                <p className="text-xs text-gray-500 mt-1">Hanya .doc / .docx yang diperbolehkan</p>
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept={acceptExt}
-                    multiple={false}              // ✅ hanya 1 file
+                    accept={acceptExt}          // ← ekstensinya + MIME
+                    multiple={false}
                     onChange={handleFileUploadWord}
                     className="hidden"
                 />

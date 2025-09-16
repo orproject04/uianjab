@@ -1,4 +1,7 @@
 // src/app/api/upload-anjab/route.ts
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import {NextRequest, NextResponse} from "next/server";
 import {spawn} from "child_process";
 import * as fs from "fs/promises";
@@ -8,12 +11,40 @@ import crypto from "crypto";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth";
 
+/** ====== ENV helpers: pastikan proses anak bisa akses soffice & python ====== */
+function buildSpawnEnv() {
+    const env = {...process.env};
+
+    // Windows: tambahkan folder LibreOffice ke PATH agar "soffice" terlihat oleh script Python
+    // Set di .env.local -> SOFFICE_DIR="C:\\Program Files\\LibreOffice\\program"
+    const sofficeDir = process.env.SOFFICE_DIR || "";
+    if (sofficeDir) {
+        env.PATH = env.PATH ? `${env.PATH};${sofficeDir}` : sofficeDir;
+    }
+
+    // Linux/macOS: jika butuh path absolut, set SOFFICE_BIN="/usr/bin/soffice"
+    if (process.env.SOFFICE_BIN) {
+        env.SOFFICE_BIN = process.env.SOFFICE_BIN;
+    }
+
+    return env;
+}
+
+function getPythonBin() {
+    // Taruh di .env.local -> PYTHON_BIN="C:\\Python312\\python.exe" atau "python3"
+    return process.env.PYTHON_BIN || "python";
+}
+
+/** =================== ROUTE =================== */
 export async function POST(req: NextRequest) {
     try {
-        // 🔐 hanya admin
+        // 🔐 batasi role admin
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+            return NextResponse.json(
+                {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
+                {status: 403}
+            );
         }
 
         const formData = await req.formData();
@@ -26,7 +57,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({error: "slug wajib dikirim"}, {status: 400});
         }
 
-        // 🔎 Cegah duplikat slug (menolak upload kedua)
+        // 🔎 Cegah duplikat slug
         {
             const dup = await pool.query<{ exists: boolean }>(
                 `SELECT EXISTS(SELECT 1 FROM jabatan WHERE slug = $1) AS exists`,
@@ -40,14 +71,10 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Ambil file tunggal:
-        // - dukung "file"
-        // - dukung "files" tapi maksimal 1
+        // Ambil file tunggal dari "file" atau "files" (maks 1)
         let file: File | null = null;
-
         const directFile = formData.get("file");
         if (directFile instanceof File) file = directFile;
-
         if (!file) {
             const files = formData.getAll("files").filter((f) => f instanceof File) as File[];
             if (files.length > 1) {
@@ -58,7 +85,6 @@ export async function POST(req: NextRequest) {
             }
             file = files[0] ?? null;
         }
-
         if (!file) {
             return NextResponse.json({error: "Tidak ada file yang dikirim"}, {status: 400});
         }
@@ -83,12 +109,24 @@ export async function POST(req: NextRequest) {
             let stdoutData = "";
             let stderrData = "";
 
+            const pythonBin = getPythonBin();
+            const spawnEnv = buildSpawnEnv();
+
             const exitCode: number = await new Promise((resolve, reject) => {
-                const python = spawn("python", [scriptPath, tempDocPath], {windowsHide: true});
-                python.stdout.on("data", (d) => (stdoutData += d.toString()));
-                python.stderr.on("data", (d) => (stderrData += d.toString()));
-                python.on("close", (code) => resolve(code ?? 1));
-                python.on("error", reject);
+                const child = spawn(
+                    pythonBin,
+                    [scriptPath, tempDocPath],
+                    {
+                        windowsHide: true,
+                        env: spawnEnv,               // << penting: env sudah berisi SOFFICE_DIR/SOFFICE_BIN
+                        stdio: ["ignore", "pipe", "pipe"],
+                    }
+                );
+
+                child.stdout.on("data", (d) => (stdoutData += d.toString()));
+                child.stderr.on("data", (d) => (stderrData += d.toString()));
+                child.on("close", (code) => resolve(code ?? 1));
+                child.on("error", reject);
             });
 
             await safeUnlink(tempDocPath);
@@ -106,7 +144,7 @@ export async function POST(req: NextRequest) {
             try {
                 item = JSON.parse(stdoutData);
             } catch (e) {
-                console.error("❌ JSON extractor tidak valid:", e);
+                console.error("❌ JSON extractor tidak valid:", e, "\nRAW:\n", stdoutData);
                 return NextResponse.json(
                     {error: "Output extractor bukan JSON yang valid"},
                     {status: 422}
@@ -140,13 +178,11 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // Sekali lagi cegah race-condition (jika kamu pasang UNIQUE INDEX pada jabatan.slug),
-            // maka jika proses lain insert slug yang sama di saat bersamaan, kita tangkap 23505.
             const client = await pool.connect();
             try {
                 await client.query("BEGIN");
 
-                // Insert jabatan (slug ditaruh sebagaimana adanya)
+                // Insert jabatan
                 const insJabatan = await client.query<{ id: string }>(
                     `
                         INSERT INTO jabatan
@@ -160,8 +196,8 @@ export async function POST(req: NextRequest) {
                         ikhtisar_jabatan || "",
                         kelas_jabatan || "",
                         prestasi_yang_diharapkan || "",
-                        slug, // ← slug dari form
-                        struktur_id, // boleh null
+                        slug,
+                        struktur_id,
                     ]
                 );
                 const jabatanUUID = insJabatan.rows[0].id;
@@ -207,8 +243,8 @@ export async function POST(req: NextRequest) {
                 await client.query(
                     `
                         INSERT INTO kualifikasi_jabatan (jabatan_id, pendidikan_formal, diklat_penjenjangan,
-                                                         diklat_teknis,
-                                                         diklat_fungsional, pengalaman_kerja, created_at, updated_at)
+                                                         diklat_teknis, diklat_fungsional, pengalaman_kerja,
+                                                         created_at, updated_at)
                         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
                     `,
                     [
@@ -221,7 +257,7 @@ export async function POST(req: NextRequest) {
                     ]
                 );
 
-                // tugas_pokok + tahapan_uraian_tugas
+                // tugas_pokok + tahapan
                 for (const tugas of Array.isArray(tugas_pokok) ? tugas_pokok : []) {
                     const nomor_tugas = parseInt(tugas.no) || null;
                     const uraian = tugas.uraian_tugas?.deskripsi || "";
@@ -240,8 +276,7 @@ export async function POST(req: NextRequest) {
                         `
                             INSERT INTO tugas_pokok (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja,
                                                      jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif,
-                                                     kebutuhan_pegawai,
-                                                     created_at, updated_at)
+                                                     kebutuhan_pegawai, created_at, updated_at)
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id
                         `,
                         [
@@ -407,8 +442,6 @@ export async function POST(req: NextRequest) {
                 );
             } catch (err: any) {
                 await client.query("ROLLBACK");
-                // Jika kamu menambahkan constraint unik di DB: UNIQUE INDEX pada jabatan.slug,
-                // tangkap error 23505 di sini agar respons tetap 409.
                 if (err?.code === "23505") {
                     return NextResponse.json(
                         {error: "Upload gagal, Slug sudah mempunyai Anjab"},
