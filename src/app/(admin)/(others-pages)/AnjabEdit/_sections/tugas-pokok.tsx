@@ -454,7 +454,7 @@ export default function TugasPokokForm({
                     <label className="block text-sm font-medium mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
                     <input
                         type="number"
-                        value={Number.isFinite(totalKebutuhan) ? totalKebutuhan : 0}
+                        value={Number.isFinite(totalKebutuhan) ? totalKebutuhan.toFixed(4) : 0}
                         readOnly
                         disabled
                         className="w-full rounded border px-3 py-2 bg-gray-100"
