@@ -1,0 +1,60 @@
+version: "3.9"
+
+name: anjab-stack
+
+services:
+  anjab-db:
+    image: postgres:16
+    container_name: anjab-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Ortalayes1
+      POSTGRES_DB: eaa
+    ports:
+      - "5432:5432"                    # opsional, enak buat debug dari host
+    volumes:
+      - anjab-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eaa || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  anjab-app:
+    build:
+      context: .
+      dockerfile: Dockerfile           # <- Dockerfile kamu yang sudah ada
+    container_name: anjab-app
+    depends_on:
+      anjab-db:
+        condition: service_healthy
+    env_file:
+      - .env.docker
+    environment:
+      - PYTHON_BIN=/usr/bin/python3
+      - SOFFICE_BIN=/usr/bin/soffice
+      - SOFFICE_DIR=/usr/bin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./storage/pdf-cache:/app/storage/pdf-cache
+    restart: unless-stopped
+
+  anjab-pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: anjab-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ortala@dpd.go.id
+      PGADMIN_DEFAULT_PASSWORD: Ortalayes1
+    ports:
+      - "9090:80"
+    depends_on:
+      - anjab-db
+    volumes:
+      - anjab-pgadmin-data:/var/lib/pgadmin
+    restart: unless-stopped
+
+volumes:
+  anjab-pgdata:
+  anjab-pgadmin-data:

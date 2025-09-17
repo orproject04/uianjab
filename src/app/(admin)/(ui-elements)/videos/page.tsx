@@ -1,20 +1,20 @@
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import VideosExample from "@/components/ui/video/VideosExample";
-import { Metadata } from "next";
-import React from "react";
+import React, {Suspense} from "react";
+import type {Metadata} from "next";
+import VideosClient from "./VideosClient";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "Next.js Videos | TailAdmin - Next.js Dashboard Template",
-  description:
-    "This is Next.js Videos page for TailAdmin - Next.js Tailwind CSS Admin Dashboard Template",
+    title: "Next.js Videos | TailAdmin - Next.js Dashboard Template",
+    description:
+        "This is Next.js Videos page for TailAdmin - Next.js Tailwind CSS Admin Dashboard Template",
 };
 
-export default function VideoPage() {
-  return (
-    <div>
-      <PageBreadcrumb pageTitle="Videos" />
-
-      <VideosExample />
-    </div>
-  );
+export default function Page() {
+    return (
+        <Suspense fallback={null}>
+            <VideosClient/>
+        </Suspense>
+    );
 }

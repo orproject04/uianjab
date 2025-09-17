@@ -8,11 +8,38 @@ import crypto from "crypto";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth";
 
+/** ====== ENV helpers: pastikan proses anak bisa akses python/soffice ====== */
+function buildSpawnEnv() {
+    const env = {...process.env};
+
+    // Untuk Windows lokal (opsional): SOFFICE_DIR menambah PATH
+    const sofficeDir = process.env.SOFFICE_DIR || "";
+    if (sofficeDir) {
+        env.PATH = env.PATH ? `${env.PATH};${sofficeDir}` : sofficeDir;
+    }
+
+    // Linux: set jalur absolut jika ada
+    if (process.env.SOFFICE_BIN) {
+        env.SOFFICE_BIN = process.env.SOFFICE_BIN;
+    }
+
+    return env;
+}
+
+function getPythonBin() {
+    // Di container Linux: gunakan python3
+    // Bisa override lewat ENV: PYTHON_BIN=/usr/bin/python3
+    return process.env.PYTHON_BIN || "python3";
+}
+
 export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+            return NextResponse.json(
+                {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
+                {status: 403}
+            );
         }
 
         const formData = await req.formData();
@@ -26,11 +53,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({message: "Invalid, id harus UUID"}, {status: 400});
         }
 
-        // Ambil tepat 1 file: dukung "file" atau "files" tapi maksimal 1
+        // Ambil tepat 1 file
         let file: File | null = null;
         const directFile = formData.get("file");
         if (directFile instanceof File) file = directFile;
-
         if (!file) {
             const files = formData.getAll("files").filter((f) => f instanceof File) as File[];
             if (files.length > 1) {
@@ -38,7 +64,6 @@ export async function POST(req: NextRequest) {
             }
             file = files[0] ?? null;
         }
-
         if (!file) {
             return NextResponse.json({message: "Tidak ada file yang dikirim"}, {status: 400});
         }
@@ -47,7 +72,7 @@ export async function POST(req: NextRequest) {
         const sessionTmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "anjab-abk-"));
 
         try {
-            // --- 1) Simpan file ke temp unik ---
+            // 1) Simpan file ke temp unik
             const ext = path.extname(file.name) || ".doc";
             const base = path.basename(file.name, ext).replace(/[^\w\-]+/g, "_").slice(0, 80);
             const unique = crypto.randomUUID();
@@ -56,16 +81,24 @@ export async function POST(req: NextRequest) {
             const buffer = Buffer.from(await file.arrayBuffer());
             await writeWithRetry(tempDocPath, buffer);
 
-            // --- 2) Jalankan Python extractor ---
+            // 2) Jalankan Python extractor
             let stdoutData = "";
             let stderrData = "";
 
+            const pythonBin = getPythonBin();
+            const spawnEnv = buildSpawnEnv();
+
             const exitCode: number = await new Promise((resolve, reject) => {
-                const python = spawn("python", [scriptPath, tempDocPath], {windowsHide: true});
-                python.stdout.on("data", (d) => (stdoutData += d.toString()));
-                python.stderr.on("data", (d) => (stderrData += d.toString()));
-                python.on("close", (code) => resolve(code ?? 1));
-                python.on("error", reject);
+                const child = spawn(pythonBin, [scriptPath, tempDocPath], {
+                    windowsHide: true,
+                    env: spawnEnv,
+                    stdio: ["ignore", "pipe", "pipe"],
+                });
+
+                child.stdout.on("data", (d) => (stdoutData += d.toString()));
+                child.stderr.on("data", (d) => (stderrData += d.toString()));
+                child.on("close", (code) => resolve(code ?? 1));
+                child.on("error", reject);
             });
 
             await safeUnlink(tempDocPath);
@@ -78,12 +111,12 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // --- 3) Parse JSON & update DB ---
+            // 3) Parse JSON & update DB
             let parsed: any;
             try {
                 parsed = JSON.parse(stdoutData);
             } catch (e) {
-                console.error("❌ JSON extractor tidak valid:", e);
+                console.error("❌ JSON extractor tidak valid:", e, "\nRAW:\n", stdoutData);
                 return NextResponse.json(
                     {message: "Output extractor bukan JSON yang valid"},
                     {status: 422}
@@ -119,7 +152,7 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                // --- Tambahan: akumulator total kebutuhan_pegawai ---
+                // Akumulator total kebutuhan_pegawai
                 let totalKebutuhanPegawai = 0;
 
                 // Update berdasarkan urutan existing (nomor_tugas)
@@ -137,7 +170,6 @@ export async function POST(req: NextRequest) {
                             ? toFloatOrNull(t.pegawai_dibutuhkan.replace(",", "."))
                             : t?.pegawai_dibutuhkan ?? null;
 
-                    // --- Tambahan: akumulasi jika valid number ---
                     if (typeof kebutuhan_pegawai === "number" && Number.isFinite(kebutuhan_pegawai)) {
                         totalKebutuhanPegawai += kebutuhan_pegawai;
                     }
@@ -165,7 +197,7 @@ export async function POST(req: NextRequest) {
                     updated++;
                 }
 
-                // --- Tambahan: tulis total (dibulatkan) ke struktur_organisasi.kebutuhan_pegawai ---
+                // Tulis total (dibulatkan) ke struktur_organisasi.kebutuhan_pegawai
                 const totalRounded = Math.round(totalKebutuhanPegawai);
                 await client.query(
                     `

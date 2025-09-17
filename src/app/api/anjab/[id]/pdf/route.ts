@@ -83,7 +83,8 @@ export async function GET(
 
         await page.setRequestInterception(true);
         page.on("request", (r) => {
-            if (["image", "stylesheet", "font"].includes(r.resourceType())) r.abort();
+            // boleh blok image saja kalau mau lebih cepat
+            if (r.resourceType() === "image") r.abort();
             else r.continue();
         });
 
