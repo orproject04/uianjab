@@ -13,6 +13,8 @@ import {createPortal} from "react-dom";
 import Swal from "sweetalert2";
 import {apiFetch} from "@/lib/apiFetch";
 
+// ⬇️ pakai komponen Select milikmu (lihat file Select di bawah)
+
 /** ====== TIPE API (flat) ====== */
 type APIRow = {
     id: string;
@@ -22,6 +24,9 @@ type APIRow = {
     unit_kerja: string | null;
     level: number;
     order_index: number;
+    // nilai baru dari API (pastikan GET sudah mengembalikan ini)
+    is_pusat?: boolean;
+    jenis_jabatan?: string | null;
 };
 
 /** ====== TIPE INTERNAL ====== */
@@ -63,6 +68,11 @@ const AppSidebar: React.FC = () => {
     const [editOrder, setEditOrder] = useState<string>("");
     const [editParentId, setEditParentId] = useState<string | "">("");
     const [editUnitKerja, setEditUnitKerja] = useState<string>("");
+
+    // NEW: field baru
+    const [editIsPusat, setEditIsPusat] = useState<string>("true");    // "true" | "false"
+    const [editJenisJabatan, setEditJenisJabatan] = useState<string>(""); // "" | salah satu opsi
+
     const [parentOptions, setParentOptions] = useState<Array<{ id: string | ""; label: string }>>([]);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -74,6 +84,11 @@ const AppSidebar: React.FC = () => {
     const [addSlug, setAddSlug] = useState("unitbaru");
     const [addOrder, setAddOrder] = useState<string>("");
     const [addUnitKerja, setAddUnitKerja] = useState<string>("");
+
+    // NEW: field baru
+    const [addIsPusat, setAddIsPusat] = useState<string>("true");
+    const [addJenisJabatan, setAddJenisJabatan] = useState<string>("");
+
     const [addErr, setAddErr] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
     const [slugTouched, setSlugTouched] = useState(false);
@@ -81,10 +96,8 @@ const AppSidebar: React.FC = () => {
     // ====== UTIL ======
     const toSlug = (s: string) => {
         if (!s) return "unit";
-        // 1) Jika ada huruf kapital → ambil kapitalnya saja, lalu lowercase (acronym)
         const caps = (s.match(/[A-Z]/g) || []).join("").toLowerCase();
         if (caps) return caps;
-        // 2) Jika tidak ada kapital (user ketik manual) → bersihkan ke huruf a-z saja
         const lettersOnly = s.toLowerCase().replace(/[^a-z]/g, "");
         return lettersOnly || "unit";
     };
@@ -123,18 +136,16 @@ const AppSidebar: React.FC = () => {
         return roots.map((r) => buildNode(r, null));
     };
 
-    // ====== LOCAL STORAGE MAPPING (2 segmen terakhir) ======
+    // ====== LOCAL STORAGE HELPERS ======
     const pathSegments = (fullPath: string) =>
         fullPath.replace(/^Anjab\/?/, "").replace(/^\/+/, "").split("/").filter(Boolean);
 
-    // "Anjab/a/b/c" -> "b-c" ; "Anjab/a" -> "a"
     const lastTwoDashFromPath = (fullPath: string) => {
         const segs = pathSegments(fullPath);
         const lastTwo = segs.slice(-2);
         return lastTwo.join("-");
     };
 
-    // Helpers find node dan subtree
     function findNodeById(id: string, items: SubNavItem[]): SubNavItem | null {
         for (const it of items) {
             if (it.id === id) return it;
@@ -274,7 +285,6 @@ const AppSidebar: React.FC = () => {
         });
         if (!resSwal.isConfirmed) return;
 
-        // endpoint baru (RESTful): DELETE /api/struktur-organisasi/:id
         let res = await apiFetch(`/api/struktur-organisasi/${encodeURIComponent(node.id)}`, {
             method: "DELETE",
         });
@@ -349,11 +359,17 @@ const AppSidebar: React.FC = () => {
         const currentOrder = current?.order_index ?? "";
         const currentUnitKerja = current?.unit_kerja ?? "";
 
+        // NEW: ambil default is_pusat & jenis_jabatan
+        const currentIsPusat = (current?.is_pusat ?? true) ? "true" : "false";
+        const currentJenisJabatan = current?.jenis_jabatan ?? "";
+
         return {
             opts,
             currentParent,
             currentOrder: String(currentOrder),
             currentUnitKerja: String(currentUnitKerja ?? ""),
+            currentIsPusat,
+            currentJenisJabatan,
         };
     }, []);
 
@@ -365,11 +381,18 @@ const AppSidebar: React.FC = () => {
                 setEditName(node.name);
                 setEditSlug(node.slug);
 
-                const {opts, currentParent, currentOrder, currentUnitKerja} = await fetchParentOptions(node.id);
+                const {
+                    opts, currentParent, currentOrder, currentUnitKerja,
+                    currentIsPusat, currentJenisJabatan
+                } = await fetchParentOptions(node.id);
+
                 setParentOptions(opts);
                 setEditParentId(currentParent);
                 setEditOrder(currentOrder === "0" ? "0" : currentOrder);
                 setEditUnitKerja(currentUnitKerja || "");
+                // NEW
+                setEditIsPusat(currentIsPusat);
+                setEditJenisJabatan(currentJenisJabatan || "");
 
                 setShowEdit(true);
             } catch (e: any) {
@@ -383,7 +406,6 @@ const AppSidebar: React.FC = () => {
         if (!editFor) return;
         const id = editFor.id;
 
-        // gunakan "name" (bukan nama_jabatan)
         const name = editName.trim();
         const slug = editSlug.trim();
         const parent_id = editParentId === "" ? null : editParentId;
@@ -398,8 +420,11 @@ const AppSidebar: React.FC = () => {
             return;
         }
 
-        // kirim "name" agar backend mengenali
-        const body: any = {name, slug, parent_id, unit_kerja};
+        // NEW: konversi ke boolean + null
+        const is_pusat = editIsPusat === "true" || editIsPusat === true;
+        const jenis_jabatan = editJenisJabatan || null;
+
+        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan};
         if (editOrder.trim() !== "") {
             const parsed = Number(editOrder);
             if (!Number.isFinite(parsed)) {
@@ -475,7 +500,7 @@ const AppSidebar: React.FC = () => {
         } finally {
             setSaving(false);
         }
-    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, loadData, anjabSubs]);
+    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, loadData, anjabSubs]);
 
     // ====== ADD CHILD ======
     const openAddModal = (parent: SubNavItem) => {
@@ -485,6 +510,8 @@ const AppSidebar: React.FC = () => {
         setAddSlug("unitbaru");
         setAddOrder("");
         setAddUnitKerja("");
+        setAddIsPusat("true");
+        setAddJenisJabatan("");
         setSlugTouched(false);
         setShowAdd(true);
     };
@@ -505,7 +532,10 @@ const AppSidebar: React.FC = () => {
             return;
         }
 
-        const body: any = {parent_id, nama_jabatan, slug, unit_kerja};
+        const is_pusat = addIsPusat === "true" || addIsPusat === true;
+        const jenis_jabatan = addJenisJabatan || null;
+
+        const body: any = {parent_id, nama_jabatan, slug, unit_kerja, is_pusat, jenis_jabatan};
         if (addOrder.trim() !== "") {
             const parsed = Number(addOrder);
             if (!Number.isFinite(parsed)) {
@@ -526,11 +556,11 @@ const AppSidebar: React.FC = () => {
             const json = await res.json().catch(() => ({}));
             if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menambah (${res.status})`);
 
-            // === Simpan mapping localStorage untuk child baru (2 segmen terakhir) ===
+            // simpan mapping
             try {
                 const newId: string | undefined = json?.node?.id;
                 if (newId && addParentFor) {
-                    const parentPath = addParentFor.path; // "Anjab/...."
+                    const parentPath = addParentFor.path;
                     const newPath = `${parentPath}/${slug}`;
                     const key = `so:${lastTwoDashFromPath(newPath)}`;
                     localStorage.setItem(key, newId);
@@ -546,7 +576,7 @@ const AppSidebar: React.FC = () => {
         } finally {
             setAdding(false);
         }
-    }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, loadData]);
+    }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, addIsPusat, addJenisJabatan, loadData]);
 
     // ====== Node actions menu (⋯) ======
     const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({node}) => {
@@ -851,7 +881,7 @@ const AppSidebar: React.FC = () => {
         });
     }, [pathname, anjabSubs]);
 
-    // ====== NEW: Seed semua mapping localStorage untuk admin ======
+    // Seed mapping localStorage utk admin
     useEffect(() => {
         if (!isAdmin || !anjabSubs.length) return;
         try {
@@ -864,7 +894,6 @@ const AppSidebar: React.FC = () => {
             };
             seed(anjabSubs);
         } catch {
-            // abaikan error storage (mode private/quota)
         }
     }, [isAdmin, anjabSubs]);
 
@@ -921,75 +950,115 @@ const AppSidebar: React.FC = () => {
             {/* ===== Modal Edit Node ===== */}
             {showEdit && editFor && (
                 <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center">
-                    <div className="bg-white rounded-xl p-4 w-full max-w-lg shadow-lg">
-                        <h3 className="text-lg font-semibold mb-3">Edit Node</h3>
-
-                        <div className="grid grid-cols-1 gap-3">
-                            <div>
-                                <label className="text-sm block mb-1">Nama</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    value={editName}
-                                    onChange={(e) => {
-                                        const v = e.target.value;
-                                        setEditName(v);
-                                        if (!editSlug) setEditSlug(toSlug(v));
-                                    }}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Slug</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    value={editSlug}
-                                    onChange={(e) => setEditSlug(toSlug(e.target.value))}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Unit Kerja</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    value={editUnitKerja}
-                                    onChange={(e) => setEditUnitKerja(e.target.value)}
-                                    placeholder="Opsional"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Order index</label>
-                                <input
-                                    type="number"
-                                    className="w-full border rounded px-3 py-2"
-                                    value={editOrder}
-                                    onChange={(e) => setEditOrder(e.target.value)}
-                                    placeholder="Kosongkan untuk auto"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Parent</label>
-                                <select
-                                    className="w-full border rounded px-3 py-2"
-                                    value={editParentId}
-                                    onChange={(e) => setEditParentId(e.target.value as any)}
-                                >
-                                    {parentOptions.map((o) => (
-                                        <option key={String(o.id)} value={o.id as any}>
-                                            {o.label}
-                                        </option>
-                                    ))}
-                                </select>
-                                <p className="mt-1 text-xs text-gray-500">
-                                    Memindahkan node juga memindahkan seluruh subtree ke parent baru.
-                                </p>
-                            </div>
+                    {/* container diperpendek + scroll di isi */}
+                    <div className="bg-white rounded-xl w-full max-w-lg shadow-lg max-h-[80vh] flex flex-col">
+                        <div className="px-4 pt-4">
+                            <h3 className="text-lg font-semibold">Edit Node</h3>
                         </div>
 
-                        {saveErr && <div className="mt-2 text-sm text-red-600">{saveErr}</div>}
+                        {/* isi form scrollable */}
+                        <div className="px-4 pb-2 mt-3 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-3">
+                                <div>
+                                    <label className="text-sm block mb-1">Nama</label>
+                                    <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editName}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            setEditName(v);
+                                            if (!editSlug) setEditSlug(toSlug(v));
+                                        }}
+                                    />
+                                </div>
 
-                        <div className="mt-4 flex justify-end gap-2">
+                                <div>
+                                    <label className="text-sm block mb-1">Slug</label>
+                                    <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editSlug}
+                                        onChange={(e) => setEditSlug(toSlug(e.target.value))}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-sm block mb-1">Unit Kerja</label>
+                                    <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editUnitKerja}
+                                        onChange={(e) => setEditUnitKerja(e.target.value)}
+                                        placeholder="Opsional"
+                                    />
+                                </div>
+
+                                {/* === NEW: Pusat / Daerah === */}
+                                <div>
+                                    <label className="text-sm block mb-1">Pusat / Daerah</label>
+                                    <select
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editIsPusat}
+                                        onChange={(e) => setEditIsPusat(e.target.value)}
+                                    >
+                                        <option value="true">Pusat</option>
+                                        <option value="false">Daerah</option>
+                                    </select>
+                                </div>
+
+                                {/* === NEW: Jenis Jabatan === */}
+                                <div>
+                                    <label className="text-sm block mb-1">Jenis Jabatan</label>
+                                    <select
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editJenisJabatan}
+                                        onChange={(e) => setEditJenisJabatan(e.target.value)}
+                                    >
+                                        <option value="">(Pilih Jenis Jabatan)</option>
+                                        <option value="ESELON I">ESELON I</option>
+                                        <option value="ESELON II">ESELON II</option>
+                                        <option value="ESELON III">ESELON III</option>
+                                        <option value="ESELON IV">ESELON IV</option>
+                                        <option value="JABATAN FUNGSIONAL">JABATAN FUNGSIONAL</option>
+                                        <option value="JABATAN PELAKSANA">JABATAN PELAKSANA</option>
+                                        <option value="PEGAWAI DPK">PEGAWAI DPK</option>
+                                        <option value="PEGAWAI CLTN">PEGAWAI CLTN</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm block mb-1">Order index</label>
+                                    <input
+                                        type="number"
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editOrder}
+                                        onChange={(e) => setEditOrder(e.target.value)}
+                                        placeholder="Kosongkan untuk auto"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-sm block mb-1">Parent</label>
+                                    <select
+                                        className="w-full border rounded px-3 py-2"
+                                        value={editParentId}
+                                        onChange={(e) => setEditParentId(e.target.value as any)}
+                                    >
+                                        {parentOptions.map((o) => (
+                                            <option key={String(o.id)} value={o.id as any}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Memindahkan node juga memindahkan seluruh subtree ke parent baru.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {saveErr && <div className="mt-2 text-sm text-red-600">{saveErr}</div>}
+                        </div>
+
+                        {/* footer tetap terlihat */}
+                        <div className="px-4 pb-4 mt-2 flex justify-end gap-2 border-t border-gray-100 pt-3">
                             <button className="px-3 py-1.5 rounded bg-gray-200" onClick={() => setShowEdit(false)}>
                                 Batal
                             </button>
@@ -1008,62 +1077,102 @@ const AppSidebar: React.FC = () => {
             {/* ===== Modal Tambah Child ===== */}
             {showAdd && addParentFor && (
                 <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center">
-                    <div className="bg-white rounded-xl p-4 w-full max-w-lg shadow-lg">
-                        <h3 className="text-lg font-semibold mb-3">Tambah Child untuk: {addParentFor.name}</h3>
-
-                        <div className="grid grid-cols-1 gap-3">
-                            <div>
-                                <label className="text-sm block mb-1">Nama</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    value={addName}
-                                    onChange={(e) => {
-                                        const v = e.target.value;
-                                        setAddName(v);
-                                        if (!slugTouched) setAddSlug(toSlug(v));
-                                    }}
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Slug</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    value={addSlug}
-                                    onChange={(e) => {
-                                        setAddSlug(toSlug(e.target.value));
-                                        setSlugTouched(true);
-                                    }}
-                                    placeholder="mis. depmin-okk"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Unit Kerja</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    value={addUnitKerja}
-                                    onChange={(e) => setAddUnitKerja(e.target.value)}
-                                    placeholder="Opsional"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-sm block mb-1">Order index</label>
-                                <input
-                                    type="number"
-                                    className="w-full border rounded px-3 py-2"
-                                    value={addOrder}
-                                    onChange={(e) => setAddOrder(e.target.value)}
-                                    placeholder="Kosongkan untuk auto"
-                                />
-                            </div>
+                    {/* container diperpendek + scroll di isi */}
+                    <div className="bg-white rounded-xl w-full max-w-lg shadow-lg max-h-[80vh] flex flex-col">
+                        <div className="px-4 pt-4">
+                            <h3 className="text-lg font-semibold">Tambah Child untuk: {addParentFor.name}</h3>
                         </div>
 
-                        {addErr && <div className="mt-2 text-sm text-red-600">{addErr}</div>}
+                        {/* isi form scrollable */}
+                        <div className="px-4 pb-2 mt-3 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-3">
+                                <div>
+                                    <label className="text-sm block mb-1">Nama</label>
+                                    <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={addName}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            setAddName(v);
+                                            if (!slugTouched) setAddSlug(toSlug(v));
+                                        }}
+                                        autoFocus
+                                    />
+                                </div>
 
-                        <div className="mt-4 flex justify-end gap-2">
+                                <div>
+                                    <label className="text-sm block mb-1">Slug</label>
+                                    <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={addSlug}
+                                        onChange={(e) => {
+                                            setAddSlug(toSlug(e.target.value));
+                                            setSlugTouched(true);
+                                        }}
+                                        placeholder="mis. depmin-okk"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-sm block mb-1">Unit Kerja</label>
+                                    <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={addUnitKerja}
+                                        onChange={(e) => setAddUnitKerja(e.target.value)}
+                                        placeholder="Opsional"
+                                    />
+                                </div>
+
+                                {/* === NEW: Pusat / Daerah === */}
+                                <div>
+                                    <label className="text-sm block mb-1">Pusat / Daerah</label>
+                                    <select
+                                        className="w-full border rounded px-3 py-2"
+                                        value={addIsPusat}
+                                        onChange={(e) => setAddIsPusat(e.target.value)}
+                                    >
+                                        <option value="true">Pusat</option>
+                                        <option value="false">Daerah</option>
+                                    </select>
+                                </div>
+
+                                {/* === NEW: Jenis Jabatan === */}
+                                <div>
+                                    <label className="text-sm block mb-1">Jenis Jabatan</label>
+                                    <select
+                                        className="w-full border rounded px-3 py-2"
+                                        value={addJenisJabatan}
+                                        onChange={(e) => setAddJenisJabatan(e.target.value)}
+                                    >
+                                        <option value="">(Pilih Jenis Jabatan)</option>
+                                        <option value="ESELON I">ESELON I</option>
+                                        <option value="ESELON II">ESELON II</option>
+                                        <option value="ESELON III">ESELON III</option>
+                                        <option value="ESELON IV">ESELON IV</option>
+                                        <option value="JABATAN FUNGSIONAL">JABATAN FUNGSIONAL</option>
+                                        <option value="JABATAN PELAKSANA">JABATAN PELAKSANA</option>
+                                        <option value="PEGAWAI DPK">PEGAWAI DPK</option>
+                                        <option value="PEGAWAI CLTN">PEGAWAI CLTN</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm block mb-1">Order index</label>
+                                    <input
+                                        type="number"
+                                        className="w-full border rounded px-3 py-2"
+                                        value={addOrder}
+                                        onChange={(e) => setAddOrder(e.target.value)}
+                                        placeholder="Kosongkan untuk auto"
+                                    />
+                                </div>
+                            </div>
+
+                            {addErr && <div className="mt-2 text-sm text-red-600">{addErr}</div>}
+                        </div>
+
+                        {/* footer tetap terlihat */}
+                        <div className="px-4 pb-4 mt-2 flex justify-end gap-2 border-t border-gray-100 pt-3">
                             <button className="px-3 py-1.5 rounded bg-gray-200" onClick={() => setShowAdd(false)}>
                                 Batal
                             </button>

@@ -16,7 +16,10 @@ export async function PATCH(
         // ✅ admin only
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+            return NextResponse.json(
+                {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
+                {status: 403}
+            );
         }
 
         const {id} = await ctx.params;
@@ -27,14 +30,22 @@ export async function PATCH(
         const body = await req.json().catch(() => ({} as any));
 
         const name =
-            typeof body.name === "string" ? body.name.trim() : (undefined as string | undefined);
+            typeof body.name === "string"
+                ? body.name.trim()
+                : (undefined as string | undefined);
         const slug =
-            typeof body.slug === "string" ? body.slug.trim() : (undefined as string | undefined);
+            typeof body.slug === "string"
+                ? body.slug.trim()
+                : (undefined as string | undefined);
         const unit_kerja =
-            typeof body.unit_kerja === "string" ? body.unit_kerja.trim() : (undefined as string | undefined);
+            typeof body.unit_kerja === "string"
+                ? body.unit_kerja.trim()
+                : (undefined as string | undefined);
 
         const hasOrder = Object.prototype.hasOwnProperty.call(body, "order_index");
-        const order_index = hasOrder ? Number(body.order_index) : (undefined as number | undefined);
+        const order_index = hasOrder
+            ? Number(body.order_index)
+            : (undefined as number | undefined);
         if (hasOrder && (!Number.isFinite(order_index) || order_index! < 0)) {
             return NextResponse.json({error: "order_index tidak valid"}, {status: 400});
         }
@@ -46,7 +57,30 @@ export async function PATCH(
                 : String(body.parent_id)
             : undefined;
         if (wantParent && parent_id !== null && !isUuid(parent_id!)) {
-            return NextResponse.json({error: "Invalid, parent_id harus UUID atau null"}, {status: 400});
+            return NextResponse.json(
+                {error: "Invalid, parent_id harus UUID atau null"},
+                {status: 400}
+            );
+        }
+
+        // ✅ NEW: jenis_jabatan (string|null|skip)
+        const jenis_jabatan =
+            Object.prototype.hasOwnProperty.call(body, "jenis_jabatan")
+                ? body.jenis_jabatan === null
+                    ? null
+                    : typeof body.jenis_jabatan === "string"
+                        ? body.jenis_jabatan.trim()
+                        : undefined
+                : undefined;
+
+        // ✅ NEW: is_pusat (boolean|skip)
+        const hasIsPusat = Object.prototype.hasOwnProperty.call(body, "is_pusat");
+        const is_pusat = hasIsPusat ? body.is_pusat : undefined;
+        if (hasIsPusat && typeof is_pusat !== "boolean") {
+            return NextResponse.json(
+                {error: "is_pusat harus boolean"},
+                {status: 400}
+            );
         }
 
         await client.query("BEGIN");
@@ -60,7 +94,12 @@ export async function PATCH(
             await client.query("ROLLBACK");
             return NextResponse.json({error: "Invalid, Node tidak ditemukan"}, {status: 404});
         }
-        const cur = curRes.rows[0] as { id: string; parent_id: string | null; level: number; slug: string };
+        const cur = curRes.rows[0] as {
+            id: string;
+            parent_id: string | null;
+            level: number;
+            slug: string;
+        };
 
         const newParentId = wantParent ? parent_id! : cur.parent_id;
         const effParent = newParentId;
@@ -70,15 +109,22 @@ export async function PATCH(
         if (wantParent) {
             if (newParentId === id) {
                 await client.query("ROLLBACK");
-                return NextResponse.json({error: "Invalid, parent_id tidak boleh diri sendiri"}, {status: 400});
+                return NextResponse.json(
+                    {error: "Invalid, parent_id tidak boleh diri sendiri"},
+                    {status: 400}
+                );
             }
             if (newParentId) {
-                const p = await client.query("SELECT id, level FROM struktur_organisasi WHERE id = $1::uuid", [
-                    newParentId,
-                ]);
+                const p = await client.query(
+                    "SELECT id, level FROM struktur_organisasi WHERE id = $1::uuid",
+                    [newParentId]
+                );
                 if (p.rowCount === 0) {
                     await client.query("ROLLBACK");
-                    return NextResponse.json({error: "Invalid, parent_id tidak ditemukan"}, {status: 400});
+                    return NextResponse.json(
+                        {error: "Invalid, parent_id tidak ditemukan"},
+                        {status: 400}
+                    );
                 }
                 const sub = await client.query(
                     `
@@ -130,9 +176,10 @@ export async function PATCH(
         if (wantParent) {
             let newLevel: number;
             if (newParentId) {
-                const p = await client.query("SELECT level FROM struktur_organisasi WHERE id = $1::uuid", [
-                    newParentId,
-                ]);
+                const p = await client.query(
+                    "SELECT level FROM struktur_organisasi WHERE id = $1::uuid",
+                    [newParentId]
+                );
                 newLevel = Number(p.rows[0].level) + 1;
             } else {
                 newLevel = 0; // jadi root
@@ -179,6 +226,9 @@ export async function PATCH(
         setIf("unit_kerja", unit_kerja);
         if (hasOrder) setIf("order_index", order_index);
 
+        setIf("is_pusat", is_pusat);
+        setIf("jenis_jabatan", jenis_jabatan);
+
         if (fields.length) {
             const q = `
                 UPDATE struktur_organisasi
@@ -206,7 +256,10 @@ export async function PATCH(
             );
         }
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "Parameter harus UUID yang valid"}, {status: 400});
+            return NextResponse.json(
+                {error: "Parameter harus UUID yang valid"},
+                {status: 400}
+            );
         }
         return NextResponse.json({error: "Internal error"}, {status: 500});
     } finally {
@@ -222,7 +275,10 @@ export async function DELETE(
         // ✅ admin only
         const user = getUserFromReq(_req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+            return NextResponse.json(
+                {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
+                {status: 403}
+            );
         }
 
         const {id} = await ctx.params;
@@ -277,44 +333,44 @@ async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
             SELECT so.id, so.parent_id, so.slug, so.level
             FROM struktur_organisasi so
                      JOIN subtree s ON so.parent_id = s.id ),
-    upwalk AS (
-      SELECT s.id AS node_id, s.id AS anc_id, s.slug AS anc_slug, s.level AS anc_level, s.parent_id
-      FROM subtree s
-      UNION ALL
-      SELECT u.node_id, p.id, p.slug, p.level, p.parent_id
-      FROM upwalk u
-      JOIN struktur_organisasi p ON p.id = u.parent_id
-      WHERE u.parent_id IS NOT NULL
-    ),
-    parts AS (
-      SELECT
-        node_id,
-        NULLIF(
-          regexp_replace(replace(lower(trim(anc_slug)), ' ', '-'), '[^a-z0-9-]+', '', 'g'),
-          ''
-        ) AS part,
-        anc_level
-      FROM upwalk
-    ),
-    grouped AS (
-      SELECT node_id, ARRAY_REMOVE(ARRAY_AGG(part ORDER BY anc_level), NULL) AS parts_arr
-      FROM parts
-      GROUP BY node_id
-    ),
-    last2 AS (
-      SELECT node_id,
-        CASE
-          WHEN array_length(parts_arr, 1) >= 2
-            THEN parts_arr[(array_length(parts_arr,1)-1):array_length(parts_arr,1)]
-          ELSE parts_arr
-        END AS last_two
-      FROM grouped
-    ),
-    paths AS (
-      SELECT node_id,
-        regexp_replace(COALESCE(array_to_string(last_two, '-'), ''), '-{2,}', '-', 'g') AS short_slug
-      FROM last2
-    )
+      upwalk AS (
+        SELECT s.id AS node_id, s.id AS anc_id, s.slug AS anc_slug, s.level AS anc_level, s.parent_id
+        FROM subtree s
+        UNION ALL
+        SELECT u.node_id, p.id, p.slug, p.level, p.parent_id
+        FROM upwalk u
+        JOIN struktur_organisasi p ON p.id = u.parent_id
+        WHERE u.parent_id IS NOT NULL
+      ),
+      parts AS (
+        SELECT
+          node_id,
+          NULLIF(
+            regexp_replace(replace(lower(trim(anc_slug)), ' ', '-'), '[^a-z0-9-]+', '', 'g'),
+            ''
+          ) AS part,
+          anc_level
+        FROM upwalk
+      ),
+      grouped AS (
+        SELECT node_id, ARRAY_REMOVE(ARRAY_AGG(part ORDER BY anc_level), NULL) AS parts_arr
+        FROM parts
+        GROUP BY node_id
+      ),
+      last2 AS (
+        SELECT node_id,
+          CASE
+            WHEN array_length(parts_arr, 1) >= 2
+              THEN parts_arr[(array_length(parts_arr,1)-1):array_length(parts_arr,1)]
+            ELSE parts_arr
+          END AS last_two
+        FROM grouped
+      ),
+      paths AS (
+        SELECT node_id,
+          regexp_replace(COALESCE(array_to_string(last_two, '-'), ''), '-{2,}', '-', 'g') AS short_slug
+        FROM last2
+      )
             UPDATE jabatan
             SET slug       = paths.short_slug,
                 updated_at = NOW() FROM paths

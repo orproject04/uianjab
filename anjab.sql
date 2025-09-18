@@ -103,7 +103,10 @@ CREATE TABLE IF NOT EXISTS struktur_organisasi (
   slug         text NOT NULL,
   level        int  NOT NULL DEFAULT 0,
   order_index  int  NOT NULL DEFAULT 0,
+  bezetting    int  NOT NULL DEFAULT 0,
   kebutuhan_pegawai  int  NOT NULL DEFAULT 0,
+  is_pusat     boolean NOT NULL DEFAULT true,
+  jenis_jabatan text NOT NULL DEFAULT 'JABATAN PELAKSANA',
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT uq_so_parent_slug UNIQUE (parent_id, slug)

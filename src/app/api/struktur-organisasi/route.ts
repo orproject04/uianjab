@@ -12,6 +12,9 @@ type Row = {
     unit_kerja: string | null;
     level: number;
     order_index: number | null;
+    kebutuhan_pegawai: number;
+    is_pusat: boolean;
+    jenis_jabatan: string | null;
 };
 
 const UUID_RE =
@@ -24,49 +27,75 @@ const CreateSchema = z.object({
     slug: z.string().trim().min(1, "slug wajib diisi"),
     unit_kerja: z.string().trim().optional().nullable(),
     order_index: z.number().int().min(0).optional().nullable(),
+    is_pusat: z.boolean().optional(), // NEW
+    jenis_jabatan: z.string().trim().optional().nullable(), // NEW
 });
 
 export async function GET(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
-        if (!user) return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
+        if (!user)
+            return NextResponse.json(
+                {error: "Unauthorized, Silakan login kembali"},
+                {status: 401}
+            );
 
         const {searchParams} = new URL(req.url);
         const root_id = searchParams.get("root_id");
 
         if (root_id) {
             if (!isUuid(root_id)) {
-                return NextResponse.json({error: "root_id harus UUID"}, {status: 400});
+                return NextResponse.json(
+                    {error: "root_id harus UUID"},
+                    {status: 400}
+                );
             }
 
             // Subtree mulai root_id, urut pre-order
             const {rows} = await pool.query<Row>(
                 `
-                    WITH RECURSIVE subtree AS (SELECT id,
-                                                      parent_id,
-                                                      nama_jabatan,
-                                                      slug,
-                                                      unit_kerja,
-                                                      level,
-                                                      order_index,
-                                                      kebutuhan_pegawai,
-                                                      ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text] ::text[] AS sort_path
-                                               FROM struktur_organisasi
-                                               WHERE id = $1::uuid
+                    WITH RECURSIVE subtree AS (
+                        SELECT
+                            id,
+                            parent_id,
+                            nama_jabatan,
+                            slug,
+                            unit_kerja,
+                            level,
+                            order_index,
+                            kebutuhan_pegawai,
+                            is_pusat,            -- ✅ NEW
+                            jenis_jabatan,       -- ✅ NEW
+                            ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text]::text[] AS sort_path
+                        FROM struktur_organisasi
+                        WHERE id = $1::uuid
                     UNION ALL
-                    SELECT c.id,
-                           c.parent_id,
-                           c.nama_jabatan,
-                           c.slug,
-                           c.unit_kerja,
-                           c.level,
-                           c.order_index,
-                           c.kebutuhan_pegawai,
-                           s.sort_path ||
-                           (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
+                    SELECT
+                        c.id,
+                        c.parent_id,
+                        c.nama_jabatan,
+                        c.slug,
+                        c.unit_kerja,
+                        c.level,
+                        c.order_index,
+                        c.kebutuhan_pegawai,
+                        c.is_pusat,          -- ✅ NEW
+                        c.jenis_jabatan,     -- ✅ NEW
+                        s.sort_path || (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
                     FROM struktur_organisasi c
-                             JOIN subtree s ON c.parent_id = s.id )
-                    SELECT id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai
+                             JOIN subtree s ON c.parent_id = s.id
+                        )
+                    SELECT
+                        id,
+                        parent_id,
+                        nama_jabatan,
+                        slug,
+                        unit_kerja,
+                        level,
+                        order_index,
+                        kebutuhan_pegawai,
+                        is_pusat,              -- ✅ NEW
+                        jenis_jabatan          -- ✅ NEW
                     FROM subtree
                     ORDER BY sort_path
                 `,
@@ -78,31 +107,48 @@ export async function GET(req: NextRequest) {
         // semua pohon (root → preorder)
         const {rows} = await pool.query<Row>(
             `
-                WITH RECURSIVE tree AS (SELECT id,
-                                               parent_id,
-                                               nama_jabatan,
-                                               slug,
-                                               unit_kerja,
-                                               level,
-                                               order_index,
-                                               kebutuhan_pegawai,
-                                               ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text] ::text[] AS sort_path
-                                        FROM struktur_organisasi
-                                        WHERE parent_id IS NULL
-                                        UNION ALL
-                                        SELECT c.id,
-                                               c.parent_id,
-                                               c.nama_jabatan,
-                                               c.slug,
-                                               c.unit_kerja,
-                                               c.level,
-                                               c.order_index,
-                                               c.kebutuhan_pegawai,
-                                               t.sort_path ||
-                                               (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
-                                        FROM struktur_organisasi c
-                                                 JOIN tree t ON c.parent_id = t.id)
-                SELECT id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai
+                WITH RECURSIVE tree AS (
+                    SELECT
+                        id,
+                        parent_id,
+                        nama_jabatan,
+                        slug,
+                        unit_kerja,
+                        level,
+                        order_index,
+                        kebutuhan_pegawai,
+                        is_pusat,            -- ✅ NEW
+                        jenis_jabatan,       -- ✅ NEW
+                        ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text]::text[] AS sort_path
+                    FROM struktur_organisasi
+                    WHERE parent_id IS NULL
+                    UNION ALL
+                    SELECT
+                        c.id,
+                        c.parent_id,
+                        c.nama_jabatan,
+                        c.slug,
+                        c.unit_kerja,
+                        c.level,
+                        c.order_index,
+                        c.kebutuhan_pegawai,
+                        c.is_pusat,          -- ✅ NEW
+                        c.jenis_jabatan,     -- ✅ NEW
+                        t.sort_path || (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
+                    FROM struktur_organisasi c
+                             JOIN tree t ON c.parent_id = t.id
+                )
+                SELECT
+                    id,
+                    parent_id,
+                    nama_jabatan,
+                    slug,
+                    unit_kerja,
+                    level,
+                    order_index,
+                    kebutuhan_pegawai,
+                    is_pusat,              -- ✅ NEW
+                    jenis_jabatan          -- ✅ NEW
                 FROM tree
                 ORDER BY sort_path
             `
@@ -119,7 +165,10 @@ export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
+            return NextResponse.json(
+                {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
+                {status: 403}
+            );
         }
 
         const body = await req.json().catch(() => ({}));
@@ -131,18 +180,29 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const {parent_id = null, nama_jabatan, slug, unit_kerja = null, order_index = null} =
-            parsed.data;
+        const {
+            parent_id = null,
+            nama_jabatan,
+            slug,
+            unit_kerja = null,
+            order_index = null,
+            is_pusat, // NEW
+            jenis_jabatan, // NEW
+        } = parsed.data;
 
         // Jika parent_id ada, pastikan parent eksis
         if (parent_id) {
-            const p = await pool.query(`SELECT 1
-                                        FROM struktur_organisasi
-                                        WHERE id = $1::uuid LIMIT 1`, [
-                parent_id,
-            ]);
+            const p = await pool.query(
+                `SELECT 1
+                 FROM struktur_organisasi
+                 WHERE id = $1::uuid LIMIT 1`,
+                [parent_id]
+            );
             if (p.rowCount === 0) {
-                return NextResponse.json({error: "parent_id tidak ditemukan"}, {status: 400});
+                return NextResponse.json(
+                    {error: "parent_id tidak ditemukan"},
+                    {status: 400}
+                );
             }
         }
 
@@ -178,17 +238,22 @@ export async function POST(req: NextRequest) {
                     SELECT COALESCE (MAX (order_index) + 1, 0)
                     FROM struktur_organisasi
                     WHERE parent_id IS NOT DISTINCT FROM (SELECT id FROM parent)
-                    )) AS ord
+                    )
+                    ) AS ord
                     ), ins AS (
                 INSERT
-                INTO struktur_organisasi (parent_id, nama_jabatan, slug, unit_kerja, level, order_index)
-                VALUES ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults))
-                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index
+                INTO struktur_organisasi
+                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan)
+                VALUES (
+                    (SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), $7
+                    )
+                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan
                     )
                 SELECT *
                 FROM ins
             `,
-            [parent_id, nama_jabatan.trim(), slug.trim(), unit_kerja, order_index]
+            //                $1         $2                 $3           $4          $5           $6        $7
+            [parent_id, nama_jabatan.trim(), slug.trim(), unit_kerja, order_index, is_pusat, jenis_jabatan]
         );
 
         return NextResponse.json({ok: true, node: rows[0]});
