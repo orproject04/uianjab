@@ -25,7 +25,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex justify-between">
                 {prevSection ? (
                     <Link
-                        href={`/edit/${prevSection}/${viewerPath}`}
+                        href={`/anjab/edit/${prevSection}/${viewerPath}`}
                         className="px-4 py-2 rounded border bg-gray-50 hover:bg-gray-100"
                     >
                         ← {SECTION_LABELS[prevSection]}
@@ -34,7 +34,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
                 {nextSection ? (
                     <Link
-                        href={`/edit/${nextSection}/${viewerPath}`}
+                        href={`/anjab/edit/${nextSection}/${viewerPath}`}
                         className="px-4 py-2 rounded border bg-gray-50 hover:bg-gray-100"
                     >
                         {SECTION_LABELS[nextSection]} →
