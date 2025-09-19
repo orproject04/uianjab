@@ -115,7 +115,7 @@ const AppHeader: React.FC = () => {
                 cur = cur.parent_id ? byId.get(cur.parent_id) ?? null : null;
             }
             segs.reverse();
-            return `Anjab/${segs.join("/")}`;
+            return `anjab/${segs.join("/")}`;
         };
 
         return rows.map((r) => {
