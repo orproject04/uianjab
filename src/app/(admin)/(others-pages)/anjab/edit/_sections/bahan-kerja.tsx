@@ -286,7 +286,7 @@ export default function BahanKerjaForm({ viewerPath }: { viewerPath: string }) {
                 </p>
                 <div className="flex items-center gap-3">
                     <button className="rounded border px-3 py-1.5" onClick={retry}>Coba lagi</button>
-                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
+                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
                 </div>
             </div>
         );
@@ -300,7 +300,7 @@ export default function BahanKerjaForm({ viewerPath }: { viewerPath: string }) {
                 <button type="button" onClick={addRow} className="rounded px-4 py-2 bg-green-600 text-white hover:bg-green-700">
                     + Tambah Item Bahan Kerja
                 </button>
-                <Link href={`/Anjab/${viewerPath}`} className="rounded border px-4 py-2">
+                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
                     Kembali
                 </Link>
             </div>

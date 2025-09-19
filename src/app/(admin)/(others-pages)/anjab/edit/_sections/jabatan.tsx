@@ -178,7 +178,7 @@ export default function EditJabatanSection({
             if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
             await MySwal.fire({ icon: "success", title: "Terhapus", text: `Anjab ${resolvedId} telah dihapus.` });
             // Arahkan kembali ke viewer root / daftar
-            window.location.href = `/Anjab/${viewerPath}`;
+            window.location.href = `/anjab/${viewerPath}`;
         } catch (e) {
             console.error(e);
             await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
@@ -203,7 +203,7 @@ export default function EditJabatanSection({
                     >
                         Coba lagi
                     </button>
-                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
                         Kembali
                     </Link>
                 </div>
@@ -288,7 +288,7 @@ export default function EditJabatanSection({
                     <button type="submit" disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-60">
                         {saving ? "Menyimpan..." : "Simpan"}
                     </button>
-                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-4 py-2">
+                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
                         Batal
                     </Link>
                 </div>

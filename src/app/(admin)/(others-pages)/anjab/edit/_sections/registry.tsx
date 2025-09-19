@@ -1,16 +1,16 @@
 import JabatanForm from "./jabatan";
-import UnitKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/unit-kerja";
-import KualifikasiForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/kualifikasi";
+import UnitKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/unit-kerja";
+import KualifikasiForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/kualifikasi";
 import TugasPokokForm from "./tugas-pokok";
-import HasilKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/hasil-kerja";
-import BahanKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/bahan-kerja";
-import PerangkatKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/perangkat-kerja";
-import TanggungJawabForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/tanggung_jawab";
-import WewenangForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/wewenang";
-import KorelasiJabatanForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/korelasi-jabatan";
-import KondisiLingkunganKerjaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/kondisi-lingkungan-kerja";
-import RisikoBahayaForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/risiko-bahaya";
-import SyaratJabatanForm from "@/app/(admin)/(others-pages)/AnjabEdit/_sections/syarat-jabatan";
+import HasilKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/hasil-kerja";
+import BahanKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/bahan-kerja";
+import PerangkatKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/perangkat-kerja";
+import TanggungJawabForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/tanggung_jawab";
+import WewenangForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/wewenang";
+import KorelasiJabatanForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/korelasi-jabatan";
+import KondisiLingkunganKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/kondisi-lingkungan-kerja";
+import RisikoBahayaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/risiko-bahaya";
+import SyaratJabatanForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/syarat-jabatan";
 // import UnitKerjaForm from "./unit-kerja";
 
 // Stub untuk sementara

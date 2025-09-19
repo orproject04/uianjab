@@ -23,7 +23,7 @@ type SearchItem = {
     id: string;
     name: string;
     unit_kerja: string | null;
-    path: string; // "Anjab/<slug>/<child-slug>"
+    path: string; // "anjab/<slug>/<child-slug>"
     searchable: string;
 };
 

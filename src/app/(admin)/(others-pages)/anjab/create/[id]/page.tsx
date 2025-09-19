@@ -116,7 +116,7 @@ export default function AnjabCreateByIdPage() {
             });
 
             if (slugForUrl) {
-                router.push(`/AnjabEdit/jabatan/${slugForUrl}`);
+                router.push(`/anjab/edit/jabatan/${slugForUrl}`);
             } else {
                 router.push(`/Anjab`);
             }
@@ -134,7 +134,7 @@ export default function AnjabCreateByIdPage() {
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-semibold">Buat Anjab Baru</h1>
                 <Link
-                    href={id ? `/Anjab/${encodeURIComponent(String(id))}` : `/Anjab`}
+                    href={id ? `/anjab/${encodeURIComponent(String(id))}` : `/anjab`}
                     className="rounded border px-3 py-1.5"
                 >
                     Kembali
@@ -172,7 +172,7 @@ export default function AnjabCreateByIdPage() {
                     <button type="submit" disabled={saving} className="rounded bg-green-600 text-white px-4 py-2 disabled:opacity-60">
                         {saving ? "Membuat..." : "Buat"}
                     </button>
-                    <Link href={id ? `/Anjab/${encodeURIComponent(String(id))}` : `/Anjab`} className="rounded border px-4 py-2">
+                    <Link href={id ? `/anjab/${encodeURIComponent(String(id))}` : `/anjab`} className="rounded border px-4 py-2">
                         Batal
                     </Link>
                 </div>

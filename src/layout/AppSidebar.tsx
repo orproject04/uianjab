@@ -35,7 +35,7 @@ type SubNavItem = {
     name: string;
     slug: string;
     unit_kerja?: string | null;
-    path: string; // "Anjab/<slug>/<child-slug>"
+    path: string; // "anjab/<slug>/<child-slug>"
     subItems?: SubNavItem[];
 };
 
@@ -119,7 +119,7 @@ const AppSidebar: React.FC = () => {
             children.set(k, arr);
         }
         const buildNode = (node: APIRow, parentPath: string | null): SubNavItem => {
-            const path = parentPath ? `${parentPath}/${node.slug}` : `Anjab/${node.slug}`;
+            const path = parentPath ? `${parentPath}/${node.slug}` : `anjab/${node.slug}`;
             const kids = children.get(node.id) || [];
             const subItems = kids.map((k) => buildNode(k, path));
             const base: SubNavItem = {
@@ -138,7 +138,7 @@ const AppSidebar: React.FC = () => {
 
     // ====== LOCAL STORAGE HELPERS ======
     const pathSegments = (fullPath: string) =>
-        fullPath.replace(/^Anjab\/?/, "").replace(/^\/+/, "").split("/").filter(Boolean);
+        fullPath.replace(/^anjab\/?/, "").replace(/^\/+/, "").split("/").filter(Boolean);
 
     const lastTwoDashFromPath = (fullPath: string) => {
         const segs = pathSegments(fullPath);
@@ -201,7 +201,7 @@ const AppSidebar: React.FC = () => {
     const navItems: NavItem[] = [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
-        {name: "Struktur Organisasi", icon: <GroupIcon/>, path: "/StrukturOrganisasi", subItems: []}
+        {name: "Struktur Organisasi", icon: <GroupIcon/>, path: "/struktur-organisasi", subItems: []}
     ];
     const othersItems: NavItem[] = [];
 
@@ -452,7 +452,7 @@ const AppSidebar: React.FC = () => {
                     const oldPath = curNode.path;
                     const oldKeySelf = `so:${lastTwoDashFromPath(oldPath)}`;
 
-                    let parentPathNew = "Anjab";
+                    let parentPathNew = "anjab";
                     if (editParentId) {
                         const parentNode = findNodeById(String(editParentId), anjabSubs);
                         if (parentNode) parentPathNew = parentNode.path;
@@ -775,7 +775,7 @@ const AppSidebar: React.FC = () => {
     const renderMenuItems = (items: NavItem[], menuType: "main" | "others") => (
         <ul className="flex flex-col gap-4">
             {items.map((nav, index) => {
-                const isAnjab = nav.name === "Anjab";
+                const isAnjab = nav.name === "anjab";
                 const hasChildren = isAnjab || !!nav.subItems?.length;
 
                 return (

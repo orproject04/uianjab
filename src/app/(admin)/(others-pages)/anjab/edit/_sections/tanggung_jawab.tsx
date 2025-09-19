@@ -196,7 +196,7 @@ export default function TanggungJawabForm({ viewerPath }: { viewerPath: string }
                 </p>
                 <div className="flex items-center gap-3">
                     <button className="rounded border px-3 py-1.5" onClick={retry}>Coba lagi</button>
-                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
+                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
                 </div>
             </div>
         );
@@ -214,7 +214,7 @@ export default function TanggungJawabForm({ viewerPath }: { viewerPath: string }
                 >
                     + Tambah Item Tanggung Jawab
                 </button>
-                <Link href={`/Anjab/${viewerPath}`} className="rounded border px-4 py-2">
+                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
                     Kembali
                 </Link>
             </div>

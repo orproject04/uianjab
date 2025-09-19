@@ -51,7 +51,7 @@ export default function AdminLayoutClient({children}: { children: React.ReactNod
             // user biasa dilarang akses create/edit
             if (
                 role !== "admin" &&
-                (pathname.startsWith("/AnjabEdit") || pathname.startsWith("/AnjabCreate"))
+                (pathname.startsWith("anjab/edit") || pathname.startsWith("anjab/create"))
             ) {
                 router.replace("/");
                 return;

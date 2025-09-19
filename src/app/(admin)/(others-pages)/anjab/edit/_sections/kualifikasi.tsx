@@ -284,7 +284,7 @@ export default function KualifikasiForm({
                     <button className="rounded border px-3 py-1.5" onClick={retry}>
                         Coba lagi
                     </button>
-                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
                         Kembali
                     </Link>
                 </div>
@@ -302,7 +302,7 @@ export default function KualifikasiForm({
                     <button className="rounded border px-3 py-1.5" onClick={retry}>
                         Coba lagi
                     </button>
-                    <Link href={`/Anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
                         Kembali
                     </Link>
                 </div>
@@ -355,7 +355,7 @@ export default function KualifikasiForm({
                 <button type="submit" disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-60">
                     {saving ? "Menyimpan..." : "Simpan"}
                 </button>
-                <Link href={`/Anjab/${viewerPath}`} className="rounded border px-4 py-2">
+                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
                     Batal
                 </Link>
             </div>

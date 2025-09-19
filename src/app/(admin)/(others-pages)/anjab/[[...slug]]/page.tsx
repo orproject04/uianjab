@@ -64,7 +64,7 @@ export default function InformasiJabatanPage() {
         };
     }, []);
 
-    // Ambil slug (bisa undefined saat /Anjab)
+    // Ambil slug (bisa undefined saat /anjab)
     const rawSlug = useMemo<string[]>(() => {
         const s = (params as any)?.slug;
         if (!s) return [];
@@ -91,7 +91,7 @@ export default function InformasiJabatanPage() {
     const editHref = useMemo(() => {
         if (rawSlug.length === 0) return "#";
         const fullPath = rawSlug.join("/"); // contoh: "A/B/C/D"
-        return `/AnjabEdit/jabatan/${fullPath}`;
+        return `/anjab/edit/jabatan/${fullPath}`;
     }, [rawSlug]);
 
     // Blob URL + blob + filename
@@ -281,7 +281,7 @@ export default function InformasiJabatanPage() {
                                 Mulai dari form kosong.
                             </p>
                             <Link
-                                href={`/AnjabCreate/${encodeURIComponent(id)}`}
+                                href={`/anjab/create/${encodeURIComponent(id)}`}
                                 className="inline-block rounded bg-green-600 text-white px-4 py-2 hover:bg-green-700"
                             >
                                 + Buat Anjab Manual
