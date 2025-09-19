@@ -27,8 +27,8 @@ const CreateSchema = z.object({
     slug: z.string().trim().min(1, "slug wajib diisi"),
     unit_kerja: z.string().trim().optional().nullable(),
     order_index: z.number().int().min(0).optional().nullable(),
-    is_pusat: z.boolean().optional(), // NEW
-    jenis_jabatan: z.string().trim().optional().nullable(), // NEW
+    is_pusat: z.boolean().optional(),
+    jenis_jabatan: z.string().trim().optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -63,9 +63,10 @@ export async function GET(req: NextRequest) {
                             unit_kerja,
                             level,
                             order_index,
+                            bezetting,
                             kebutuhan_pegawai,
-                            is_pusat,            -- ✅ NEW
-                            jenis_jabatan,       -- ✅ NEW
+                            is_pusat,            
+                            jenis_jabatan,       
                             ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text]::text[] AS sort_path
                         FROM struktur_organisasi
                         WHERE id = $1::uuid
@@ -78,9 +79,10 @@ export async function GET(req: NextRequest) {
                         c.unit_kerja,
                         c.level,
                         c.order_index,
+                        c.bezetting,       
                         c.kebutuhan_pegawai,
-                        c.is_pusat,          -- ✅ NEW
-                        c.jenis_jabatan,     -- ✅ NEW
+                        c.is_pusat,          
+                        c.jenis_jabatan,     
                         s.sort_path || (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
                     FROM struktur_organisasi c
                              JOIN subtree s ON c.parent_id = s.id
@@ -93,9 +95,10 @@ export async function GET(req: NextRequest) {
                         unit_kerja,
                         level,
                         order_index,
+                        bezetting,
                         kebutuhan_pegawai,
-                        is_pusat,              -- ✅ NEW
-                        jenis_jabatan          -- ✅ NEW
+                        is_pusat,              
+                        jenis_jabatan          
                     FROM subtree
                     ORDER BY sort_path
                 `,
@@ -116,9 +119,10 @@ export async function GET(req: NextRequest) {
                         unit_kerja,
                         level,
                         order_index,
+                        bezetting,
                         kebutuhan_pegawai,
-                        is_pusat,            -- ✅ NEW
-                        jenis_jabatan,       -- ✅ NEW
+                        is_pusat,            
+                        jenis_jabatan,       
                         ARRAY[lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text]::text[] AS sort_path
                     FROM struktur_organisasi
                     WHERE parent_id IS NULL
@@ -131,9 +135,10 @@ export async function GET(req: NextRequest) {
                         c.unit_kerja,
                         c.level,
                         c.order_index,
+                        c.bezetting,       
                         c.kebutuhan_pegawai,
-                        c.is_pusat,          -- ✅ NEW
-                        c.jenis_jabatan,     -- ✅ NEW
+                        c.is_pusat,          
+                        c.jenis_jabatan,     
                         t.sort_path || (lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text)
                     FROM struktur_organisasi c
                              JOIN tree t ON c.parent_id = t.id
@@ -146,9 +151,10 @@ export async function GET(req: NextRequest) {
                     unit_kerja,
                     level,
                     order_index,
+                    bezetting,
                     kebutuhan_pegawai,
-                    is_pusat,              -- ✅ NEW
-                    jenis_jabatan          -- ✅ NEW
+                    is_pusat,              
+                    jenis_jabatan          
                 FROM tree
                 ORDER BY sort_path
             `
@@ -186,8 +192,8 @@ export async function POST(req: NextRequest) {
             slug,
             unit_kerja = null,
             order_index = null,
-            is_pusat, // NEW
-            jenis_jabatan, // NEW
+            is_pusat,
+            jenis_jabatan,
         } = parsed.data;
 
         // Jika parent_id ada, pastikan parent eksis
@@ -245,9 +251,9 @@ export async function POST(req: NextRequest) {
                 INTO struktur_organisasi
                 (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan)
                 VALUES (
-                    (SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), $7
+                    (SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA')
                     )
-                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan
+                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, bezetting, kebutuhan_pegawai, is_pusat, jenis_jabatan
                     )
                 SELECT *
                 FROM ins
