@@ -14,31 +14,23 @@ import {getUserFromReq, hasRole} from "@/lib/auth";
 /** ====== ENV helpers: pastikan proses anak bisa akses soffice & python ====== */
 function buildSpawnEnv() {
     const env = {...process.env};
-
-    // Windows: tambahkan folder LibreOffice ke PATH agar "soffice" terlihat oleh script Python
-    // Set di .env.local -> SOFFICE_DIR="C:\\Program Files\\LibreOffice\\program"
     const sofficeDir = process.env.SOFFICE_DIR || "";
     if (sofficeDir) {
         env.PATH = env.PATH ? `${env.PATH};${sofficeDir}` : sofficeDir;
     }
-
-    // Linux/macOS: jika butuh path absolut, set SOFFICE_BIN="/usr/bin/soffice"
     if (process.env.SOFFICE_BIN) {
         env.SOFFICE_BIN = process.env.SOFFICE_BIN;
     }
-
     return env;
 }
 
 function getPythonBin() {
-    // Taruh di .env.local -> PYTHON_BIN="C:\\Python312\\python.exe" atau "python3"
     return process.env.PYTHON_BIN || "python";
 }
 
 /** =================== ROUTE =================== */
 export async function POST(req: NextRequest) {
     try {
-        // 🔐 batasi role admin
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
             return NextResponse.json(
@@ -48,8 +40,6 @@ export async function POST(req: NextRequest) {
         }
 
         const formData = await req.formData();
-
-        // Ambil slug & struktur_id
         const slug = (formData.get("slug") as string | null)?.trim() || null;
         const struktur_id = ((formData.get("struktur_id") as string | null) || null);
 
@@ -57,7 +47,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({error: "slug wajib dikirim"}, {status: 400});
         }
 
-        // 🔎 Cegah duplikat slug
+        // Cegah duplikat slug
         {
             const dup = await pool.query<{ exists: boolean }>(
                 `SELECT EXISTS(SELECT 1 FROM jabatan WHERE slug = $1) AS exists`,
@@ -71,17 +61,14 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Ambil file tunggal dari "file" atau "files" (maks 1)
+        // Ambil file tunggal
         let file: File | null = null;
         const directFile = formData.get("file");
         if (directFile instanceof File) file = directFile;
         if (!file) {
             const files = formData.getAll("files").filter((f) => f instanceof File) as File[];
             if (files.length > 1) {
-                return NextResponse.json(
-                    {error: "Maksimal 1 file per upload"},
-                    {status: 400}
-                );
+                return NextResponse.json({error: "Maksimal 1 file per upload"}, {status: 400});
             }
             file = files[0] ?? null;
         }
@@ -108,21 +95,15 @@ export async function POST(req: NextRequest) {
             // Jalankan python extractor
             let stdoutData = "";
             let stderrData = "";
-
             const pythonBin = getPythonBin();
             const spawnEnv = buildSpawnEnv();
 
             const exitCode: number = await new Promise((resolve, reject) => {
-                const child = spawn(
-                    pythonBin,
-                    [scriptPath, tempDocPath],
-                    {
-                        windowsHide: true,
-                        env: spawnEnv,               // << penting: env sudah berisi SOFFICE_DIR/SOFFICE_BIN
-                        stdio: ["ignore", "pipe", "pipe"],
-                    }
-                );
-
+                const child = spawn(pythonBin, [scriptPath, tempDocPath], {
+                    windowsHide: true,
+                    env: spawnEnv,
+                    stdio: ["ignore", "pipe", "pipe"],
+                });
                 child.stdout.on("data", (d) => (stdoutData += d.toString()));
                 child.stderr.on("data", (d) => (stderrData += d.toString()));
                 child.on("close", (code) => resolve(code ?? 1));
@@ -143,6 +124,7 @@ export async function POST(req: NextRequest) {
             let item: any;
             try {
                 item = JSON.parse(stdoutData);
+                // console.log("✅ Parsed JSON:", JSON.stringify(item, null, 2));
             } catch (e) {
                 console.error("❌ JSON extractor tidak valid:", e, "\nRAW:\n", stdoutData);
                 return NextResponse.json(
@@ -182,7 +164,7 @@ export async function POST(req: NextRequest) {
             try {
                 await client.query("BEGIN");
 
-                // Insert jabatan
+                // jabatan
                 const insJabatan = await client.query<{ id: string }>(
                     `
                         INSERT INTO jabatan
@@ -227,13 +209,11 @@ export async function POST(req: NextRequest) {
                     pendidikan_dan_pelatihan = {},
                     pengalaman_kerja = [],
                 } = kualifikasi_jabatan;
-
                 const {
                     diklat_penjenjangan = [],
                     diklat_teknis = [],
                     diklat_fungsional = [],
                 } = pendidikan_dan_pelatihan;
-
                 const pendidikan_formal_arr = Array.isArray(pendidikan_formal)
                     ? pendidikan_formal
                     : typeof pendidikan_formal === "string" && pendidikan_formal.trim() !== ""
@@ -245,7 +225,7 @@ export async function POST(req: NextRequest) {
                         INSERT INTO kualifikasi_jabatan (jabatan_id, pendidikan_formal, diklat_penjenjangan,
                                                          diklat_teknis, diklat_fungsional, pengalaman_kerja,
                                                          created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                        VALUES ($1, $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], NOW(), NOW())
                     `,
                     [
                         jabatanUUID,
@@ -257,12 +237,23 @@ export async function POST(req: NextRequest) {
                     ]
                 );
 
-                // tugas_pokok + tahapan
+                // ==========================
+                // tugas_pokok + tahapan (HANYA struktur baru: detail_uraian_tugas)
+                // ==========================
                 for (const tugas of Array.isArray(tugas_pokok) ? tugas_pokok : []) {
                     const nomor_tugas = parseInt(tugas.no) || null;
-                    const uraian = tugas.uraian_tugas?.deskripsi || "";
-                    const tahapan = tugas.uraian_tugas?.tahapan || [];
-                    const hasilK = tugas.hasil_kerja || [];
+                    const uraian = tugas?.uraian_tugas?.deskripsi || "";
+                    const detailArr: any[] = Array.isArray(tugas?.uraian_tugas?.detail_uraian_tugas)
+                        ? tugas.uraian_tugas.detail_uraian_tugas
+                        : [];
+
+                    // hasil_kerja → pastikan array & cast text[]
+                    const hasilK: string[] = Array.isArray(tugas?.uraian_tugas?.hasil_kerja)
+                        ? tugas.uraian_tugas.hasil_kerja
+                        : Array.isArray(tugas?.hasil_kerja)
+                            ? tugas.hasil_kerja
+                            : [];
+
                     const jumlah_hasil = tugas.jumlah_hasil ? parseInt(tugas.jumlah_hasil) : null;
                     const waktu_penyelesaian_jam = tugas["waktu_penyelesaian_(jam)"]
                         ? parseInt(tugas["waktu_penyelesaian_(jam)"])
@@ -277,13 +268,13 @@ export async function POST(req: NextRequest) {
                             INSERT INTO tugas_pokok (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja,
                                                      jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif,
                                                      kebutuhan_pegawai, created_at, updated_at)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id
+                            VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, NOW(), NOW()) RETURNING id
                         `,
                         [
                             jabatanUUID,
                             nomor_tugas,
                             uraian,
-                            hasilK,
+                            hasilK,                      // ← cast ::text[] di SQL agar tidak kosong
                             jumlah_hasil,
                             waktu_penyelesaian_jam,
                             waktu_efektif,
@@ -292,23 +283,46 @@ export async function POST(req: NextRequest) {
                     );
 
                     const tugas_id = resTugas.rows[0].id;
-                    for (const tahap of Array.isArray(tahapan) ? tahapan : []) {
-                        await client.query(
+
+                    // Insert tahapan (nomor_tahapan auto i+1 jika tidak ada di JSON)
+                    for (let i = 0; i < detailArr.length; i++) {
+                        const td = detailArr[i] || {};
+                        const nomor_tahapan: number = Number.isInteger(td.nomor_tahapan) ? td.nomor_tahapan : i + 1;
+                        const tahapanText: string = td.tahapan || "";
+                        const detailList: string[] = Array.isArray(td.detail_tahapan) ? td.detail_tahapan : [];
+
+                        const insTah = await client.query<{ id: number }>(
                             `
-                                INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
-                                VALUES ($1, $2, $3, NOW(), NOW())
+                                INSERT INTO tahapan_uraian_tugas
+                                    (tugas_id, jabatan_id, tahapan, nomor_tahapan, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id
                             `,
-                            [tugas_id, jabatanUUID, tahap]
+                            [tugas_id, jabatanUUID, tahapanText, nomor_tahapan]
                         );
+                        const tahapan_id = insTah.rows[0].id;
+
+                        // Insert detail_tahapan bila ada
+                        if (detailList.length) {
+                            for (const det of detailList) {
+                                await client.query(
+                                    `
+                                        INSERT INTO detail_tahapan_uraian_tugas
+                                            (tahapan_id, jabatan_id, detail, created_at, updated_at)
+                                        VALUES ($1, $2, $3, NOW(), NOW())
+                                    `,
+                                    [tahapan_id, jabatanUUID, det]
+                                );
+                            }
+                        }
                     }
                 }
 
-                // hasil_kerja
+                // hasil_kerja (tabel lain), bahan_kerja, perangkat_kerja, dst. (tidak diubah)
                 for (const hk of Array.isArray(hasil_kerja) ? hasil_kerja : []) {
                     await client.query(
                         `
                             INSERT INTO hasil_kerja (jabatan_id, hasil_kerja, satuan_hasil, created_at, updated_at)
-                            VALUES ($1, $2, $3, NOW(), NOW())
+                            VALUES ($1, $2::text[], $3::text[], NOW(), NOW())
                         `,
                         [
                             jabatanUUID,
@@ -318,31 +332,28 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                // bahan_kerja
                 for (const bk of Array.isArray(bahan_kerja) ? bahan_kerja : []) {
                     await client.query(
                         `
                             INSERT INTO bahan_kerja (jabatan_id, bahan_kerja, penggunaan_dalam_tugas, created_at,
                                                      updated_at)
-                            VALUES ($1, $2, $3, NOW(), NOW())
+                            VALUES ($1, $2::text[], $3::text[], NOW(), NOW())
                         `,
                         [jabatanUUID, bk.bahan_kerja || [], bk.penggunaan_dalam_tugas || []]
                     );
                 }
 
-                // perangkat_kerja
                 for (const pk of Array.isArray(perangkat_kerja) ? perangkat_kerja : []) {
                     await client.query(
                         `
                             INSERT INTO perangkat_kerja (jabatan_id, perangkat_kerja, penggunaan_untuk_tugas,
                                                          created_at, updated_at)
-                            VALUES ($1, $2, $3, NOW(), NOW())
+                            VALUES ($1, $2::text[], $3::text[], NOW(), NOW())
                         `,
                         [jabatanUUID, pk.perangkat_kerja || [], pk.penggunaan_untuk_tugas || []]
                     );
                 }
 
-                // tanggung_jawab
                 for (const tj of Array.isArray(tanggung_jawab) ? tanggung_jawab : []) {
                     await client.query(
                         `
@@ -353,7 +364,6 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                // wewenang
                 for (const w of Array.isArray(wewenang) ? wewenang : []) {
                     await client.query(
                         `
@@ -364,19 +374,17 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                // korelasi_jabatan
                 for (const k of Array.isArray(korelasi_jabatan) ? korelasi_jabatan : []) {
                     await client.query(
                         `
                             INSERT INTO korelasi_jabatan (jabatan_id, jabatan_terkait, unit_kerja_instansi, dalam_hal,
                                                           created_at, updated_at)
-                            VALUES ($1, $2, $3, $4, NOW(), NOW())
+                            VALUES ($1, $2, $3, $4::text[], NOW(), NOW())
                         `,
                         [jabatanUUID, k.jabatan || "", k.unit_kerja_instansi || "", k.dalam_hal || []]
                     );
                 }
 
-                // kondisi_lingkungan_kerja
                 for (const kl of Array.isArray(kondisi_lingkungan_kerja) ? kondisi_lingkungan_kerja : []) {
                     await client.query(
                         `
@@ -387,7 +395,6 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                // risiko_bahaya
                 for (const rb of Array.isArray(risiko_bahaya) ? risiko_bahaya : []) {
                     await client.query(
                         `
@@ -398,7 +405,6 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                // syarat_jabatan
                 const syarat = syarat_jabatan || {};
                 await client.query(
                     `
@@ -408,7 +414,8 @@ export async function POST(req: NextRequest) {
                                                     kondisi_fisik_bb, kondisi_fisik_pb,
                                                     kondisi_fisik_tampilan, kondisi_fisik_keadaan, fungsi_pekerja,
                                                     created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+                        VALUES ($1, $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],
+                                $7, $8, $9, $10, $11, $12, $13, $14::text[], NOW(), NOW())
                     `,
                     [
                         jabatanUUID,
@@ -492,8 +499,7 @@ async function safeUnlink(filePath: string) {
             await new Promise((r) => setTimeout(r, 150));
             try {
                 await fs.unlink(filePath);
-            } catch {
-                // ignore
+            } catch {/* ignore */
             }
         }
     }

@@ -49,18 +49,63 @@ function renderTableList(value: string | string[]) {
     return value;
 }
 
-function renderUraianTugasDanTahapan(item: any) {
-    const uraian = renderTableList(item.uraian_tugas);
-    let tahapanHtml = "";
-    if (item.tahapan && item.tahapan.length > 0) {
-        tahapanHtml = `
+/** ====== BARU: render detail_uraian_tugas (tahapan + detail_tahapan) ====== */
+function renderDetailUraian(detailArr?: Array<{
+    nomor_tahapan?: number | null;
+    tahapan?: string;
+    detail_tahapan?: string[]
+}>) {
+    if (!Array.isArray(detailArr) || detailArr.length === 0) return "";
+
+    // urutkan berdasar nomor_tahapan jika ada, kalau tidak biarkan urutan asli
+    const items = [...detailArr].sort((a, b) => {
+        const na = a?.nomor_tahapan ?? null;
+        const nb = b?.nomor_tahapan ?? null;
+        if (na == null && nb == null) return 0;
+        if (na == null) return 1;
+        if (nb == null) return -1;
+        return na - nb;
+    });
+
+    const li = items.map((it) => {
+        const head = (it?.tahapan ?? "").trim();
+        const details = Array.isArray(it?.detail_tahapan) ? it!.detail_tahapan.filter(Boolean) : [];
+        const sub =
+            details.length > 0
+                ? `
+            <ol class="alpha" style="margin-top:4px;">
+              ${details.map((d) => `<li>${d}</li>`).join("")}
+            </ol>`
+                : "";
+        return `<li style="margin-bottom:4px;">${head}${sub}</li>`;
+    }).join("");
+
+    return `
       <br><p>Tahapan :</p>
-      <ol style="margin:0; padding-left:1.5em; list-style-type: decimal;">
-        ${item.tahapan.map((t: any) => `<li style="margin-bottom:2px;">${t.tahapan}</li>`).join("")}
+      <ol class="num" style="margin:0; padding-left:1.5em; list-style-type: decimal;">
+        ${li}
       </ol>
     `;
-    }
+}
+
+function renderUraianTugasDanTahapan(item: any) {
+    // uraian_tugas tetap pakai renderer lama (menerima string atau string[])
+    const uraian = renderTableList(item.uraian_tugas);
+
+    // ===== perubahan: gunakan detail_uraian_tugas (ganti dari item.tahapan) =====
+    const tahapanHtml = renderDetailUraian(item.detail_uraian_tugas);
+
     return `${uraian}${tahapanHtml}`;
+}
+
+function hasAnySatuanHasil(data: any): boolean {
+    const list = Array.isArray(data?.hasil_kerja) ? data.hasil_kerja : [];
+    return list.some((it: any) => {
+        const v = it?.satuan_hasil;
+        if (Array.isArray(v)) return v.some((s) => String(s ?? "").trim() !== "");
+        if (typeof v === "string") return v.trim() !== "";
+        return false;
+    });
 }
 
 // ===== Perangkat Kerja: split & render table multi-halaman =====
@@ -176,6 +221,8 @@ export function buildAnjabHtml(data: any): string {
         0
     );
 
+    const showSatuanHasil = hasAnySatuanHasil(data);
+
     return `<!doctype html>
 <html>
 <head>
@@ -260,13 +307,59 @@ export function buildAnjabHtml(data: any): string {
   <!-- 5. KUALIFIKASI JABATAN -->
   <div class="section portrait">
     <table class="key-value">
-      <tr><td class="kv-left">5. KUALIFIKASI JABATAN</td><td class="kv-sep">:</td><td class="custom-padding kv-right"></td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:25px; width:36%;">a. Pendidikan Formal</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${renderList(data.pendidikan_formal)}</td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:25px;">b. Pendidikan dan Pelatihan</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify"></td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:43px;">Diklat Penjenjangan</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${data.diklat_penjenjangan}</td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:43px;">Diklat Teknis</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${renderList(data.diklat_teknis)}</td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:43px;">Diklat Fungsional</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${renderList(data.diklat_fungsional)}</td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:25px; width:36%;">c. Pengalaman Kerja</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${renderNumberList(data.pengalaman_kerja)}</td></tr>
+      <tr>
+        <td class="kv-left">5. KUALIFIKASI JABATAN</td>
+        <td class="kv-sep">:</td>
+        <td class="custom-padding kv-right"></td>
+      </tr>
+      <tr>
+        <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">a. Pendidikan Formal</td>
+        <td class="custom-padding kv-sep">:</td>
+        <td class="custom-padding kv-right custom-justify">${renderList(data.pendidikan_formal)}</td>
+      </tr>
+      <tr>
+        <td class="custom-padding kv-left" style="padding-left:25px;">b. Pendidikan dan Pelatihan</td>
+        <td class="custom-padding kv-sep">:</td>
+        <td class="custom-padding kv-right custom-justify"></td>
+      </tr>
+      <tr>
+        <td class="custom-padding kv-left" style="padding-left:43px;">
+          ${
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+            ? "Diklat Penjenjangan"
+            : "Manajerial"
+    }
+        </td>
+        <td class="custom-padding kv-sep">:</td>
+        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_penjenjangan)}</td>
+      </tr>
+      <tr>
+        <td class="custom-padding kv-left" style="padding-left:43px;">
+          ${
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+            ? "Diklat Teknis"
+            : "Teknis"
+    }
+        </td>
+        <td class="custom-padding kv-sep">:</td>
+        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_teknis)}</td>
+      </tr>
+      <tr>
+        <td class="custom-padding kv-left" style="padding-left:43px;">
+          ${
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+            ? "Diklat Fungsional"
+            : "Fungsional"
+    }
+        </td>
+        <td class="custom-padding kv-sep">:</td>
+        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_fungsional)}</td>
+      </tr>
+      <tr>
+        <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">c. Pengalaman Kerja</td>
+        <td class="custom-padding kv-sep">:</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.pengalaman_kerja)}</td>
+      </tr>
     </table>
   </div>
 
@@ -313,13 +406,19 @@ export function buildAnjabHtml(data: any): string {
   <div class="section portrait table-section">
     <p>7. HASIL KERJA :</p>
     <table style="margin-left: 0; width: 99%" class="word-table">
-      <thead><tr><th style="width:5%;">NO</th><th>HASIL KERJA</th><th style="width:25%;">SATUAN HASIL</th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width:${showSatuanHasil ? "5%" : "7%"};">NO</th>
+          <th>HASIL KERJA</th>
+          ${showSatuanHasil ? '<th style="width:25%;">SATUAN HASIL</th>' : ""}
+        </tr>
+      </thead>
       <tbody>
         ${(data.hasil_kerja || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
             <td>${renderTableList(item.hasil_kerja)}</td>
-            <td>${renderTableList(item.satuan_hasil)}</td>
+            ${showSatuanHasil ? `<td>${renderTableList(item.satuan_hasil)}</td>` : ""}
           </tr>
         `).join("")}
       </tbody>
@@ -431,10 +530,20 @@ export function buildAnjabHtml(data: any): string {
   <div class="section portrait table-section">
     <p>14. RISIKO BAHAYA :</p>
     <table style="margin-left: 0; width: 99%" class="word-table">
-      <thead><tr><th style="width:5%;">NO</th><th>NAMA RISIKO</th><th>PENYEBAB</th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width:5%;">NO</th>
+          <th>NAMA RISIKO</th>
+          <th>PENYEBAB</th>
+        </tr>
+      </thead>
       <tbody>
         ${(data.risiko_bahaya || []).map((item: any, index: number) => `
-          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.nama_risiko)}</td><td>${renderTableList(item.penyebab)}</td></tr>
+          <tr>
+            <td class="center">${index + 1}.</td>
+            <td class="center">${renderTableList(item.nama_risiko)}</td>
+            <td class="center">${renderTableList(item.penyebab)}</td>
+          </tr>
         `).join("")}
       </tbody>
     </table>
@@ -457,7 +566,7 @@ export function buildAnjabHtml(data: any): string {
       <tr><td class="custom-padding kv-left" style="padding-left:43px;">5) Postur Badan</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${data.syarat_jabatan?.kondisi_fisik_pb ?? ""}</td></tr>
       <tr><td class="custom-padding kv-left" style="padding-left:43px;">6) Penampilan</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${data.syarat_jabatan?.kondisi_fisik_tampilan ?? ""}</td></tr>
       <tr><td class="custom-padding kv-left" style="padding-left:43px;">7) Keadaan Fisik</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${data.syarat_jabatan?.kondisi_fisik_keadaan ?? ""}</td></tr>
-      <tr><td class="custom-padding kv-left" style="padding-left:25px; width:36%;">g. Fungsi Pekerja</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${renderList(data.syarat_jabatan?.fungsi_pekerja)}</td></tr>
+      <tr><td class="custom-padding kv-left" style="padding-left:25px; width:36%;">g. Fungsi Pekerjaan</td><td class="custom-padding kv-sep">:</td><td class="custom-padding kv-right custom-justify">${renderList(data.syarat_jabatan?.fungsi_pekerja)}</td></tr>
     </table>
   </div>
 

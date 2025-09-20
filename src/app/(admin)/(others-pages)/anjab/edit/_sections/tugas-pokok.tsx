@@ -8,25 +8,43 @@ import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
-/** ====== Tipe data mengikuti backend TANPA alias ====== */
+/** ====== Types (nested) ====== */
+type TahapanDetail = {
+    nomor_tahapan: number | null;
+    tahapan: string;
+    detail_tahapan: string[];
+};
+
 type TugasPokok = {
-    id: string; // UUID string; "" untuk baris baru
-    jabatan_id: string; // UUID jabatan
+    id: string; // stringified INT id dari DB; "" untuk baris baru
+    jabatan_id: string; // UUID
     nomor_tugas: number | null;
     uraian_tugas: string;
     hasil_kerja: string[];
     jumlah_hasil: number | null;
     waktu_penyelesaian_jam: number | null;
     waktu_efektif: number | null;
-    kebutuhan_pegawai: number | null; // DISABLE edit; auto computed
-    tahapan: string[];
-    _tmpKey?: string; // hanya untuk key React lokal
+    kebutuhan_pegawai: number | null; // readonly, auto-computed
+    detail_uraian_tugas: TahapanDetail[];
+    _tmpKey?: string;
 };
 
-/** ---- Util: normalisasi aman dari API (tanpa alias) ---- */
+/** ---- Normalizer dari API ---- */
 function normalizeFromApi(raw: any, fallbackJabatanId: string): TugasPokok {
     const asString = (v: any) => (typeof v === "string" ? v : v == null ? "" : String(v));
     const toNum = (v: any) => (v == null || v === "" ? null : Number(v));
+    const asTahapanDetail = (arr: any): TahapanDetail[] =>
+        Array.isArray(arr)
+            ? arr.map((x: any, i: number): TahapanDetail => ({
+                nomor_tahapan:
+                    x?.nomor_tahapan == null || x.nomor_tahapan === ""
+                        ? i + 1
+                        : Number(x.nomor_tahapan),
+                tahapan: typeof x?.tahapan === "string" ? x.tahapan : "",
+                detail_tahapan: Array.isArray(x?.detail_tahapan) ? x.detail_tahapan : [],
+            }))
+            : [];
+
     return {
         id: raw?.id ? asString(raw.id) : "",
         jabatan_id: raw?.jabatan_id ? asString(raw.jabatan_id) : fallbackJabatanId,
@@ -37,7 +55,7 @@ function normalizeFromApi(raw: any, fallbackJabatanId: string): TugasPokok {
         waktu_penyelesaian_jam: toNum(raw?.waktu_penyelesaian_jam),
         waktu_efektif: toNum(raw?.waktu_efektif),
         kebutuhan_pegawai: raw?.kebutuhan_pegawai == null ? null : Number(raw.kebutuhan_pegawai),
-        tahapan: Array.isArray(raw?.tahapan) ? raw.tahapan : [],
+        detail_uraian_tugas: asTahapanDetail(raw?.detail_uraian_tugas),
     };
 }
 
@@ -132,17 +150,127 @@ function ArrayInput({
     );
 }
 
+/** Editor nested: detail_uraian_tugas[]  */
+function DetailUraianTugasEditor({
+                                     value,
+                                     onChange,
+                                 }: {
+    value: TahapanDetail[];
+    onChange: (v: TahapanDetail[]) => void;
+}) {
+    const [items, setItems] = useState<TahapanDetail[]>(value ?? []);
+
+    useEffect(() => {
+        setItems(value ?? []);
+    }, [value]);
+
+    function setAndEmit(next: TahapanDetail[]) {
+        setItems(next);
+        onChange(next);
+    }
+
+    function renumber(arr: TahapanDetail[]) {
+        return arr.map((x, i) => ({...x, nomor_tahapan: i + 1}));
+    }
+
+    function addNew() {
+        const next = renumber([
+            ...items,
+            {nomor_tahapan: items.length + 1, tahapan: "", detail_tahapan: []},
+        ]);
+        setAndEmit(next);
+    }
+
+    function remove(i: number) {
+        const next = renumber(items.filter((_, idx) => idx !== i));
+        setAndEmit(next);
+    }
+
+    function update(i: number, patch: Partial<TahapanDetail>) {
+        const next = [...items];
+        next[i] = {...next[i], ...patch};
+        setAndEmit(next);
+    }
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium">
+                    Detail Uraian Tugas (Tahapan &amp; Rincian)
+                </label>
+                <button
+                    type="button"
+                    onClick={addNew}
+                    className="rounded px-3 py-1 bg-green-600 text-white hover:bg-green-700"
+                >
+                    + Tambah Tahapan
+                </button>
+            </div>
+
+            {items.map((it, i) => (
+                <div key={i} className="rounded border p-3 space-y-3 bg-gray-50">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                        <div>
+                            <label className="block text-xs mb-1">Nomor Tahapan</label>
+                            <input
+                                type="number"
+                                value={it.nomor_tahapan ?? i + 1}
+                                onChange={(e) =>
+                                    update(i, {
+                                        nomor_tahapan:
+                                            e.target.value === "" ? null : Number(e.target.value),
+                                    })
+                                }
+                                className="w-full rounded border px-2 py-1"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                            />
+                        </div>
+                        <div className="md:col-span-5">
+                            <label className="block text-xs mb-1">Judul Tahapan</label>
+                            <input
+                                type="text"
+                                value={it.tahapan}
+                                onChange={(e) => update(i, {tahapan: e.target.value})}
+                                className="w-full rounded border px-2 py-1"
+                                placeholder="Contoh: Mengidentifikasi kebutuhan anggaran …"
+                            />
+                        </div>
+                    </div>
+
+                    <ArrayInput
+                        label="Detail Tahapan"
+                        value={it.detail_tahapan ?? []}
+                        onChange={(arr) => update(i, {detail_tahapan: arr})}
+                        placeholder="Contoh: Mengidentifikasi & mempelajari peraturan …"
+                    />
+
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => remove(i)}
+                            className="rounded px-3 py-1 bg-red-50 hover:bg-red-100 border"
+                        >
+                            Hapus Tahapan
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function TugasPokokForm({
-                                           viewerPath, // contoh: "Ortala/PKSTI"
+                                           viewerPath,
                                        }: {
     viewerPath: string;
 }) {
-    const [resolvedId, setResolvedId] = useState<string>(""); // UUID jabatan dari localStorage
-    const [storageInfo, setStorageInfo] = useState<{ storageKey: string; exists: boolean; value: string }>({
-        storageKey: "",
-        exists: false,
-        value: "",
-    });
+    const [resolvedId, setResolvedId] = useState<string>("");
+    const [storageInfo, setStorageInfo] = useState<{
+        storageKey: string;
+        exists: boolean;
+        value: string;
+    }>({storageKey: "", exists: false, value: ""});
 
     const [loading, setLoading] = useState(true);
     const [savingId, setSavingId] = useState<string | "new" | null>(null);
@@ -151,7 +279,6 @@ export default function TugasPokokForm({
 
     const firstRef = useRef<HTMLTextAreaElement>(null);
 
-    // Ambil key storage (2 segmen terakhir)
     function resolveFromStorage(vpath: string) {
         const storageKey = vpath.split("/").filter(Boolean).slice(-2).join("/");
         try {
@@ -162,7 +289,6 @@ export default function TugasPokokForm({
         }
     }
 
-    // 1) Resolve ID dari storage saat mount / viewerPath berubah
     useEffect(() => {
         const info = resolveFromStorage(viewerPath);
         setStorageInfo(info);
@@ -170,12 +296,14 @@ export default function TugasPokokForm({
         setLastError(null);
     }, [viewerPath]);
 
-    // 2) Fetch list
     const fetchAll = async (jabatanId: string) => {
         setLastError(null);
         setLoading(true);
         try {
-            const res = await apiFetch(`/api/anjab/${encodeURIComponent(jabatanId)}/tugas-pokok`, {cache: "no-store"});
+            const res = await apiFetch(
+                `/api/anjab/${encodeURIComponent(jabatanId)}/tugas-pokok`,
+                {cache: "no-store"}
+            );
             if (!res.ok) {
                 setList([]);
                 setLastError(`Gagal memuat Tugas Pokok (HTTP ${res.status}).`);
@@ -188,12 +316,15 @@ export default function TugasPokokForm({
                     _tmpKey: `srv-${i}-${r?.id ?? Math.random().toString(36).slice(2)}`,
                 }))
                 : [];
-            // Pastikan kebutuhan_pegawai konsisten secara tampilan (kalau null → hitung dari 3 kolom bila memungkinkan)
             setList(
-                normalized.map((row) => {
-                    const calc = computeKebutuhanPegawai(row.jumlah_hasil, row.waktu_penyelesaian_jam, row.waktu_efektif);
-                    return {...row, kebutuhan_pegawai: calc};
-                })
+                normalized.map((row) => ({
+                    ...row,
+                    kebutuhan_pegawai: computeKebutuhanPegawai(
+                        row.jumlah_hasil,
+                        row.waktu_penyelesaian_jam,
+                        row.waktu_efektif
+                    ),
+                }))
             );
             setTimeout(() => firstRef.current?.focus(), 0);
         } catch {
@@ -204,7 +335,6 @@ export default function TugasPokokForm({
         }
     };
 
-    // 3) Trigger fetch berdasarkan hasil resolve
     useEffect(() => {
         let alive = true;
         (async () => {
@@ -230,7 +360,8 @@ export default function TugasPokokForm({
         const j = Number(jumlah_hasil ?? 0);
         const w = Number(waktu_penyelesaian_jam ?? 0);
         const e = Number(waktu_efektif ?? 0);
-        if (!Number.isFinite(j) || !Number.isFinite(w) || !Number.isFinite(e) || e <= 0) return 0;
+        if (!Number.isFinite(j) || !Number.isFinite(w) || !Number.isFinite(e) || e <= 0)
+            return 0;
         return (j * w) / e;
     }
 
@@ -239,7 +370,6 @@ export default function TugasPokokForm({
             const next = [...prev];
             const before = next[idx];
 
-            // Jika ada perubahan di salah satu dari 3 kolom pemicu → re-calc kebutuhan_pegawai baris ini
             const willTrigger =
                 Object.prototype.hasOwnProperty.call(patch, "jumlah_hasil") ||
                 Object.prototype.hasOwnProperty.call(patch, "waktu_penyelesaian_jam") ||
@@ -260,26 +390,29 @@ export default function TugasPokokForm({
         });
     }
 
-    // === Total & pembulatan (auto) ===
     const totalKebutuhan = useMemo(
         () =>
             (list ?? []).reduce((sum, r) => {
-                const v = typeof r.kebutuhan_pegawai === "number" && Number.isFinite(r.kebutuhan_pegawai) ? r.kebutuhan_pegawai : 0;
+                const v =
+                    typeof r.kebutuhan_pegawai === "number" && Number.isFinite(r.kebutuhan_pegawai)
+                        ? r.kebutuhan_pegawai
+                        : 0;
                 return sum + v;
             }, 0),
         [list]
     );
     const pembulatan = useMemo(() => Math.ceil(totalKebutuhan), [totalKebutuhan]);
 
-    // 4) Simpan (POST/ PATCH)
     async function saveItem(idx: number) {
         const item = list[idx];
-        // Pastikan payload pakai kebutuhan_pegawai hasil kalkulasi terakhir di client
         const clean = normalizeFromApi(item, resolvedId);
         const isEdit = typeof clean.id === "string" && clean.id.length > 0;
 
-        // Pastikan lagi kebutuhan_pegawai baris ini dihitung dari 3 kolom
-        const kp = computeKebutuhanPegawai(clean.jumlah_hasil, clean.waktu_penyelesaian_jam, clean.waktu_efektif);
+        const kp = computeKebutuhanPegawai(
+            clean.jumlah_hasil,
+            clean.waktu_penyelesaian_jam,
+            clean.waktu_efektif
+        );
 
         const payload = {
             nomor_tugas: clean.nomor_tugas,
@@ -288,8 +421,12 @@ export default function TugasPokokForm({
             jumlah_hasil: clean.jumlah_hasil,
             waktu_penyelesaian_jam: clean.waktu_penyelesaian_jam,
             waktu_efektif: clean.waktu_efektif,
-            kebutuhan_pegawai: kp, // ← kirim hasil kalkulasi
-            tahapan: clean.tahapan,
+            kebutuhan_pegawai: kp,
+            detail_uraian_tugas: (clean.detail_uraian_tugas ?? []).map((x, i) => ({
+                nomor_tahapan: x.nomor_tahapan ?? i + 1,
+                tahapan: x.tahapan ?? "",
+                detail_tahapan: Array.isArray(x.detail_tahapan) ? x.detail_tahapan : [],
+            })),
         };
 
         setSavingId(isEdit ? clean.id : "new");
@@ -311,7 +448,6 @@ export default function TugasPokokForm({
                     return;
                 }
                 const updated = normalizeFromApi((json as any).data, resolvedId);
-                // Recompute kebutuhan_pegawai untuk konsistensi tampilan (server mungkin mengembalikan angka yang sama)
                 updated.kebutuhan_pegawai = computeKebutuhanPegawai(
                     updated.jumlah_hasil,
                     updated.waktu_penyelesaian_jam,
@@ -341,7 +477,11 @@ export default function TugasPokokForm({
                 updateLocal(idx, created);
             }
 
-            await MySwal.fire({icon: "success", title: "Tersimpan", text: "Tugas Pokok berhasil disimpan."});
+            await MySwal.fire({
+                icon: "success",
+                title: "Tersimpan",
+                text: "Tugas Pokok berhasil disimpan.",
+            });
         } catch {
             setLastError("Terjadi kesalahan saat menyimpan.");
         } finally {
@@ -349,7 +489,6 @@ export default function TugasPokokForm({
         }
     }
 
-    // 5) Hapus
     async function deleteItem(idx: number) {
         const item = list[idx];
         const clean = normalizeFromApi(item, resolvedId);
@@ -372,22 +511,30 @@ export default function TugasPokokForm({
                     {method: "DELETE"}
                 );
                 const json = await res.json().catch(() => ({}));
-                if (!res.ok || (json as any)?.error) throw new Error((json as any)?.error || `HTTP ${res.status}`);
+                if (!res.ok || (json as any)?.error)
+                    throw new Error((json as any)?.error || `HTTP ${res.status}`);
             }
             setList((prev) => prev.filter((_, i) => i !== idx));
-            await MySwal.fire({icon: "success", title: "Terhapus", text: "Tugas Pokok dihapus."});
+            await MySwal.fire({
+                icon: "success",
+                title: "Terhapus",
+                text: "Tugas Pokok dihapus.",
+            });
         } catch (e) {
-            await MySwal.fire({icon: "error", title: "Gagal menghapus", text: String(e)});
+            await MySwal.fire({
+                icon: "error",
+                title: "Gagal menghapus",
+                text: String(e),
+            });
         }
     }
 
-    // 6) Tambah baris baru (id kosong)
     function addNew() {
         const tmpKey = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         setList((prev) => [
             ...prev,
             {
-                id: "", // kosong = belum tersimpan (POST)
+                id: "",
                 jabatan_id: resolvedId,
                 nomor_tugas: (prev[prev.length - 1]?.nomor_tugas ?? 0) + 1,
                 uraian_tugas: "",
@@ -395,15 +542,14 @@ export default function TugasPokokForm({
                 jumlah_hasil: null,
                 waktu_penyelesaian_jam: null,
                 waktu_efektif: null,
-                kebutuhan_pegawai: 0, // default tampilan
-                tahapan: [],
+                kebutuhan_pegawai: 0,
+                detail_uraian_tugas: [],
                 _tmpKey: tmpKey,
             },
         ]);
         setTimeout(() => firstRef.current?.focus(), 0);
     }
 
-    // 7) Retry resolve
     const retry = () => {
         const info = resolveFromStorage(viewerPath);
         setStorageInfo(info);
@@ -414,10 +560,12 @@ export default function TugasPokokForm({
     if (!storageInfo.exists || lastError === "__NOT_FOUND_KEY__") {
         return (
             <div className="p-6 space-y-3">
-                <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                <p className="text-red-600">
+                    ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.
+                </p>
                 <p className="text-sm text-gray-600">
-                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu
-                    kembali ke halaman ini.
+                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat
+                    sehingga ID tersimpan, lalu kembali ke halaman ini.
                 </p>
                 <div className="flex items-center gap-3">
                     <button className="rounded border px-3 py-1.5" onClick={retry}>
@@ -448,87 +596,45 @@ export default function TugasPokokForm({
                 </Link>
             </div>
 
-            {/* ====== 2 field ringkasan (read-only) ====== */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
-                    <input
-                        type="number"
-                        value={Number.isFinite(totalKebutuhan) ? totalKebutuhan.toFixed(4) : 0}
-                        readOnly
-                        disabled
-                        className="w-full rounded border px-3 py-2 bg-gray-100"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">Pembulatan</label>
-                    <input
-                        type="number"
-                        value={pembulatan}
-                        readOnly
-                        disabled
-                        className="w-full rounded border px-3 py-2 bg-gray-100"
-                    />
-                </div>
-            </div>
+            <Summary totalKebutuhan={totalKebutuhan} pembulatan={pembulatan}/>
 
-            {list.length === 0 && <p className="text-gray-600">Belum ada Tugas Pokok. Klik “+ Tambah Tugas”.</p>}
+            {list.length === 0 && (
+                <p className="text-gray-600">
+                    Belum ada Tugas Pokok. Klik “+ Tambah Tugas”.
+                </p>
+            )}
 
             {list.map((row, idx) => {
                 const key = row.id || row._tmpKey || `row-${idx}`;
                 return (
                     <div key={key} className="rounded border p-4 space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Nomor</label>
-                                <input
-                                    type="number"
-                                    value={row.nomor_tugas ?? 0}
-                                    onChange={(e) =>
-                                        updateLocal(idx, {nomor_tugas: e.target.value === "" ? null : Number(e.target.value)})
-                                    }
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Jumlah Hasil</label>
-                                <input
-                                    type="number"
-                                    value={row.jumlah_hasil ?? 0}
-                                    onChange={(e) =>
-                                        updateLocal(idx, {jumlah_hasil: e.target.value === "" ? null : Number(e.target.value)})
-                                    }
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Waktu Penyelesaian (jam)</label>
-                                <input
-                                    type="number"
-                                    value={row.waktu_penyelesaian_jam ?? 0}
-                                    onChange={(e) =>
-                                        updateLocal(idx, {
-                                            waktu_penyelesaian_jam: e.target.value === "" ? null : Number(e.target.value),
-                                        })
-                                    }
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Waktu Efektif</label>
-                                <input
-                                    type="number"
-                                    value={row.waktu_efektif ?? 0}
-                                    onChange={(e) =>
-                                        updateLocal(idx, {waktu_efektif: e.target.value === "" ? null : Number(e.target.value)})
-                                    }
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
+                            <NumberInput
+                                label="Nomor"
+                                value={row.nomor_tugas}
+                                onChange={(v) => updateLocal(idx, {nomor_tugas: v})}
+                            />
+                            <NumberInput
+                                label="Jumlah Hasil"
+                                value={row.jumlah_hasil}
+                                onChange={(v) => updateLocal(idx, {jumlah_hasil: v})}
+                            />
+                            <NumberInput
+                                label="Waktu Penyelesaian (jam)"
+                                value={row.waktu_penyelesaian_jam}
+                                onChange={(v) => updateLocal(idx, {waktu_penyelesaian_jam: v})}
+                            />
+                            <NumberInput
+                                label="Waktu Efektif"
+                                value={row.waktu_efektif}
+                                onChange={(v) => updateLocal(idx, {waktu_efektif: v})}
+                            />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1">Kebutuhan Pegawai</label>
+                            <label className="block text-sm font-medium mb-1">
+                                Kebutuhan Pegawai
+                            </label>
                             <input
                                 type="number"
                                 step="0.0001"
@@ -550,18 +656,16 @@ export default function TugasPokokForm({
                             />
                         </div>
 
-                        <ArrayInput
-                            label="Tahapan Uraian Tugas"
-                            value={row.tahapan ?? []}
-                            onChange={(v) => updateLocal(idx, {tahapan: v})}
-                            placeholder="Contoh: Mengumpulkan data …"
+                        <DetailUraianTugasEditor
+                            value={row.detail_uraian_tugas ?? []}
+                            onChange={(v) => updateLocal(idx, {detail_uraian_tugas: v})}
                         />
 
                         <ArrayInput
                             label="Hasil Kerja"
                             value={row.hasil_kerja ?? []}
                             onChange={(v) => updateLocal(idx, {hasil_kerja: v})}
-                            placeholder="Contoh: Laporan analisis …"
+                            placeholder="Contoh: Dokumen laporan …"
                         />
 
                         <div className="flex gap-2 pt-2">
@@ -584,6 +688,60 @@ export default function TugasPokokForm({
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+/** ====== Small subcomponents ====== */
+function NumberInput({
+                         label,
+                         value,
+                         onChange,
+                     }: {
+    label: string;
+    value: number | null;
+    onChange: (v: number | null) => void;
+}) {
+    return (
+        <div>
+            <label className="block text-sm font-medium mb-1">{label}</label>
+            <input
+                type="number"
+                value={value ?? ""} // bisa kosong
+                onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+                className="w-full rounded border px-3 py-2"
+                inputMode="numeric"
+                pattern="[0-9]*"
+            />
+        </div>
+    );
+}
+
+function Summary({totalKebutuhan, pembulatan}: { totalKebutuhan: number; pembulatan: number }) {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label className="block text-sm font-medium mb-1">
+                    Jumlah Pegawai Yang Dibutuhkan
+                </label>
+                <input
+                    type="number"
+                    value={Number.isFinite(totalKebutuhan) ? totalKebutuhan.toFixed(4) : 0}
+                    readOnly
+                    disabled
+                    className="w-full rounded border px-3 py-2 bg-gray-100"
+                />
+            </div>
+            <div>
+                <label className="block text-sm font-medium mb-1">Pembulatan</label>
+                <input
+                    type="number"
+                    value={pembulatan}
+                    readOnly
+                    disabled
+                    className="w-full rounded border px-3 py-2 bg-gray-100"
+                />
+            </div>
         </div>
     );
 }

@@ -18,18 +18,6 @@ async function jabatanExists(id: string): Promise<boolean> {
 }
 
 const toNum = (v: any): number | null => (v == null ? null : Number(v));
-const normalizeRow = (r: any) => ({
-    id: Number(r.id), // INT
-    jabatan_id: r.jabatan_id, // UUID
-    nomor_tugas: toNum(r.nomor_tugas),
-    uraian_tugas: r.uraian_tugas ?? "",
-    hasil_kerja: Array.isArray(r.hasil_kerja) ? r.hasil_kerja : [],
-    jumlah_hasil: toNum(r.jumlah_hasil),
-    waktu_penyelesaian_jam: toNum(r.waktu_penyelesaian_jam),
-    waktu_efektif: toNum(r.waktu_efektif),
-    kebutuhan_pegawai: r.kebutuhan_pegawai == null ? null : Number(r.kebutuhan_pegawai),
-    tahapan: Array.isArray(r.tahapan) ? r.tahapan : [],
-});
 
 /** ======= Zod helpers ======= */
 const zIntNullable = z.preprocess(
@@ -41,6 +29,12 @@ const zNumNullable = z.preprocess(
     z.number().nullable()
 );
 
+const TahapanDetailSchema = z.object({
+    nomor_tahapan: zIntNullable.optional(),
+    tahapan: z.string().default(""),
+    detail_tahapan: z.array(z.string()).default([]),
+});
+
 const PatchSchema = z.object({
     nomor_tugas: zIntNullable.optional(),
     uraian_tugas: z.string().optional(),
@@ -48,9 +42,12 @@ const PatchSchema = z.object({
     jumlah_hasil: zIntNullable.optional(),
     waktu_penyelesaian_jam: zIntNullable.optional(),
     waktu_efektif: zIntNullable.optional(),
-    // kebutuhan_pegawai dari user diabaikan → jangan dipakai
-    kebutuhan_pegawai: zNumNullable.optional(),
-    tahapan: z.array(z.string()).optional(), // replace-all tahapan jika dikirim
+    kebutuhan_pegawai: zNumNullable.optional(), // diabaikan
+
+    detail_uraian_tugas: z.array(TahapanDetailSchema).optional(), // replace-all nested
+
+    // kompat lama
+    tahapan: z.array(z.string()).optional(),
 });
 
 export async function PATCH(
@@ -65,13 +62,12 @@ export async function PATCH(
             return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
-        const {id, id_tugas} = await ctx.params; // UUID, INT
+        const {id, id_tugas} = await ctx.params;
         if (!isUuid(id) || !isIntId(id_tugas)) {
             return NextResponse.json({error: "Invalid, id harus UUID, id_tugas harus angka"}, {status: 400});
         }
         const tugasId = Number(id_tugas);
 
-        // ✅ pastikan jabatan ada
         if (!(await jabatanExists(id))) {
             return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
@@ -93,9 +89,9 @@ export async function PATCH(
         if (p.data.uraian_tugas !== undefined) push("uraian_tugas", p.data.uraian_tugas);
         if (p.data.hasil_kerja !== undefined) push("hasil_kerja", p.data.hasil_kerja);
         if (p.data.jumlah_hasil !== undefined) push("jumlah_hasil", p.data.jumlah_hasil);
-        if (p.data.waktu_penyelesaian_jam !== undefined) push("waktu_penyelesaian_jam", p.data.waktu_penyelesaian_jam);
+        if (p.data.waktu_penyelesaian_jam !== undefined)
+            push("waktu_penyelesaian_jam", p.data.waktu_penyelesaian_jam);
         if (p.data.waktu_efektif !== undefined) push("waktu_efektif", p.data.waktu_efektif);
-        // NOTE: kebutuhan_pegawai dari user diabaikan → tidak dipush
 
         await client.query("BEGIN");
         began = true;
@@ -104,9 +100,9 @@ export async function PATCH(
             values.push(id, tugasId);
             const q = `UPDATE tugas_pokok
                        SET ${fields.join(", ")},
-                           updated_at=NOW()
+                           updated_at = NOW()
                        WHERE jabatan_id = $${fields.length + 1}::uuid
-                   AND id = $${fields.length + 2}::int`;
+                   AND id = $${fields.length + 2}:: int`;
             const up = await client.query(q, values);
             if (!up.rowCount) {
                 await client.query("ROLLBACK");
@@ -115,41 +111,68 @@ export async function PATCH(
             }
         }
 
-        if (p.data.tahapan) {
-            await client.query(`DELETE
-                                FROM tahapan_uraian_tugas
-                                WHERE tugas_id = $1::int`, [tugasId]);
-            for (const t of p.data.tahapan) {
-                await client.query(
-                    `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, created_at, updated_at)
-                     VALUES ($1::int, $2::uuid, $3, NOW(), NOW())`,
-                    [tugasId, id, t]
+        // Replace-all nested jika dikirim (atau kompat lama via tahapan[])
+        let nestedPatch = p.data.detail_uraian_tugas;
+        if ((!nestedPatch || !nestedPatch.length) && Array.isArray(p.data.tahapan)) {
+            nestedPatch = p.data.tahapan.map((t, i) => ({
+                nomor_tahapan: i + 1,
+                tahapan: t,
+                detail_tahapan: [],
+            }));
+        }
+
+        if (nestedPatch) {
+            await client.query(
+                `DELETE
+                 FROM tahapan_uraian_tugas
+                 WHERE tugas_id = $1::int`,
+                [tugasId]
+            );
+
+            for (let i = 0; i < nestedPatch.length; i++) {
+                const td = nestedPatch[i];
+                const nomorTah = td.nomor_tahapan ?? i + 1;
+
+                const insTah = await client.query(
+                    `INSERT INTO tahapan_uraian_tugas (tugas_id, jabatan_id, tahapan, nomor_tahapan, created_at, updated_at)
+                     VALUES ($1::int, $2::uuid, $3, $4, NOW(), NOW()) RETURNING id`,
+                    [tugasId, id, td.tahapan ?? "", nomorTah]
                 );
+                const tahapanId = Number(insTah.rows[0].id);
+
+                if (Array.isArray(td.detail_tahapan) && td.detail_tahapan.length) {
+                    for (const det of td.detail_tahapan) {
+                        await client.query(
+                            `INSERT INTO detail_tahapan_uraian_tugas (tahapan_id, jabatan_id, detail, created_at, updated_at)
+                             VALUES ($1::int, $2::uuid, $3, NOW(), NOW())`,
+                            [tahapanId, id, det]
+                        );
+                    }
+                }
             }
         }
 
-        // ✅ Recompute kebutuhan_pegawai raw (tanpa pembulatan) untuk baris ini
+        // Recompute kebutuhan_pegawai raw untuk baris ini
         await client.query(
             `UPDATE tugas_pokok
-             SET kebutuhan_pegawai = CASE
-                                         WHEN COALESCE(waktu_efektif,0) > 0
-                                             THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric)
-                                             / waktu_efektif::numeric
-                                       ELSE NULL
+             SET kebutuhan_pegawai =
+                     CASE WHEN COALESCE(waktu_efektif, 0) > 0
+                              THEN (COALESCE(jumlah_hasil, 0)::numeric * COALESCE(waktu_penyelesaian_jam, 0)::numeric) / waktu_efektif::numeric
+          ELSE NULL
             END,
-                 updated_at = NOW()
-             WHERE jabatan_id = $1::uuid AND id = $2::int`,
+     updated_at = NOW()
+   WHERE jabatan_id = $1::uuid AND id = $2::int`,
             [id, tugasId]
         );
 
-        // ✅ Update kebutuhan_pegawai di struktur_organisasi (dibulatkan ke atas)
+        // Update agregat struktur_organisasi
         await client.query(
             `UPDATE struktur_organisasi so
              SET kebutuhan_pegawai = COALESCE(
-                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
+                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric, 0))
                       FROM tugas_pokok tp
-                      WHERE tp.jabatan_id = $1::uuid), 0),
-                 updated_at = NOW()
+                      WHERE tp.jabatan_id = $1 ::uuid), 0),
+                 updated_at        = NOW()
              WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
             [id]
         );
@@ -157,7 +180,7 @@ export async function PATCH(
         await client.query("COMMIT");
         began = false;
 
-        // Reload satu baris pakai JOIN + json_agg
+        // Reload satu baris
         const {rows} = await pool.query(
             `
                 SELECT t.id,
@@ -170,16 +193,28 @@ export async function PATCH(
                        t.waktu_efektif,
                        t.kebutuhan_pegawai,
                        COALESCE(
-                               json_agg(u.tahapan ORDER BY u.created_at, u.id)
-                               FILTER(WHERE u.tugas_id IS NOT NULL),
+                               (SELECT json_agg(j.x ORDER BY j._ord_nomor NULLS LAST, j._created_at, j._id)
+                                FROM (SELECT u.id                         AS _id,
+                                             u.created_at                 AS _created_at,
+                                             COALESCE(u.nomor_tahapan, 0) AS _ord_nomor,
+                                             json_build_object(
+                                                     'nomor_tahapan', u.nomor_tahapan,
+                                                     'tahapan', u.tahapan,
+                                                     'detail_tahapan',
+                                                     COALESCE(
+                                                             (SELECT json_agg(d.detail ORDER BY d.created_at, d.id)
+                                                              FROM detail_tahapan_uraian_tugas d
+                                                              WHERE d.tahapan_id = u.id),
+                                                             '[]'
+                                                     )
+                                             )                            AS x
+                                      FROM tahapan_uraian_tugas u
+                                      WHERE u.tugas_id = t.id
+                                      ORDER BY u.nomor_tahapan NULLS LAST, u.created_at, u.id) j),
                                '[]'
-                       ) AS tahapan
+                       ) AS detail_uraian_tugas
                 FROM tugas_pokok t
-                         LEFT JOIN tahapan_uraian_tugas u ON u.tugas_id = t.id
-                WHERE t.jabatan_id = $1::uuid AND t.id = $2::int
-                GROUP BY
-                    t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas, t.hasil_kerja,
-                    t.jumlah_hasil, t.waktu_penyelesaian_jam, t.waktu_efektif, t.kebutuhan_pegawai
+                WHERE t.jabatan_id = $1::uuid AND t.id = $2:: int
             `,
             [id, tugasId]
         );
@@ -187,7 +222,21 @@ export async function PATCH(
             return NextResponse.json({error: "Not Found, (Tugas Pokok tidak ditemukan)"}, {status: 404});
         }
 
-        return NextResponse.json({ok: true, data: normalizeRow(rows[0])});
+        const row = rows[0];
+        const data = {
+            id: Number(row.id),
+            jabatan_id: row.jabatan_id,
+            nomor_tugas: toNum(row.nomor_tugas),
+            uraian_tugas: row.uraian_tugas ?? "",
+            hasil_kerja: Array.isArray(row.hasil_kerja) ? row.hasil_kerja : [],
+            jumlah_hasil: toNum(row.jumlah_hasil),
+            waktu_penyelesaian_jam: toNum(row.waktu_penyelesaian_jam),
+            waktu_efektif: toNum(row.waktu_efektif),
+            kebutuhan_pegawai: row.kebutuhan_pegawai == null ? null : Number(row.kebutuhan_pegawai),
+            detail_uraian_tugas: Array.isArray(row.detail_uraian_tugas) ? row.detail_uraian_tugas : [],
+        };
+
+        return NextResponse.json({ok: true, data});
     } catch (e: any) {
         if (began) {
             try {
@@ -201,10 +250,16 @@ export async function PATCH(
         if (e?.code === "23503") {
             return NextResponse.json({error: "jabatan_id / tugas_id tidak ditemukan"}, {status: 400});
         }
+        if (e?.code === "23505") {
+            return NextResponse.json({error: "Duplikasi nomor_tahapan pada satu tugas"}, {status: 400});
+        }
         console.error("[tugas-pokok][PATCH]", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     } finally {
-        client.release();
+        try {
+            (client as any).release?.();
+        } catch {
+        }
     }
 }
 
@@ -218,13 +273,12 @@ export async function DELETE(
             return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
-        const {id, id_tugas} = await ctx.params; // UUID, INT
+        const {id, id_tugas} = await ctx.params;
         if (!isUuid(id) || !isIntId(id_tugas)) {
             return NextResponse.json({error: "Invalid, id harus UUID, id_tugas harus angka"}, {status: 400});
         }
         const tugasId = Number(id_tugas);
 
-        // ✅ pastikan jabatan ada
         if (!(await jabatanExists(id))) {
             return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
@@ -232,24 +286,20 @@ export async function DELETE(
         const del = await pool.query(
             `DELETE
              FROM tugas_pokok
-             WHERE jabatan_id = $1::uuid AND id = $2::int`,
+             WHERE jabatan_id = $1::uuid AND id = $2:: int`,
             [id, tugasId]
         );
-
         if (!del.rowCount) {
             return NextResponse.json({error: "Not Found, (Tugas Pokok tidak ditemukan)"}, {status: 404});
         }
 
-        // tahapan_uraian_tugas.tugas_id ON DELETE CASCADE → tahapan ikut terhapus
-
-        // ✅ Setelah delete, update agregat struktur_organisasi (CEIL SUM)
         await pool.query(
             `UPDATE struktur_organisasi so
              SET kebutuhan_pegawai = COALESCE(
-                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
+                     (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric, 0))
                       FROM tugas_pokok tp
-                      WHERE tp.jabatan_id = $1::uuid), 0),
-                 updated_at = NOW()
+                      WHERE tp.jabatan_id = $1 ::uuid), 0),
+                 updated_at        = NOW()
              WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
             [id]
         );

@@ -135,13 +135,12 @@ def extract_block(start_marker, end_marker, lines):
 
 def extract_kualifikasi(doc):
     """
-    Baca tabel KUALIFIKASI JABATAN (3 kolom, 6 baris):
-    - Kolom 1 (baris 1): 'Pendidikan Formal' -> ambil kolom 3 baris 1 -> array
-    - Kolom 1 (baris 3): 'Diklat Penjenjangan' -> kolom 3 baris 3 -> array
-    - Kolom 1 (baris 4): 'Diklat Teknis' -> kolom 3 baris 4 -> array
-    - Kolom 1 (baris 5): 'Diklat Fungsional' -> kolom 3 baris 5 -> array
-    - Kolom 1 (baris 6): 'Pengalaman Kerja' -> kolom 3 baris 6 -> array
-    (Baris 2 biasanya 'Pendidikan dan Pelatihan' → dilewati)
+    Baca tabel KUALIFIKASI JABATAN (3 kolom, 6+ baris) dengan dukungan alias label:
+    - 'Pendidikan Formal'         -> pendidikan_formal
+    - 'Diklat Penjenjangan' OR 'Manajerial' (juga 'Penjenjangan', 'Diklat Manajerial', ...) -> diklat_penjenjangan
+    - 'Diklat Teknis' OR 'Teknis' -> diklat_teknis
+    - 'Diklat Fungsional' OR 'Fungsional' -> diklat_fungsional
+    - 'Pengalaman Kerja'          -> pengalaman_kerja
     """
     result = {
         "pendidikan_formal": [],
@@ -163,7 +162,6 @@ def extract_kualifikasi(doc):
 
     def cell_to_list(cell):
         items = []
-        # ambil per paragraf agar butir jadi list
         for p in cell.paragraphs:
             t = tidy(p.text)
             if not t or t in {"-", "–", "—", ":"}:
@@ -171,27 +169,39 @@ def extract_kualifikasi(doc):
             items.append(t)
         if items:
             return items
-        # fallback: split newline
         txt = tidy(cell.text)
         return [x for x in (ln.strip() for ln in txt.splitlines()) if x]
 
-    # cari tabel kandidat: punya ≥ 6 baris, tiap baris punya ≥ 3 kolom,
-    # dan kolom-1 mengandung beberapa label yang kita kenal
-    LABELS = (
+    # ===== Alias sets (lowercase) =====
+    PENJENJANGAN_ALIASES = (
+        "diklat penjenjangan", "penjenjangan", "manajerial", "diklat manajerial",
+        "pelatihan manajerial"
+    )
+    TEKNIS_ALIASES = (
+        "diklat teknis", "teknis", "pelatihan teknis"
+    )
+    FUNGSIONAL_ALIASES = (
+        "diklat fungsional", "fungsional", "pelatihan fungsional"
+    )
+
+    # Untuk scoring kandidat tabel, gabungkan semua label yang kita kenal
+    LABELS_FOR_SCORE = (
         "pendidikan formal",
-        "diklat penjenjangan",
-        "diklat teknis",
-        "diklat fungsional",
+        *PENJENJANGAN_ALIASES,
+        *TEKNIS_ALIASES,
+        *FUNGSIONAL_ALIASES,
         "pengalaman kerja",
     )
 
     def table_score(tbl):
-        if len(tbl.rows) < 6:
+        if len(tbl.rows) < 3:  # longgar: kadang >6, kadang <6
             return -1
-        if any(len(r.cells) < 3 for r in tbl.rows[:6]):
+        # butuh >=3 kolom di beberapa baris awal
+        probe = min(6, len(tbl.rows))
+        if any(len(r.cells) < 3 for r in tbl.rows[:probe]):
             return -1
-        labels = [tidy(r.cells[0].text).lower() for r in tbl.rows[:6]]
-        return sum(any(lab in x for lab in LABELS) for x in labels)
+        labels = [tidy(r.cells[0].text).lower() for r in tbl.rows[:probe]]
+        return sum(any(lab in x for lab in LABELS_FOR_SCORE) for x in labels)
 
     candidate = None
     best = -1
@@ -201,36 +211,40 @@ def extract_kualifikasi(doc):
             best = sc
             candidate = t
 
-    if not candidate or best < 3:
-        # Tidak ketemu tabel yang cocok → kembalikan kosong (struktur sama)
+    if not candidate or best < 2:
         return result
 
+    # ===== Helper matcher =====
+    def match_any(label_low: str, aliases: tuple[str, ...]) -> bool:
+        return any(a in label_low for a in aliases)
+
     # mapping per baris berdasarkan isi kolom-1
-    for idx, row in enumerate(candidate.rows, start=1):
-        c1 = tidy(row.cells[0].text).lower()
+    for row in candidate.rows:
         if len(row.cells) < 3:
             continue
-        val_items = cell_to_list(row.cells[2])
+        c1_low = tidy(row.cells[0].text).lower()
+        # Skip baris header "Pendidikan dan Pelatihan"
+        if "pendidikan dan pelatihan" in c1_low:
+            continue
 
+        val_items = cell_to_list(row.cells[2])
         if not val_items:
             continue
 
-        if "pendidikan formal" in c1:
+        if "pendidikan formal" in c1_low:
             result["pendidikan_formal"] = val_items
 
-        elif "diklat penjenjangan" in c1:
+        elif match_any(c1_low, PENJENJANGAN_ALIASES):
             result["pendidikan_dan_pelatihan"]["diklat_penjenjangan"] = val_items
 
-        elif "diklat teknis" in c1:
+        elif match_any(c1_low, TEKNIS_ALIASES):
             result["pendidikan_dan_pelatihan"]["diklat_teknis"] = val_items
 
-        elif "diklat fungsional" in c1:
+        elif match_any(c1_low, FUNGSIONAL_ALIASES):
             result["pendidikan_dan_pelatihan"]["diklat_fungsional"] = val_items
 
-        elif "pengalaman kerja" in c1:
+        elif "pengalaman kerja" in c1_low:
             result["pengalaman_kerja"] = val_items
-
-        # baris 2 ('Pendidikan dan Pelatihan') → skip otomatis
 
     return result
 
@@ -272,49 +286,284 @@ def extract_deskripsi_dan_tahapan_cell(cell):
 # ---------- Bagian tabel: gunakan table_header_cells() untuk map kolom ----------
 
 def extract_tugas_pokok(doc):
+    """
+    Ekstrak tabel TUGAS POKOK menjadi list item:
+    - deskripsi (teks uraian)
+    - detail_uraian_tugas (tahapan + detail)
+    - hasil_kerja (bullet/daftar)
+    - jumlah_hasil, waktu_penyelesaian_(jam), waktu_efektif, kebutuhan_pegawai (string kosong default)
+    Catatan:
+    - Mengabaikan baris total/rekap: "JUMLAH", "JUMLAH PEGAWAI", "PEMBULATAN".
+    - Tidak mengabaikan baris biasa hanya karena mengandung kata 'jumlah' di tengah kalimat.
+    """
+    import re
+    from docx.oxml.ns import qn
+
+    # ---------- util dasar ----------
+    def tidy(s: str) -> str:
+        # buang kontrol & whitespace berlebih
+        return re.sub(r'[\u0007\r\t\x0b\x0c]', '', (s or '')).strip()
+
+    # pola penomoran
+    NUMERIC_TOP_RE = re.compile(r'^\s*\d{1,3}[\.\)]\s+')
+    LETTER_SUB_RE  = re.compile(r'^\s*[a-zA-Z][\.\)]\s+')
+
+    # ---------- akses numbering Word ----------
+    def get_numpr(p):
+        try:
+            pPr = p._p.pPr
+            if pPr is None:
+                return None, None
+            numPr = pPr.find(qn('w:numPr'))
+            if numPr is None:
+                return None, None
+            numId_elm = numPr.find(qn('w:numId'))
+            ilvl_elm  = numPr.find(qn('w:ilvl'))
+            numId = int(numId_elm.val) if (numId_elm is not None and numId_elm.val is not None) else None
+            ilvl  = int(ilvl_elm.val)  if (ilvl_elm  is not None and ilvl_elm.val  is not None) else 0
+            return numId, ilvl
+        except Exception:
+            return None, None
+
+    def get_numfmt(doc, numId, ilvl):
+        try:
+            numbering = doc.part.numbering_part.element
+            for num in numbering.findall(qn('w:num')):
+                if str(num.get(qn('w:numId'))) == str(numId):
+                    absId_elm = num.find(qn('w:abstractNumId'))
+                    if absId_elm is None:
+                        break
+                    absId = absId_elm.get(qn('w:val'))
+                    for absnum in numbering.findall(qn('w:abstractNum')):
+                        if str(absnum.get(qn('w:abstractNumId'))) == str(absId):
+                            # cari level tepat
+                            for lvl in absnum.findall(qn('w:lvl')):
+                                if str(lvl.get(qn('w:ilvl'))) == str(ilvl):
+                                    nf = lvl.find(qn('w:numFmt'))
+                                    if nf is not None and nf.get(qn('w:val')):
+                                        return nf.get(qn('w:val')).lower()
+                            # fallback lvl=0
+                            for lvl in absnum.findall(qn('w:lvl')):
+                                if str(lvl.get(qn('w:ilvl'))) == "0":
+                                    nf = lvl.find(qn('w:numFmt'))
+                                    if nf is not None and nf.get(qn('w:val')):
+                                        return nf.get(qn('w:val')).lower()
+                    break
+        except Exception:
+            pass
+        return None
+
+    def indent_twips(p):
+        try:
+            pf = p.paragraph_format
+            left  = pf.left_indent.twips if pf.left_indent else 0
+            first = pf.first_line_indent.twips if pf.first_line_indent else 0
+            hang  = -first if (first is not None and first < 0) else 0
+            return int(left + hang)
+        except Exception:
+            return 0
+
+    SUB_DELTA = 120  # twips
+
+    # ---------- klasifikasi baris uraian ----------
+    def classify_line(doc, p, base_indent):
+        """
+        return "top" (tahapan) atau "sub" (detail_tahapan).
+        PRIORITAS:
+        1) Regex teks (angka = top, huruf = sub)
+        2) numFmt (decimal-family = top; letter-family = sub)
+        3) ilvl
+        4) delta indent
+        """
+        txt = tidy(p.text)
+        if not txt:
+            return None, ""
+
+        # (1) Regex teks
+        if NUMERIC_TOP_RE.match(txt):
+            return "top", txt
+        if LETTER_SUB_RE.match(txt):
+            return "sub", txt
+
+        # (2) numFmt Word
+        numId, ilvl = get_numpr(p)
+        numfmt = get_numfmt(doc, numId, ilvl) if numId is not None else None
+        if numfmt:
+            # anggap semua decimal/roman angka sbg top
+            if numfmt in {"decimal", "decimalzero", "arabic", "lowerroman", "upperroman"}:
+                return "top", txt
+            if numfmt in {"lowerletter", "loweralpha", "alphalower", "upperletter", "upperalpha", "alphaupper"}:
+                return "sub", txt
+
+        # (3) ilvl
+        if ilvl is not None:
+            if ilvl == 0:
+                ind = indent_twips(p)
+                if base_indent is not None and (ind - base_indent) >= SUB_DELTA:
+                    return "sub", txt
+                return "top", txt
+            else:
+                return "sub", txt
+
+        # (4) Fallback indent
+        ind = indent_twips(p)
+        if base_indent is not None and (ind - base_indent) >= SUB_DELTA:
+            return "sub", txt
+        return "top", txt
+
+    # ---------- parsing uraian -> deskripsi & nested ----------
+    def parse_uraian_cell_to_struct(cell):
+        deskripsi_parts = []
+        detail_uraian   = []
+        in_tahapan      = False
+        current         = None
+        base_indent     = None
+        seen_any_line   = False
+
+        for p in cell.paragraphs:
+            raw = tidy(p.text)
+            if not raw:
+                continue
+
+            low = raw.lower().strip().strip(':')
+            if not in_tahapan and 'tahapan' in low:
+                in_tahapan = True
+                continue
+
+            if not in_tahapan:
+                deskripsi_parts.append(raw)
+                continue
+
+            kind, text = classify_line(doc, p, base_indent)
+            if not kind:
+                continue
+
+            # Promosikan baris pertama bila terklasifikasi "sub"
+            if not seen_any_line and kind == "sub":
+                kind = "top"
+            seen_any_line = True
+
+            if kind == "top":
+                if current:
+                    detail_uraian.append(current)
+                current = {"tahapan": text, "detail_tahapan": []}
+                if base_indent is None:
+                    base_indent = indent_twips(p)
+            else:
+                if current is None:
+                    current = {"tahapan": "", "detail_tahapan": []}
+                current["detail_tahapan"].append(text)
+
+        if current:
+            detail_uraian.append(current)
+
+        return " ".join(deskripsi_parts).strip(), detail_uraian
+
+    # ---------- hasil kerja (pakai helper Anda yang sudah ada) ----------
+    def extract_bulleted_items(cell):
+        raw = extract_bullet_marked_text_cell(cell)  # helper existing
+        return split_items(raw)  # helper existing
+
+    # ---------- deteksi baris total/rekap yang harus di-skip ----------
+    TOTAL_KEYS = {
+        "jumlah", "jumlah pegawai", "jumlah pegawai yang dibutuhkan",
+        "pembulatan"
+    }
+
+    def is_placeholder(s: str) -> bool:
+        """Cek isian kosong/placeholder seperti titik2, dash, null, dsb."""
+        low = s.lower().strip()
+        return (
+            low in {"", "-", "–", "—", "null"} or
+            low.strip(".") == "" or
+            all(ch == '.' for ch in low if ch != ' ')
+        )
+
+    def row_is_total_or_footer(cells):
+        """
+        True bila baris adalah 'JUMLAH', 'JUMLAH PEGAWAI', 'PEMBULATAN', dsb.
+        Pengecekan dari seluruh sel, cukup 1 sel mengandung label kunci.
+        """
+        texts = [tidy(c.text) for c in cells]
+        joined = " ".join(texts).lower()
+        # cepat: kalau ada kata kunci utama, langsung anggap footer
+        for k in TOTAL_KEYS:
+            # cocokkan yang berdiri sendiri / di awal baris
+            if re.search(rf'\b{k}\b', joined):
+                # kecuali jika jelas bagian dari kalimat panjang (jarang terjadi untuk baris footer)
+                # di case real, baris footer biasanya 1-2 kata saja.
+                # Tambahan: jika hampir semua kolom lain placeholder, makin yakin footer
+                non_ph = sum(0 if is_placeholder(t) else 1 for t in texts)
+                if non_ph <= 2:
+                    return True
+        # Baris yang seluruh kolom placeholder & tanpa uraian berarti baris kosong → skip juga
+        if all(is_placeholder(t) for t in texts):
+            return True
+        return False
+
+    # ---------- proses utama ----------
     tugas_list = []
+
     for table in doc.tables:
-        headers = table_header_cells(table)
+        headers = table_header_cells(table)  # helper existing -> list lowercase header names
         if not headers:
             continue
         if ("uraian tugas" in headers) and ("hasil kerja" in headers):
             uraian_idx = headers.index("uraian tugas")
-            hasil_idx = headers.index("hasil kerja")
+            hasil_idx  = headers.index("hasil kerja")
 
+            # iterasi baris isi
             for r in table.rows[1:]:
                 cells = r.cells
                 if len(cells) <= max(uraian_idx, hasil_idx):
                     continue
 
-                deskripsi, tahapan = extract_deskripsi_dan_tahapan_cell(cells[uraian_idx])
-                hasil_raw = extract_bullet_marked_text_cell(cells[hasil_idx])
-                hasil_items = split_items(hasil_raw)
-
-                # Filter baris invalid
-                if deskripsi.strip(". -").strip().lower() in ["", "...........", "..........", "-", "–"]:
-                    continue
-                if hasil_raw.strip(". -").strip().lower() in ["", "...........", "..........", "-", "–"]:
+                # Skip baris total/rekap/footer
+                if row_is_total_or_footer(cells):
                     continue
 
-                no = str(len(tugas_list) + 1)
-                no_text = no.strip().lower()
-                uraian_text = deskripsi.strip().lower()
-                if ("jumlah" in no_text or "jumlah pegawai" in no_text
-                    or "jumlah" in uraian_text or "jumlah pegawai" in uraian_text):
+                deskripsi, detail_uraian = parse_uraian_cell_to_struct(cells[uraian_idx])
+                hasil_items = extract_bulleted_items(cells[hasil_idx])
+
+                # Normalisasi & filter baris kosong
+                norm_desc = tidy(deskripsi).strip(". -").strip()
+                low_desc  = norm_desc.lower()
+
+                # --- Skip hanya jika "JUMLAH" dsb sebagai label standalone,
+                #     BUKAN jika kata 'jumlah' muncul sebagai bagian kalimat biasa.
+                if low_desc in TOTAL_KEYS or re.fullmatch(r'jumlah\.?', low_desc):
                     continue
+
+                # buang baris yang benar-benar kosong
+                if low_desc in {"", "...........", ".........."}:
+                    continue
+                if not hasil_items:
+                    raw_h = tidy(extract_bullet_marked_text_cell(cells[hasil_idx])).strip(". -").strip().lower()
+                    if raw_h in {"", "...........", "..........", "-", "–", "—"}:
+                        # seluruh kolom kanan kosong → kemungkinan bukan baris tugas
+                        continue
 
                 tugas_list.append({
-                    "no": no,
+                    "no": str(len(tugas_list) + 1),
                     "uraian_tugas": {
-                        "deskripsi": deskripsi,
-                        "tahapan": tahapan
-                    },
-                    "hasil_kerja": hasil_items,
-                    "jumlah_hasil": "",
-                    "waktu_penyelesaian_(jam)": "",
-                    "waktu_efektif": "",
-                    "kebutuhan_pegawai": ""
+                        "deskripsi": norm_desc,
+                        "detail_uraian_tugas": detail_uraian,
+                        "hasil_kerja": hasil_items,
+                        "jumlah_hasil": "",
+                        "waktu_penyelesaian_(jam)": "",
+                        "waktu_efektif": "",
+                        "kebutuhan_pegawai": ""
+                    }
                 })
+
+            # ---- tambahan safety: bila masih ada footer nyasar di ekor, drop trailing ----
+            while tugas_list:
+                tail = tugas_list[-1]["uraian_tugas"]["deskripsi"].strip().lower()
+                if (tail in TOTAL_KEYS) or re.fullmatch(r'jumlah\.?', tail):
+                    tugas_list.pop()
+                else:
+                    break
+
     return tugas_list
 
 def extract_hasil_kerja(doc):

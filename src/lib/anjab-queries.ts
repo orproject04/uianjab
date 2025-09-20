@@ -12,6 +12,9 @@ export type AnjabRow = {
     slug: string | null;
     updated_at: string;
 
+    // NEW
+    jenis_jabatan: string | null;
+
     jpt_utama: string | null;
     jpt_madya: string | null;
     jpt_pratama: string | null;
@@ -51,7 +54,8 @@ export type AnjabRow = {
         fungsi_pekerja?: string[];
     }
         | Record<string, never>;
-    tugas_pokok: Array<{
+    tugas_pokok:
+        | Array<{
         id_tugas: string; // UUID
         nomor_tugas: number | null;
         uraian_tugas: string[] | string | null;
@@ -60,8 +64,16 @@ export type AnjabRow = {
         waktu_penyelesaian_jam: number | null;
         waktu_efektif: number | null;
         kebutuhan_pegawai: string | number | null;
-        tahapan: Array<{ id_tahapan: string; tahapan: string }> | [];
-    }> | [];
+        detail_uraian_tugas:
+            | Array<{
+            id_tahapan: string;
+            nomor_tahapan: number | null;
+            tahapan: string;
+            detail_tahapan: string[];
+        }>
+            | [];
+    }>
+        | [];
 };
 
 const UUID_RE =
@@ -76,6 +88,9 @@ const SELECT_ANJAB = (whereClause: string) => `
            j.prestasi_diharapkan,
            j.slug,
            j.updated_at,
+
+           -- NEW
+           so.jenis_jabatan                             AS jenis_jabatan,
 
            u.jpt_utama,
            u.jpt_madya,
@@ -103,6 +118,7 @@ const SELECT_ANJAB = (whereClause: string) => `
            COALESCE(tp.tugas_pokok, '[]')               AS tugas_pokok
 
     FROM jabatan j
+             LEFT JOIN struktur_organisasi so ON so.id = j.struktur_id
              LEFT JOIN unit_kerja u ON u.jabatan_id = j.id
              LEFT JOIN kualifikasi_jabatan k ON k.jabatan_id = j.id
 
@@ -223,7 +239,7 @@ const SELECT_ANJAB = (whereClause: string) => `
         WHERE s.jabatan_id = j.id
             ) sj ON TRUE
 
-        -- tugas_pokok + tahapan
+        -- tugas_pokok + detail_uraian_tugas (tahapan + detail)
              LEFT JOIN LATERAL (
         SELECT COALESCE(
                        JSON_AGG(
@@ -236,17 +252,26 @@ const SELECT_ANJAB = (whereClause: string) => `
                                        'waktu_penyelesaian_jam', tp.waktu_penyelesaian_jam,
                                        'waktu_efektif', tp.waktu_efektif,
                                        'kebutuhan_pegawai', tp.kebutuhan_pegawai,
-                                       'tahapan',
+                                       'detail_uraian_tugas',
                                        (SELECT COALESCE(
                                                        JSON_AGG(
-                                                               JSON_BUILD_OBJECT('id_tahapan', tut.id, 'tahapan',
-                                                                                 tut.tahapan) ORDER BY tut.id
+                                                               JSON_BUILD_OBJECT(
+                                                                       'id_tahapan', tut.id,
+                                                                       'nomor_tahapan', tut.nomor_tahapan,
+                                                                       'tahapan', tut.tahapan,
+                                                                       'detail_tahapan',
+                                                                       COALESCE(
+                                                                               (SELECT ARRAY_AGG(d.detail ORDER BY d.id)
+                                                                                FROM detail_tahapan_uraian_tugas d
+                                                                                WHERE d.tahapan_id = tut.id), '{}')
+                                                               ) ORDER BY COALESCE(tut.nomor_tahapan, 2147483647),
+                                                               tut.id
                                                        ),
                                                        '[]'
                                                )
                                         FROM tahapan_uraian_tugas tut
                                         WHERE tut.tugas_id = tp.id)
-                               ) ORDER BY tp.nomor_tugas NULLS LAST, tp.id
+                               ) ORDER BY COALESCE (tp.nomor_tugas, 2147483647), tp.id
                        ),
                        '[]'
                ) AS tugas_pokok
@@ -268,7 +293,6 @@ export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | n
         const byStruktur = await pool.query<AnjabRow>(SELECT_ANJAB("j.struktur_id = $1::uuid"), [idOrSlug]);
         return byStruktur.rows[0] ?? null;
     }
-
 
     // Selain itu → anggap slug
     const q = SELECT_ANJAB("j.slug = $1");

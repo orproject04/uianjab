@@ -236,6 +236,7 @@ CREATE TABLE IF NOT EXISTS tahapan_uraian_tugas (
   id            SERIAL PRIMARY KEY,
   tugas_id      INT REFERENCES tugas_pokok(id) ON DELETE CASCADE,
   jabatan_id    uuid REFERENCES jabatan(id) ON DELETE CASCADE,
+  nomor_tahapan int,
   tahapan       text,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
@@ -249,6 +250,21 @@ DROP TRIGGER IF EXISTS trg_touch_parent_tahapan ON tahapan_uraian_tugas;
 CREATE TRIGGER trg_touch_parent_tahapan
 AFTER INSERT OR UPDATE OR DELETE ON tahapan_uraian_tugas
 FOR EACH ROW EXECUTE FUNCTION touch_parent_jabatan_from_tahapan();
+
+-- Tabel detail (bila belum dibuat)
+CREATE TABLE IF NOT EXISTS detail_tahapan_uraian_tugas (
+  id            SERIAL PRIMARY KEY,
+  tahapan_id    INT REFERENCES tahapan_uraian_tugas(id) ON DELETE CASCADE,
+  jabatan_id    uuid REFERENCES jabatan(id) ON DELETE CASCADE,
+  detail        text NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS detail_tahapan_uraian_tugas_touch ON detail_tahapan_uraian_tugas;
+CREATE TRIGGER detail_tahapan_uraian_tugas_touch
+BEFORE UPDATE ON detail_tahapan_uraian_tugas
+FOR EACH ROW EXECUTE FUNCTION trg_touch_updated_at();
 
 CREATE TABLE IF NOT EXISTS hasil_kerja (
   id            SERIAL PRIMARY KEY,
@@ -443,3 +459,4 @@ CREATE INDEX IF NOT EXISTS idx_risiko_bahaya_jabatan    ON risiko_bahaya (jabata
 CREATE INDEX IF NOT EXISTS idx_syarat_jabatan_jabatan   ON syarat_jabatan (jabatan_id);
 CREATE INDEX IF NOT EXISTS idx_tugas_pokok_jabatan      ON tugas_pokok (jabatan_id);
 CREATE INDEX IF NOT EXISTS idx_tahapan_tugas            ON tahapan_uraian_tugas (tugas_id);
+CREATE INDEX IF NOT EXISTS idx_detail_tahapan           ON detail_tahapan_uraian_tugas (tahapan_id);
