@@ -20,8 +20,8 @@ type APIRow = {
     kebutuhan_pegawai?: number | null;
     is_pusat?: boolean;
     jenis_jabatan: string | null;
-    kelas_jabatan?: string | null;         // text
-    nama_pejabat?: string | string[] | null; // optional text[]
+    kelas_jabatan?: string | null;
+    nama_pejabat?: string | string[] | null;
 };
 
 // ---- Node internal + ghost
@@ -61,7 +61,6 @@ function wrapText(s: string, maxChars = 38): string[] {
     return lines.length ? lines : [s];
 }
 
-// ranking eselon (lebih kecil = lebih tinggi)
 function rankJenis(j: string | null | undefined): number {
     const t = (j || "").trim().toUpperCase();
     switch (t) {
@@ -86,7 +85,7 @@ function rankJenis(j: string | null | undefined): number {
     }
 }
 
-// Khusus: HANYA turunkan "Inspektorat" yang adalah ANAK LANGSUNG SETJEN
+// Turunkan Inspektorat bila anak langsung SETJEN
 function extraDepthOverride(parentSlug: string, childSlug: string, childName: string): number {
     const isParentSetjen = (parentSlug || "").toLowerCase() === "setjen";
     const childIsInspektoratByName = /^inspektorat$/i.test(childName || "");
@@ -97,10 +96,10 @@ function extraDepthOverride(parentSlug: string, childSlug: string, childName: st
 const fmtNum = (n: number | null | undefined) => (n ?? 0).toString();
 
 type ScenarioSyntheticFlags = {
-    addKJFforEselonII: boolean;           // ESELON II → KJF
-    addSKDPforSetjen: boolean;            // SETJEN → SKDP
-    addKJFforEselonIII: boolean;          // ESELON III → KJF
-    kjfForInspekturAsE4: boolean;         // khusus: Inspektur/Inspektorat → KJF ESELON IV
+    addKJFforEselonII: boolean;
+    addSKDPforSetjen: boolean;
+    addKJFforEselonIII: boolean;
+    kjfForInspekturAsE4: boolean;
 };
 
 type ScenarioResult = {
@@ -109,27 +108,14 @@ type ScenarioResult = {
 };
 
 /**
- * Skenario filter:
- * 1) pusat=true,  fungsional=false (DEFAULT):
- *    - is_pusat=true & jenis ≠ JF (plus ancestors)
- *    - Synthetic: E2→KJF (E3, kecuali Inspektur/Inspektorat → E4), SETJEN→SKDP (E3)
- *
- * 2) pusat=true,  fungsional=true:
- *    - tampilkan semua SETJEN sampai ESELON II + semua JF pusat
- *    - Synthetic: OFF
- *
- * 3) pusat=false, fungsional=false:
- *    - hanya SETJEN + anak is_pusat=false & jenis ≠ JF (plus ancestors sampai SETJEN)
- *    - Synthetic: ON untuk ESELON III → KJF (ESELON IV)
- *
- * 4) pusat=false, fungsional=true:
- *    - hanya SETJEN + anak is_pusat=false dan (ESELON III atau JF)
- *    - Synthetic: OFF
+ * Skenario (tetap sama):
+ * 1) pusat=true,  fungsional=false (DEFAULT)
+ * 2) pusat=true,  fungsional=true
+ * 3) pusat=false, fungsional=false
+ * 4) pusat=false, fungsional=true
  */
 function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): ScenarioResult {
     const byId = new Map<string, APIRow>(all.map(r => [r.id, r]));
-
-    // cari node SETJEN (ambil yang pertama kalau ada duplikat)
     const setjenNode = all.find(r => (r.slug || "").toLowerCase() === "setjen") || null;
     const setjenId = setjenNode?.id ?? null;
 
@@ -146,7 +132,7 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
     };
 
     const isUnderSetjen = (id: string) => {
-        if (!setjenId) return true; // jika tak ketemu setjen, biarkan lolos
+        if (!setjenId) return true;
         let cur: string | null = id;
         while (cur) {
             if (cur === setjenId) return true;
@@ -158,34 +144,32 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
     const jenisEq = (r: APIRow, s: string) => ((r.jenis_jabatan || "").toUpperCase() === s.toUpperCase());
     const jenisRankLE = (r: APIRow, n: number) => rankJenis(r.jenis_jabatan) <= n;
 
-    // ==== SKENARIO 1 ====
+    // 1) Pusat + Struktural
     if (pusat && !fungsional) {
         for (const r of all) {
             if (r.is_pusat === true && !jenisEq(r, "JABATAN FUNGSIONAL")) add(r.id);
         }
         for (const id of Array.from(keep)) addWithAncestors(id);
-
         return {
             rows: all.filter(r => keep.has(r.id)),
             synthetic: {
                 addKJFforEselonII: true,
                 addSKDPforSetjen: true,
                 addKJFforEselonIII: false,
-                kjfForInspekturAsE4: true, // khusus
+                kjfForInspekturAsE4: true,
             },
         };
     }
 
-    // ==== SKENARIO 2 ====
+    // 2) Pusat + Fungsional
     if (pusat && fungsional) {
         for (const r of all) {
-            if (r.is_pusat === true && jenisRankLE(r, 2)) add(r.id); // sampai Eselon II
+            if (r.is_pusat === true && jenisRankLE(r, 2)) add(r.id);
         }
         for (const r of all) {
             if (r.is_pusat === true && jenisEq(r, "JABATAN FUNGSIONAL")) add(r.id);
         }
         for (const id of Array.from(keep)) addWithAncestors(id);
-
         return {
             rows: all.filter(r => keep.has(r.id)),
             synthetic: {
@@ -197,7 +181,7 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
         };
     }
 
-    // ==== SKENARIO 3 ====
+    // 3) Daerah + Struktural
     if (!pusat && !fungsional) {
         if (setjenId) add(setjenId);
         for (const r of all) {
@@ -206,7 +190,6 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
             }
         }
         for (const id of Array.from(keep)) addWithAncestors(id, setjenId);
-
         return {
             rows: all.filter(r => keep.has(r.id)),
             synthetic: {
@@ -218,7 +201,7 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
         };
     }
 
-    // ==== SKENARIO 4 ====
+    // 4) Daerah + Fungsional
     if (setjenId) add(setjenId);
     for (const r of all) {
         const isE3 = jenisEq(r, "ESELON III");
@@ -228,7 +211,6 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
         }
     }
     for (const id of Array.from(keep)) addWithAncestors(id, setjenId);
-
     return {
         rows: all.filter(r => keep.has(r.id)),
         synthetic: {
@@ -240,42 +222,39 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
     };
 }
 
-/* ===========================
-   Switch (saklar) sederhana
-   =========================== */
-function Switch({
-                    checked,
-                    onChange,
-                    label,
-                    id,
-                }: {
-    checked: boolean;
-    onChange: (next: boolean) => void;
-    label: string;
-    id?: string;
+/* ===== Segmented (tab kecil) ===== */
+function Segmented<T extends string>({
+                                         value, onChange, options, size = "md",
+                                     }: {
+    value: T;
+    onChange: (v: T) => void;
+    options: { label: string; value: T }[];
+    size?: "sm" | "md";
 }) {
+    const pad = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm";
     return (
-        <label htmlFor={id} className="flex items-center gap-2 select-none cursor-pointer">
-            <span className="text-sm text-gray-700">{label}</span>
-            <button
-                id={id}
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                onClick={() => onChange(!checked)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    checked ? "bg-purple-600" : "bg-gray-300"
-                }`}
-            >
-        <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                checked ? "translate-x-5" : "translate-x-1"
-            }`}
-        />
-            </button>
-        </label>
+        <div className="inline-flex rounded-lg border bg-white p-0.5">
+            {options.map((opt) => {
+                const active = value === opt.value;
+                return (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onChange(opt.value)}
+                        className={`${pad} rounded-md transition ${active ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                        aria-pressed={active}
+                    >
+                        {opt.label}
+                    </button>
+                );
+            })}
+        </div>
     );
 }
+
+// ====== ENUM pilihan filter (revisi) ======
+type ScopeOpt = "PUSAT" | "DAERAH";
+type FungsionalOpt = "STRUKTURAL" | "FUNGSIONAL";
 
 export default function StrukturOrganisasiClient() {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -285,13 +264,13 @@ export default function StrukturOrganisasiClient() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
-    // UI filters
-    const [filterPusat, setFilterPusat] = useState<boolean>(true);              // default: true
-    const [includeFungsional, setIncludeFungsional] = useState<boolean>(false); // default: false
+    // Filter UI (default: Pusat + Struktural)
+    const [scope, setScope] = useState<ScopeOpt>("PUSAT");
+    const [fungsionalMode, setFungsionalMode] = useState<FungsionalOpt>("STRUKTURAL");
     const [filterText, setFilterText] = useState("");
     const [isFullscreen, setIsFullscreen] = useState(false);
 
-    // collapse map (satu saja)
+    // collapse map
     const [collapseMap, setCollapseMap] = useState<Record<string, boolean>>({});
 
     const load = useCallback(async () => {
@@ -313,7 +292,6 @@ export default function StrukturOrganisasiClient() {
         load();
     }, [load]);
 
-    // ukuran container
     useEffect(() => {
         if (!containerRef.current) return;
         const ro = new ResizeObserver(([entry]) => {
@@ -323,7 +301,6 @@ export default function StrukturOrganisasiClient() {
         return () => ro.disconnect();
     }, []);
 
-    // fullscreen sync
     useEffect(() => {
         const onFs = () => {
             const fs = !!document.fullscreenElement;
@@ -350,22 +327,22 @@ export default function StrukturOrganisasiClient() {
         }
     };
 
-    // terapkan skenario pada allRows
-    const scenario = useMemo(
-        () => filterByScenario(allRows, filterPusat, includeFungsional),
-        [allRows, filterPusat, includeFungsional]
-    );
-    const rows: APIRow[] = scenario.rows;
+    // Map enum → skenario boolean
+    const scenario = useMemo(() => {
+        const pusat = scope === "PUSAT";
+        const fungsional = fungsionalMode === "FUNGSIONAL";
+        return filterByScenario(allRows, pusat, fungsional);
+    }, [allRows, scope, fungsionalMode]);
+
+    const rows = scenario.rows;
     const syntheticFlags = scenario.synthetic;
 
-    // reset collapse tiap kali view rows berubah
     useEffect(() => {
         const map: Record<string, boolean> = {};
         for (const r of rows) map[r.id] = true;
         setCollapseMap(map);
     }, [rows]);
 
-    // Build pohon + ghost + anak sintetis (conditional)
     const roots: D3Node[] = useMemo(() => {
         if (!rows.length) return [];
 
@@ -376,10 +353,9 @@ export default function StrukturOrganisasiClient() {
             byParent.set(r.parent_id, arr);
         }
         for (const [k, arr] of byParent.entries()) {
-            arr.sort(
-                (a, b) =>
-                    (a.order_index ?? 0) - (b.order_index ?? 0) ||
-                    a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
+            arr.sort((a, b) =>
+                (a.order_index ?? 0) - (b.order_index ?? 0) ||
+                a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
             );
             byParent.set(k, arr);
         }
@@ -419,20 +395,16 @@ export default function StrukturOrganisasiClient() {
                 children: [],
             };
 
-            // anak asli
             const rawKids = (byParent.get(n.id) || []).map(child => build(child, myPath));
 
-            // anak sintetis — bergantung skenario (flags)
-            const synthetic: D4Node[] | D3Node[] = [];
+            const synthetic: D3Node[] = [];
 
-            // (Skenario 1) ESELON II → KJF (default E3, khusus Inspektur/Inspektorat → E4)
+            // ESELON II → KJF (E3; Inspektur/Inspektorat → E4)
             if (syntheticFlags.addKJFforEselonII && (n.jenis_jabatan || "").toUpperCase() === "ESELON II") {
-                const parentName = n.nama_jabatan || "";
-                const parentSlug = n.slug || "";
                 const isInspektorat =
-                    /(inspektur|inspektorat)/i.test(parentName) || /(inspektur|inspektorat)/i.test(parentSlug);
+                    /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
+                    /(inspektur|inspektorat)/i.test(n.slug || "");
                 const kjfLevel = (syntheticFlags.kjfForInspekturAsE4 && isInspektorat) ? "ESELON IV" : "ESELON III";
-
                 synthetic.push({
                     _id: `synthetic-kjf:${n.id}`,
                     _slug: "kjf",
@@ -446,10 +418,10 @@ export default function StrukturOrganisasiClient() {
                     children: [],
                     _syntheticSimple: true,
                     _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
-                } as D3Node);
+                });
             }
 
-            // (Skenario 1) SETJEN → SKDP (E3)
+            // SETJEN → SKDP (E3)
             if (syntheticFlags.addSKDPforSetjen && (n.slug || "").toLowerCase() === "setjen") {
                 synthetic.push({
                     _id: `synthetic-skdp:${n.id}`,
@@ -464,10 +436,10 @@ export default function StrukturOrganisasiClient() {
                     children: [],
                     _syntheticSimple: true,
                     _syntheticLabel: "SEKRETARIAT KANTOR DPD RI DI IBU KOTA PROVINSI",
-                } as D3Node);
+                });
             }
 
-            // (Skenario 3) ESELON III → KJF (E4)
+            // ESELON III → KJF (E4) untuk skenario daerah-struktural
             if (syntheticFlags.addKJFforEselonIII && (n.jenis_jabatan || "").toUpperCase() === "ESELON III") {
                 synthetic.push({
                     _id: `synthetic-kjf-e3:${n.id}`,
@@ -482,21 +454,17 @@ export default function StrukturOrganisasiClient() {
                     children: [],
                     _syntheticSimple: true,
                     _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
-                } as D3Node);
+                });
             }
 
-            // gabung anak asli + sintetis → ghost-align bersama
-            const allKids = [...rawKids, ...synthetic as D3Node[]];
+            const allKids = [...rawKids, ...synthetic];
             if (allKids.length) {
                 const ranks = allKids.map(k => rankJenis(k.jenis_jabatan));
                 const minRank = Math.min(...ranks);
                 const adjusted = allKids.map((kid) => {
                     const childRank = rankJenis(kid.jenis_jabatan);
                     const baseOffset = Math.max(0, childRank - minRank);
-
-                    // override khusus: turunkan INSPEKTORAT jika anak langsung SETJEN
                     const nameMin = extraDepthOverride(n.slug, kid._slug, kid.nama_jabatan);
-
                     const offset = Math.max(baseOffset, nameMin);
                     return offset > 0 ? wrapWithGhost(n.id, myPath, kid, offset) : kid;
                 });
@@ -509,7 +477,6 @@ export default function StrukturOrganisasiClient() {
         return (byParent.get(null) || []).map(root => build(root, []));
     }, [rows, syntheticFlags]);
 
-    // Cari teks
     const lcFilter = filterText.trim().toLowerCase();
     const filteredRoots: D3Node[] = useMemo(() => {
         if (!lcFilter) return roots;
@@ -524,7 +491,6 @@ export default function StrukturOrganisasiClient() {
         return roots.map(walk).filter(Boolean) as D3Node[];
     }, [roots, lcFilter]);
 
-    // map ke react-d3-tree
     const toRD3 = (n: D3Node): RawNodeDatum => {
         const id = n._id;
         const isGhost = !!n._ghost;
@@ -554,7 +520,6 @@ export default function StrukturOrganisasiClient() {
     };
     const rd3Data: RawNodeDatum[] = useMemo(() => filteredRoots.map(toRD3), [filteredRoots, collapseMap]);
 
-    // helper subtree ids
     function collectIds(node: RawNodeDatum): string[] {
         const attrs = node.attributes as any;
         const myId = attrs?.id;
@@ -563,7 +528,6 @@ export default function StrukturOrganisasiClient() {
         return ids;
     }
 
-    // toggle collapse via panah
     const toggleByDatum = useCallback((nodeDatum: CustomNodeElementProps["nodeDatum"], e?: React.MouseEvent<SVGGElement>) => {
         if (e) {
             e.preventDefault();
@@ -571,7 +535,6 @@ export default function StrukturOrganisasiClient() {
         }
         const attrs = nodeDatum.attributes as any;
         if (!attrs?.id || attrs.ghost) return;
-
         setCollapseMap(prev => {
             const currentlyCollapsed = !!prev[attrs.id];
             if (currentlyCollapsed) {
@@ -601,11 +564,10 @@ export default function StrukturOrganisasiClient() {
         const attrs = nodeDatum.attributes as any;
         if (attrs.ghost) return <g/>;
 
-        // === RENDER KHUSUS NODE SINTETIS SEDERHANA (KJF / SKDP) ===
+        // Node sintetis
         if (attrs.syntheticSimple) {
-            // kotak ungu polos dengan label di tengah
-            const simpleW = cardWidth;           // samakan lebar
-            const simpleH = 80;                  // tinggi cukup untuk 1 baris
+            const simpleW = cardWidth;
+            const simpleH = 80;
             const xLeft = -(simpleW / 2);
             const yTop = -(simpleH / 2);
             const label: string = attrs.syntheticLabel || (nodeDatum.name || "");
@@ -614,37 +576,19 @@ export default function StrukturOrganisasiClient() {
 
             return (
                 <g>
-                    <rect
-                        x={xLeft}
-                        y={yTop}
-                        width={simpleW}
-                        height={simpleH}
-                        rx={8}
-                        ry={8}
-                        fill="#F3E8FF"
-                        stroke="#6b21a8"
-                        strokeWidth={1}
-                        style={{filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))"}}
-                    />
-                    <text
-                        x={0}
-                        y={0}
-                        textAnchor="middle"
-                        alignmentBaseline="central"
-                        fill="#000000"
-                        stroke="none"
-                        strokeWidth={0}
-                        style={{fontSize: "14px", fontWeight: 800, letterSpacing: 0.2}}
-                    >
+                    <rect x={xLeft} y={yTop} width={simpleW} height={simpleH} rx={8} ry={8}
+                          fill="#F3E8FF" stroke="#6b21a8" strokeWidth={1}
+                          style={{filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))"}}/>
+                    <text x={0} y={0} textAnchor="middle" alignmentBaseline="central"
+                          stroke="none"
+                          strokeWidth={0}
+                          fill="#000" style={{fontSize: "14px", fontWeight: 800}}>
                         {label.toUpperCase()}
                     </text>
                     {hasChildren && (
-                        <g
-                            transform={`translate(${xLeft + simpleW - 26}, ${yTop + 8})`}
-                            onClick={(e) => toggleByDatum(nodeDatum, e)}
-                            style={{cursor: "pointer"}}
-                        >
-                            <rect width="18" height="18" rx="5" ry="5" fill="#ffffff" stroke="#c4c4c4"/>
+                        <g transform={`translate(${xLeft + simpleW - 26}, ${yTop + 8})`}
+                           onClick={(e) => toggleByDatum(nodeDatum, e)} style={{cursor: "pointer"}}>
+                            <rect width="18" height="18" rx="5" ry="5" fill="#fff" stroke="#c4c4c4"/>
                             <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
                                   transform={isCollapsed ? "" : "rotate(90 9 9)"}/>
                         </g>
@@ -653,7 +597,7 @@ export default function StrukturOrganisasiClient() {
             );
         }
 
-        // === NODE DETAIL NORMAL ===
+        // Node normal
         const isCollapsed = !!attrs.isCollapsed;
         const hasChildren = !!attrs.hasChildren;
 
@@ -691,115 +635,71 @@ export default function StrukturOrganisasiClient() {
         const barsX = xLeft + cardPadX;
         const metricsX = xLeft + cardWidth - cardPadX - metricsTotalW;
 
-        const metricBox = (
-            x: number, y: number, w: number, h: number,
-            value: string, color = "#111827"
-        ) => (
+        const metricBox = (x: number, y: number, w: number, h: number, value: string, color = "#111827") => (
             <g>
                 <rect x={x} y={y} width={w} height={h} rx={6} ry={6} fill="#ffffff" stroke="#d1d5db"/>
-                <text
-                    x={x + w / 2}
-                    y={y + h / 2}
-                    textAnchor="middle"
-                    alignmentBaseline="central"
-                    fill={color}
-                    stroke="none"
-                    strokeWidth={0}
-                    style={{fontSize: "14px", fontWeight: 800}}
-                >
+                <text x={x + w / 2} y={y + h / 2} textAnchor="middle" alignmentBaseline="central"
+                      stroke="none"
+                      strokeWidth={0}
+                      fill={color} style={{fontSize: "14px", fontWeight: 800}}>
                     {value}
                 </text>
             </g>
         );
 
         const labelY = yKelas + kelasH / 2;
-
         const pathStr: string = attrs.pathStr || "";
         const href = `/anjab/${pathStr}`;
 
         return (
             <g>
                 {/* KARTU */}
-                <rect
-                    x={xLeft}
-                    y={yTop}
-                    width={cardWidth}
-                    height={cardHeight}
-                    rx={8}
-                    ry={8}
-                    fill="#ffffff"
-                    stroke="#8200DB"
-                    strokeWidth={1}
-                    style={{filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))"}}
-                />
+                <rect x={xLeft} y={yTop} width={cardWidth} height={cardHeight}
+                      rx={8} ry={8} fill="#ffffff" stroke="#8200DB" strokeWidth={1}
+                      style={{filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))"}}/>
 
-                {/* HEADER (judul) */}
-                <rect
-                    x={xLeft + 1}
-                    y={yTitle - 8}
-                    width={cardWidth - 2}
-                    height={titleBlockH}
-                    rx={4}
-                    ry={4}
-                    fill="#F3E8FF"
-                    stroke="none"
-                />
+                {/* HEADER */}
+                <rect x={xLeft + 1} y={yTitle - 8} width={cardWidth - 2} height={titleBlockH}
+                      stroke="none"
+                      strokeWidth={0}
+                      rx={4} ry={4} fill="#F3E8FF"/>
                 <a href={href} target="_self" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                    {titleLines.map((line: string, i: number) => (
-                        <text
-                            key={i}
-                            x={0}
-                            y={(yTitle + titleBlockH / 2 - (titleLines.length - 1) * (lineHeight / 2) + i * lineHeight) - 8}
-                            textAnchor="middle"
-                            alignmentBaseline="central"
-                            fill="#111827"
-                            stroke="none"
-                            strokeWidth={0}
-                            style={{
-                                fontSize: "12.5px",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                textDecoration: "underline"
-                            }}
-                        >
+                    {titleLines.map((line, i) => (
+                        <text key={i} x={0}
+                              y={(yTitle + titleBlockH / 2 - (titleLines.length - 1) * (lineHeight / 2) + i * lineHeight) - 8}
+                              textAnchor="middle" alignmentBaseline="central"
+                              stroke="none"
+                              strokeWidth={0}
+                              fill="#111827" style={{fontSize: "12.5px", fontWeight: 700, textDecoration: "underline"}}>
                             {line}
                         </text>
                     ))}
                 </a>
 
                 {/* KELAS + LABEL B/K/± */}
-                <text
-                    x={0}
-                    y={labelY}
-                    textAnchor="middle"
-                    alignmentBaseline="central"
-                    fill="#111827"
-                    stroke="none"
-                    strokeWidth={0}
-                    style={{fontSize: "12px", fontWeight: 600}}
-                >
+                <text x={0} y={labelY} textAnchor="middle" alignmentBaseline="central"
+                      stroke="none"
+                      strokeWidth={0}
+                      fill="#111827" style={{fontSize: "12px", fontWeight: 600}}>
                     {`Kelas Jabatan = ${kelas}`}
                 </text>
                 <text x={metricsX + (boxW + 8) * 0 + boxW / 2} y={labelY} textAnchor="middle"
-                      alignmentBaseline="central" fill="#111827"
                       stroke="none"
                       strokeWidth={0}
-                      style={{fontSize: "11px", fontWeight: 700, letterSpacing: 0.3}}>B
+                      alignmentBaseline="central" fill="#111827" style={{fontSize: "11px", fontWeight: 700}}>B
                 </text>
                 <text x={metricsX + (boxW + 8) * 1 + boxW / 2} y={labelY} textAnchor="middle"
-                      alignmentBaseline="central" fill="#111827"
                       stroke="none"
                       strokeWidth={0}
-                      style={{fontSize: "11px", fontWeight: 700, letterSpacing: 0.3}}>K
+                      alignmentBaseline="central" fill="#111827" style={{fontSize: "11px", fontWeight: 700}}>K
                 </text>
                 <text x={metricsX + (boxW + 8) * 2 + boxW / 2} y={labelY} textAnchor="middle"
-                      alignmentBaseline="central" fill="#111827"
                       stroke="none"
                       strokeWidth={0}
-                      style={{fontSize: "11px", fontWeight: 800, letterSpacing: 0.3}}>±
+                      alignmentBaseline="central" fill="#111827" style={{fontSize: "11px", fontWeight: 800}}>±
                 </text>
 
-                {/* BAR NAMA (1 nama = 1 bar) */}
+                {/* BAR NAMA */}
                 {Array.from({length: Math.max(1, namesArr.length || 0)}).map((_, idx) => {
                     const y = yBarsStart + idx * (28 + 6);
                     const nama = namesArr[idx] ?? "";
@@ -808,10 +708,11 @@ export default function StrukturOrganisasiClient() {
                             <rect x={barsX} y={y} width={barsW} height={28} rx={4} ry={4} fill="#ffffff"
                                   stroke="#c4c4c4"/>
                             {nama && (
-                                <text x={barsX + barsW / 2} y={y + 14} textAnchor="middle" alignmentBaseline="central"
+                                <text x={barsX + barsW / 2} y={y + 14} textAnchor="middle"
+                                      alignmentBaseline="central" fill="#111827"
                                       stroke="none"
                                       strokeWidth={0}
-                                      fill="#111827" style={{fontSize: "12px", fontWeight: 800}}>
+                                      style={{fontSize: "12px", fontWeight: 800}}>
                                     {nama}
                                 </text>
                             )}
@@ -820,19 +721,17 @@ export default function StrukturOrganisasiClient() {
                 })}
 
                 {/* METRIK */}
-                {metricBox(metricsX + (48 + 8) * 0, yBarsStart, 48, 30, fmtNum(bez))}
-                {metricBox(metricsX + (48 + 8) * 1, yBarsStart, 48, 30, fmtNum(keb))}
-                {metricBox(metricsX + (48 + 8) * 2, yBarsStart, 48, 30, fmtNum(sel), selColor)}
+                {metricBox(metricsX + (boxW + 8) * 0, yBarsStart, boxW, metricsH, fmtNum(bez))}
+                {metricBox(metricsX + (boxW + 8) * 1, yBarsStart, boxW, metricsH, fmtNum(keb))}
+                {metricBox(metricsX + (boxW + 8) * 2, yBarsStart, boxW, metricsH, fmtNum(sel), selColor)}
 
                 {/* Panah collapse/expand */}
                 {hasChildren && (
-                    <g
-                        transform={`translate(${xLeft + cardWidth - 26}, ${yTop + 8})`}
-                        onClick={(e) => toggleByDatum(nodeDatum, e)}
-                        style={{cursor: "pointer"}}
-                    >
+                    <g transform={`translate(${xLeft + cardWidth - 26}, ${yTop + 8})`}
+                       onClick={(e) => toggleByDatum(nodeDatum, e)} style={{cursor: "pointer"}}>
                         <rect width="18" height="18" rx="5" ry="5" fill="#ffffff" stroke="#c4c4c4"/>
-                        <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280" transform={isCollapsed ? "" : "rotate(90 9 9)"}/>
+                        <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
+                              transform={isCollapsed ? "" : "rotate(90 9 9)"}/>
                     </g>
                 )}
             </g>
@@ -846,7 +745,6 @@ export default function StrukturOrganisasiClient() {
             {/* BARIS ATAS: Judul — Search & Fullscreen */}
             <div className="flex items-center justify-between gap-3">
                 <h1 className="text-2xl font-semibold">Struktur Organisasi</h1>
-
                 <div className="flex items-center gap-2">
                     <input
                         placeholder="Cari Jabatan"
@@ -854,53 +752,52 @@ export default function StrukturOrganisasiClient() {
                         onChange={(e) => setFilterText(e.target.value)}
                         className="px-3 py-2 rounded border text-sm w-[320px]"
                     />
-                    <button
-                        onClick={() => setFilterText("")}
-                        className="ml-2 px-2 py-1.5 rounded border text-sm hover:bg-gray-50"
-                    >
+                    <button onClick={() => setFilterText("")}
+                            className="px-2 py-2 rounded border text-sm hover:bg-gray-50">
                         Reset
                     </button>
                     {!isFullscreen ? (
-                        <button
-                            onClick={enterFullscreen}
-                            className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
-                        >
+                        <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
                             Fullscreen
                         </button>
                     ) : (
-                        <button
-                            onClick={exitFullscreen}
-                            className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
-                        >
+                        <button onClick={exitFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
                             Exit Fullscreen
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* BARIS BAWAH: Reload + Toggle saklar */}
+            {/* BARIS BAWAH: Reload + Segmented Filter */}
             <div className="mt-2 flex flex-wrap items-center gap-4">
-                <button
-                    onClick={load}
-                    disabled={loading}
-                    className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
-                >
+                <button onClick={load} disabled={loading}
+                        className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50">
                     {loading ? "Memuat…" : "Reload"}
                 </button>
 
-                <Switch
-                    label="Pusat"
-                    checked={filterPusat}
-                    onChange={setFilterPusat}
-                    id="switch-pusat"
-                />
-                <Switch
-                    label="Fungsional"
-                    checked={includeFungsional}
-                    onChange={setIncludeFungsional}
-                    id="switch-fungsional"
-                />
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Wilayah:</span>
+                    <Segmented
+                        value={scope}
+                        onChange={setScope}
+                        options={[
+                            {label: "Pusat", value: "PUSAT"},
+                            {label: "Daerah", value: "DAERAH"},
+                        ]}
+                    />
+                </div>
 
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Jenis:</span>
+                    <Segmented
+                        value={fungsionalMode}
+                        onChange={setFungsionalMode}
+                        options={[
+                            {label: "Struktural", value: "STRUKTURAL"},
+                            {label: "Fungsional", value: "FUNGSIONAL"},
+                        ]}
+                    />
+                </div>
             </div>
 
             {err && <div className="text-sm text-red-600">{err}</div>}
