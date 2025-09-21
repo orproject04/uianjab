@@ -7,7 +7,7 @@ import type {RawNodeDatum, CustomNodeElementProps} from "react-d3-tree";
 
 const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), {ssr: false});
 
-// ---- Types dari backend (GET sudah join jabatan → kelas_jabatan)
+// ---- Types dari backend
 type APIRow = {
     id: string;
     parent_id: string | null;
@@ -20,9 +20,8 @@ type APIRow = {
     kebutuhan_pegawai?: number | null;
     is_pusat?: boolean;
     jenis_jabatan: string | null;
-    kelas_jabatan?: string | null; // text
-    // opsional: bila API nanti kirim nama pejabat
-    nama_pejabat?: string | string[] | null;
+    kelas_jabatan?: string | null;         // text
+    nama_pejabat?: string | string[] | null; // optional text[]
 };
 
 // ---- Node internal + ghost
@@ -38,13 +37,11 @@ type D3Node = {
     nama_pejabat?: string | string[] | null;
     children: D3Node[];
     _ghost?: boolean;
-};
 
-function initCollapseMap(rows: APIRow[]): Record<string, boolean> {
-    const map: Record<string, boolean> = {};
-    for (const r of rows) map[r.id] = true; // collapsed default saat awal
-    return map;
-}
+    // sintetis sederhana (kotak ungu tanpa detail)
+    _syntheticSimple?: boolean;
+    _syntheticLabel?: string;
+};
 
 function wrapText(s: string, maxChars = 38): string[] {
     const words = (s || "").split(/\s+/);
@@ -64,6 +61,7 @@ function wrapText(s: string, maxChars = 38): string[] {
     return lines.length ? lines : [s];
 }
 
+// ranking eselon (lebih kecil = lebih tinggi)
 function rankJenis(j: string | null | undefined): number {
     const t = (j || "").trim().toUpperCase();
     switch (t) {
@@ -88,23 +86,212 @@ function rankJenis(j: string | null | undefined): number {
     }
 }
 
-function extraDepthByName(nama: string): number {
-    if (/inspektorat/i.test(nama)) return 1;
-    return 0;
+// Khusus: HANYA turunkan "Inspektorat" yang adalah ANAK LANGSUNG SETJEN
+function extraDepthOverride(parentSlug: string, childSlug: string, childName: string): number {
+    const isParentSetjen = (parentSlug || "").toLowerCase() === "setjen";
+    const childIsInspektoratByName = /^inspektorat$/i.test(childName || "");
+    const childIsInspektoratBySlug = /^(inspektorat)/i.test((childSlug || ""));
+    return (isParentSetjen && (childIsInspektoratByName || childIsInspektoratBySlug)) ? 1 : 0;
 }
 
 const fmtNum = (n: number | null | undefined) => (n ?? 0).toString();
+
+type ScenarioSyntheticFlags = {
+    addKJFforEselonII: boolean;           // ESELON II → KJF
+    addSKDPforSetjen: boolean;            // SETJEN → SKDP
+    addKJFforEselonIII: boolean;          // ESELON III → KJF
+    kjfForInspekturAsE4: boolean;         // khusus: Inspektur/Inspektorat → KJF ESELON IV
+};
+
+type ScenarioResult = {
+    rows: APIRow[];
+    synthetic: ScenarioSyntheticFlags;
+};
+
+/**
+ * Skenario filter:
+ * 1) pusat=true,  fungsional=false (DEFAULT):
+ *    - is_pusat=true & jenis ≠ JF (plus ancestors)
+ *    - Synthetic: E2→KJF (E3, kecuali Inspektur/Inspektorat → E4), SETJEN→SKDP (E3)
+ *
+ * 2) pusat=true,  fungsional=true:
+ *    - tampilkan semua SETJEN sampai ESELON II + semua JF pusat
+ *    - Synthetic: OFF
+ *
+ * 3) pusat=false, fungsional=false:
+ *    - hanya SETJEN + anak is_pusat=false & jenis ≠ JF (plus ancestors sampai SETJEN)
+ *    - Synthetic: ON untuk ESELON III → KJF (ESELON IV)
+ *
+ * 4) pusat=false, fungsional=true:
+ *    - hanya SETJEN + anak is_pusat=false dan (ESELON III atau JF)
+ *    - Synthetic: OFF
+ */
+function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): ScenarioResult {
+    const byId = new Map<string, APIRow>(all.map(r => [r.id, r]));
+
+    // cari node SETJEN (ambil yang pertama kalau ada duplikat)
+    const setjenNode = all.find(r => (r.slug || "").toLowerCase() === "setjen") || null;
+    const setjenId = setjenNode?.id ?? null;
+
+    const keep = new Set<string>();
+    const add = (id: string) => keep.add(id);
+
+    const addWithAncestors = (id: string, stopAtId?: string | null) => {
+        let cur: string | null = id;
+        while (cur) {
+            add(cur);
+            if (stopAtId && cur === stopAtId) break;
+            cur = byId.get(cur)?.parent_id || null;
+        }
+    };
+
+    const isUnderSetjen = (id: string) => {
+        if (!setjenId) return true; // jika tak ketemu setjen, biarkan lolos
+        let cur: string | null = id;
+        while (cur) {
+            if (cur === setjenId) return true;
+            cur = byId.get(cur)?.parent_id || null;
+        }
+        return false;
+    };
+
+    const jenisEq = (r: APIRow, s: string) => ((r.jenis_jabatan || "").toUpperCase() === s.toUpperCase());
+    const jenisRankLE = (r: APIRow, n: number) => rankJenis(r.jenis_jabatan) <= n;
+
+    // ==== SKENARIO 1 ====
+    if (pusat && !fungsional) {
+        for (const r of all) {
+            if (r.is_pusat === true && !jenisEq(r, "JABATAN FUNGSIONAL")) add(r.id);
+        }
+        for (const id of Array.from(keep)) addWithAncestors(id);
+
+        return {
+            rows: all.filter(r => keep.has(r.id)),
+            synthetic: {
+                addKJFforEselonII: true,
+                addSKDPforSetjen: true,
+                addKJFforEselonIII: false,
+                kjfForInspekturAsE4: true, // khusus
+            },
+        };
+    }
+
+    // ==== SKENARIO 2 ====
+    if (pusat && fungsional) {
+        for (const r of all) {
+            if (r.is_pusat === true && jenisRankLE(r, 2)) add(r.id); // sampai Eselon II
+        }
+        for (const r of all) {
+            if (r.is_pusat === true && jenisEq(r, "JABATAN FUNGSIONAL")) add(r.id);
+        }
+        for (const id of Array.from(keep)) addWithAncestors(id);
+
+        return {
+            rows: all.filter(r => keep.has(r.id)),
+            synthetic: {
+                addKJFforEselonII: false,
+                addSKDPforSetjen: false,
+                addKJFforEselonIII: false,
+                kjfForInspekturAsE4: false,
+            },
+        };
+    }
+
+    // ==== SKENARIO 3 ====
+    if (!pusat && !fungsional) {
+        if (setjenId) add(setjenId);
+        for (const r of all) {
+            if (r.is_pusat === false && !jenisEq(r, "JABATAN FUNGSIONAL") && isUnderSetjen(r.id)) {
+                add(r.id);
+            }
+        }
+        for (const id of Array.from(keep)) addWithAncestors(id, setjenId);
+
+        return {
+            rows: all.filter(r => keep.has(r.id)),
+            synthetic: {
+                addKJFforEselonII: false,
+                addSKDPforSetjen: false,
+                addKJFforEselonIII: true, // E3 → KJF(E4)
+                kjfForInspekturAsE4: false,
+            },
+        };
+    }
+
+    // ==== SKENARIO 4 ====
+    if (setjenId) add(setjenId);
+    for (const r of all) {
+        const isE3 = jenisEq(r, "ESELON III");
+        const isJF = jenisEq(r, "JABATAN FUNGSIONAL");
+        if (r.is_pusat === false && (isE3 || isJF) && isUnderSetjen(r.id)) {
+            add(r.id);
+        }
+    }
+    for (const id of Array.from(keep)) addWithAncestors(id, setjenId);
+
+    return {
+        rows: all.filter(r => keep.has(r.id)),
+        synthetic: {
+            addKJFforEselonII: false,
+            addSKDPforSetjen: false,
+            addKJFforEselonIII: false,
+            kjfForInspekturAsE4: false,
+        },
+    };
+}
+
+/* ===========================
+   Switch (saklar) sederhana
+   =========================== */
+function Switch({
+                    checked,
+                    onChange,
+                    label,
+                    id,
+                }: {
+    checked: boolean;
+    onChange: (next: boolean) => void;
+    label: string;
+    id?: string;
+}) {
+    return (
+        <label htmlFor={id} className="flex items-center gap-2 select-none cursor-pointer">
+            <span className="text-sm text-gray-700">{label}</span>
+            <button
+                id={id}
+                type="button"
+                role="switch"
+                aria-checked={checked}
+                onClick={() => onChange(!checked)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    checked ? "bg-purple-600" : "bg-gray-300"
+                }`}
+            >
+        <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                checked ? "translate-x-5" : "translate-x-1"
+            }`}
+        />
+            </button>
+        </label>
+    );
+}
 
 export default function StrukturOrganisasiClient() {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [containerSize, setContainerSize] = useState({w: 0, h: 0});
 
-    const [rows, setRows] = useState<APIRow[]>([]);
+    const [allRows, setAllRows] = useState<APIRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
-    const [filter, setFilter] = useState("");
+
+    // UI filters
+    const [filterPusat, setFilterPusat] = useState<boolean>(true);              // default: true
+    const [includeFungsional, setIncludeFungsional] = useState<boolean>(false); // default: false
+    const [filterText, setFilterText] = useState("");
     const [isFullscreen, setIsFullscreen] = useState(false);
 
+    // collapse map (satu saja)
     const [collapseMap, setCollapseMap] = useState<Record<string, boolean>>({});
 
     const load = useCallback(async () => {
@@ -114,8 +301,7 @@ export default function StrukturOrganisasiClient() {
             const res = await apiFetch("/api/struktur-organisasi", {cache: "no-store"});
             if (!res.ok) throw new Error(`Gagal mengambil data (${res.status})`);
             const data: APIRow[] = await res.json();
-            setRows(data);
-            setCollapseMap(initCollapseMap(data));
+            setAllRows(data);
         } catch (e: any) {
             setErr(e?.message || "Gagal memuat data");
         } finally {
@@ -127,6 +313,7 @@ export default function StrukturOrganisasiClient() {
         load();
     }, [load]);
 
+    // ukuran container
     useEffect(() => {
         if (!containerRef.current) return;
         const ro = new ResizeObserver(([entry]) => {
@@ -136,6 +323,7 @@ export default function StrukturOrganisasiClient() {
         return () => ro.disconnect();
     }, []);
 
+    // fullscreen sync
     useEffect(() => {
         const onFs = () => {
             const fs = !!document.fullscreenElement;
@@ -162,6 +350,22 @@ export default function StrukturOrganisasiClient() {
         }
     };
 
+    // terapkan skenario pada allRows
+    const scenario = useMemo(
+        () => filterByScenario(allRows, filterPusat, includeFungsional),
+        [allRows, filterPusat, includeFungsional]
+    );
+    const rows: APIRow[] = scenario.rows;
+    const syntheticFlags = scenario.synthetic;
+
+    // reset collapse tiap kali view rows berubah
+    useEffect(() => {
+        const map: Record<string, boolean> = {};
+        for (const r of rows) map[r.id] = true;
+        setCollapseMap(map);
+    }, [rows]);
+
+    // Build pohon + ghost + anak sintetis (conditional)
     const roots: D3Node[] = useMemo(() => {
         if (!rows.length) return [];
 
@@ -211,21 +415,88 @@ export default function StrukturOrganisasiClient() {
                 bezetting: n.bezetting ?? null,
                 kebutuhan_pegawai: n.kebutuhan_pegawai ?? null,
                 kelas_jabatan: n.kelas_jabatan ?? null,
-                // ⬇️ kalau mau hardcode sementara:
-                nama_pejabat: ["Nama 1", "Nama 2", "dst"],
-                // nama_pejabat: n.nama_pejabat ?? null,
+                nama_pejabat: n.nama_pejabat ?? null,
                 children: [],
             };
 
+            // anak asli
             const rawKids = (byParent.get(n.id) || []).map(child => build(child, myPath));
 
-            if (rawKids.length) {
-                const ranks = rawKids.map(k => rankJenis(k.jenis_jabatan));
+            // anak sintetis — bergantung skenario (flags)
+            const synthetic: D4Node[] | D3Node[] = [];
+
+            // (Skenario 1) ESELON II → KJF (default E3, khusus Inspektur/Inspektorat → E4)
+            if (syntheticFlags.addKJFforEselonII && (n.jenis_jabatan || "").toUpperCase() === "ESELON II") {
+                const parentName = n.nama_jabatan || "";
+                const parentSlug = n.slug || "";
+                const isInspektorat =
+                    /(inspektur|inspektorat)/i.test(parentName) || /(inspektur|inspektorat)/i.test(parentSlug);
+                const kjfLevel = (syntheticFlags.kjfForInspekturAsE4 && isInspektorat) ? "ESELON IV" : "ESELON III";
+
+                synthetic.push({
+                    _id: `synthetic-kjf:${n.id}`,
+                    _slug: "kjf",
+                    _path: [...myPath, "kjf"],
+                    nama_jabatan: "Kelompok Jabatan Fungsional",
+                    jenis_jabatan: kjfLevel,
+                    bezetting: null,
+                    kebutuhan_pegawai: null,
+                    kelas_jabatan: null,
+                    nama_pejabat: null,
+                    children: [],
+                    _syntheticSimple: true,
+                    _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
+                } as D3Node);
+            }
+
+            // (Skenario 1) SETJEN → SKDP (E3)
+            if (syntheticFlags.addSKDPforSetjen && (n.slug || "").toLowerCase() === "setjen") {
+                synthetic.push({
+                    _id: `synthetic-skdp:${n.id}`,
+                    _slug: "skdp",
+                    _path: [...myPath, "skdp"],
+                    nama_jabatan: "Sekretariat Kantor DPD RI di Ibu Kota Provinsi",
+                    jenis_jabatan: "ESELON III",
+                    bezetting: null,
+                    kebutuhan_pegawai: null,
+                    kelas_jabatan: null,
+                    nama_pejabat: null,
+                    children: [],
+                    _syntheticSimple: true,
+                    _syntheticLabel: "SEKRETARIAT KANTOR DPD RI DI IBU KOTA PROVINSI",
+                } as D3Node);
+            }
+
+            // (Skenario 3) ESELON III → KJF (E4)
+            if (syntheticFlags.addKJFforEselonIII && (n.jenis_jabatan || "").toUpperCase() === "ESELON III") {
+                synthetic.push({
+                    _id: `synthetic-kjf-e3:${n.id}`,
+                    _slug: "kjf",
+                    _path: [...myPath, "kjf"],
+                    nama_jabatan: "Kelompok Jabatan Fungsional",
+                    jenis_jabatan: "ESELON IV",
+                    bezetting: null,
+                    kebutuhan_pegawai: null,
+                    kelas_jabatan: null,
+                    nama_pejabat: null,
+                    children: [],
+                    _syntheticSimple: true,
+                    _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
+                } as D3Node);
+            }
+
+            // gabung anak asli + sintetis → ghost-align bersama
+            const allKids = [...rawKids, ...synthetic as D3Node[]];
+            if (allKids.length) {
+                const ranks = allKids.map(k => rankJenis(k.jenis_jabatan));
                 const minRank = Math.min(...ranks);
-                const adjusted = rawKids.map((kid) => {
+                const adjusted = allKids.map((kid) => {
                     const childRank = rankJenis(kid.jenis_jabatan);
                     const baseOffset = Math.max(0, childRank - minRank);
-                    const nameMin = extraDepthByName(kid.nama_jabatan);
+
+                    // override khusus: turunkan INSPEKTORAT jika anak langsung SETJEN
+                    const nameMin = extraDepthOverride(n.slug, kid._slug, kid.nama_jabatan);
+
                     const offset = Math.max(baseOffset, nameMin);
                     return offset > 0 ? wrapWithGhost(n.id, myPath, kid, offset) : kid;
                 });
@@ -236,9 +507,10 @@ export default function StrukturOrganisasiClient() {
         };
 
         return (byParent.get(null) || []).map(root => build(root, []));
-    }, [rows]);
+    }, [rows, syntheticFlags]);
 
-    const lcFilter = filter.trim().toLowerCase();
+    // Cari teks
+    const lcFilter = filterText.trim().toLowerCase();
     const filteredRoots: D3Node[] = useMemo(() => {
         if (!lcFilter) return roots;
         const match = (n: D3Node) =>
@@ -252,6 +524,7 @@ export default function StrukturOrganisasiClient() {
         return roots.map(walk).filter(Boolean) as D3Node[];
     }, [roots, lcFilter]);
 
+    // map ke react-d3-tree
     const toRD3 = (n: D3Node): RawNodeDatum => {
         const id = n._id;
         const isGhost = !!n._ghost;
@@ -273,12 +546,15 @@ export default function StrukturOrganisasiClient() {
                 kebutuhan_pegawai: n.kebutuhan_pegawai,
                 kelas_jabatan: n.kelas_jabatan,
                 nama_pejabat: n.nama_pejabat ?? null,
+                syntheticSimple: n._syntheticSimple === true,
+                syntheticLabel: n._syntheticLabel || null,
             } as any,
             children: isCollapsed ? [] : n.children.map(toRD3),
         };
     };
     const rd3Data: RawNodeDatum[] = useMemo(() => filteredRoots.map(toRD3), [filteredRoots, collapseMap]);
 
+    // helper subtree ids
     function collectIds(node: RawNodeDatum): string[] {
         const attrs = node.attributes as any;
         const myId = attrs?.id;
@@ -287,6 +563,7 @@ export default function StrukturOrganisasiClient() {
         return ids;
     }
 
+    // toggle collapse via panah
     const toggleByDatum = useCallback((nodeDatum: CustomNodeElementProps["nodeDatum"], e?: React.MouseEvent<SVGGElement>) => {
         if (e) {
             e.preventDefault();
@@ -312,25 +589,74 @@ export default function StrukturOrganisasiClient() {
 
     // Layout & ukuran
     const cardWidth = 520;
-    const nodeSizeX = 560;
-    const nodeSizeY = 240; // sedikit lebih tinggi karena multi-bar
     const lineHeight = 16;
     const kelasH = 20;
-    const metricsH = 30;           // sesuai permintaan
+    const metricsH = 30;
     const bodyGap = 8;
     const cardPadX = 12;
     const cardPadY = 10;
 
-    // Renderer kartu — label B/K/± sejajar "Kelas Jabatan", angka di dalam kotak
     const renderNode = useCallback((props: CustomNodeElementProps) => {
         const {nodeDatum} = props;
         const attrs = nodeDatum.attributes as any;
         if (attrs.ghost) return <g/>;
 
+        // === RENDER KHUSUS NODE SINTETIS SEDERHANA (KJF / SKDP) ===
+        if (attrs.syntheticSimple) {
+            // kotak ungu polos dengan label di tengah
+            const simpleW = cardWidth;           // samakan lebar
+            const simpleH = 80;                  // tinggi cukup untuk 1 baris
+            const xLeft = -(simpleW / 2);
+            const yTop = -(simpleH / 2);
+            const label: string = attrs.syntheticLabel || (nodeDatum.name || "");
+            const isCollapsed = !!attrs.isCollapsed;
+            const hasChildren = !!attrs.hasChildren;
+
+            return (
+                <g>
+                    <rect
+                        x={xLeft}
+                        y={yTop}
+                        width={simpleW}
+                        height={simpleH}
+                        rx={8}
+                        ry={8}
+                        fill="#F3E8FF"
+                        stroke="#6b21a8"
+                        strokeWidth={1}
+                        style={{filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))"}}
+                    />
+                    <text
+                        x={0}
+                        y={0}
+                        textAnchor="middle"
+                        alignmentBaseline="central"
+                        fill="#000000"
+                        stroke="none"
+                        strokeWidth={0}
+                        style={{fontSize: "14px", fontWeight: 800, letterSpacing: 0.2}}
+                    >
+                        {label.toUpperCase()}
+                    </text>
+                    {hasChildren && (
+                        <g
+                            transform={`translate(${xLeft + simpleW - 26}, ${yTop + 8})`}
+                            onClick={(e) => toggleByDatum(nodeDatum, e)}
+                            style={{cursor: "pointer"}}
+                        >
+                            <rect width="18" height="18" rx="5" ry="5" fill="#ffffff" stroke="#c4c4c4"/>
+                            <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
+                                  transform={isCollapsed ? "" : "rotate(90 9 9)"}/>
+                        </g>
+                    )}
+                </g>
+            );
+        }
+
+        // === NODE DETAIL NORMAL ===
         const isCollapsed = !!attrs.isCollapsed;
         const hasChildren = !!attrs.hasChildren;
 
-        // data
         const jabatan = (nodeDatum.name ?? "").toUpperCase();
         const titleLines = wrapText(jabatan, 38);
         const titleBlockH = Math.max(40, titleLines.length * lineHeight + 14);
@@ -341,12 +667,10 @@ export default function StrukturOrganisasiClient() {
         const sel: number = bez - keb;
         const selColor = sel < 0 ? "#b91c1c" : sel > 0 ? "#065f46" : "#374151";
 
-        // nama pejabat: string | string[] | null → array
         const namesArr: string[] =
             Array.isArray(attrs.nama_pejabat) ? attrs.nama_pejabat :
                 attrs.nama_pejabat ? [attrs.nama_pejabat as string] : [];
 
-        // multi-bar: 1 nama = 1 bar oranye; kalau kosong → 1 bar kosong
         const barPerNameH = 28;
         const barGap = 6;
         const numBars = Math.max(1, namesArr.length);
@@ -360,7 +684,6 @@ export default function StrukturOrganisasiClient() {
         const yKelas = yTitle + titleBlockH + 2;
         const yBarsStart = yKelas + kelasH + bodyGap;
 
-        // metrik
         const boxW = 48;
         const gap = 8;
         const metricsTotalW = boxW * 3 + gap * 2;
@@ -389,10 +712,8 @@ export default function StrukturOrganisasiClient() {
             </g>
         );
 
-        // label sejajar dengan "Kelas Jabatan"
         const labelY = yKelas + kelasH / 2;
 
-        // path untuk judul (tautan)
         const pathStr: string = attrs.pathStr || "";
         const href = `/anjab/${pathStr}`;
 
@@ -412,7 +733,7 @@ export default function StrukturOrganisasiClient() {
                     style={{filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))"}}
                 />
 
-                {/* HEADER (judul jabatan) dengan link */}
+                {/* HEADER (judul) */}
                 <rect
                     x={xLeft + 1}
                     y={yTitle - 8}
@@ -428,7 +749,7 @@ export default function StrukturOrganisasiClient() {
                         <text
                             key={i}
                             x={0}
-                            y={(yTitle + titleBlockH / 2 - (titleLines.length - 1) * (lineHeight / 2) + i * lineHeight)-8}
+                            y={(yTitle + titleBlockH / 2 - (titleLines.length - 1) * (lineHeight / 2) + i * lineHeight) - 8}
                             textAnchor="middle"
                             alignmentBaseline="central"
                             fill="#111827"
@@ -446,7 +767,7 @@ export default function StrukturOrganisasiClient() {
                     ))}
                 </a>
 
-                {/* "Kelas Jabatan" (tengah) */}
+                {/* KELAS + LABEL B/K/± */}
                 <text
                     x={0}
                     y={labelY}
@@ -459,72 +780,38 @@ export default function StrukturOrganisasiClient() {
                 >
                     {`Kelas Jabatan = ${kelas}`}
                 </text>
-
-                {/* Label B/K/± sejajar kelas (kanan) */}
-                <text
-                    x={metricsX + (boxW + gap) * 0 + boxW / 2}
-                    y={labelY}
-                    textAnchor="middle"
-                    alignmentBaseline="central"
-                    fill="#111827"
-                    stroke="none"
-                    strokeWidth={0}
-                    style={{fontSize: "11px", fontWeight: 700, letterSpacing: 0.3}}
-                >
-                    B
+                <text x={metricsX + (boxW + 8) * 0 + boxW / 2} y={labelY} textAnchor="middle"
+                      alignmentBaseline="central" fill="#111827"
+                      stroke="none"
+                      strokeWidth={0}
+                      style={{fontSize: "11px", fontWeight: 700, letterSpacing: 0.3}}>B
                 </text>
-                <text
-                    x={metricsX + (boxW + gap) * 1 + boxW / 2}
-                    y={labelY}
-                    textAnchor="middle"
-                    alignmentBaseline="central"
-                    fill="#111827"
-                    stroke="none"
-                    strokeWidth={0}
-                    style={{fontSize: "11px", fontWeight: 700, letterSpacing: 0.3}}
-                >
-                    K
+                <text x={metricsX + (boxW + 8) * 1 + boxW / 2} y={labelY} textAnchor="middle"
+                      alignmentBaseline="central" fill="#111827"
+                      stroke="none"
+                      strokeWidth={0}
+                      style={{fontSize: "11px", fontWeight: 700, letterSpacing: 0.3}}>K
                 </text>
-                <text
-                    x={metricsX + (boxW + gap) * 2 + boxW / 2}
-                    y={labelY}
-                    textAnchor="middle"
-                    alignmentBaseline="central"
-                    fill="#111827"
-                    stroke="none"
-                    strokeWidth={0}
-                    style={{fontSize: "11px", fontWeight: 800, letterSpacing: 0.3}}
-                >
-                    ±
+                <text x={metricsX + (boxW + 8) * 2 + boxW / 2} y={labelY} textAnchor="middle"
+                      alignmentBaseline="central" fill="#111827"
+                      stroke="none"
+                      strokeWidth={0}
+                      style={{fontSize: "11px", fontWeight: 800, letterSpacing: 0.3}}>±
                 </text>
 
-                {/* Kotak-kotak oranye: 1 nama = 1 bar (stack ke bawah) */}
-                {Array.from({length: numBars}).map((_, idx) => {
-                    const y = yBarsStart + idx * (barPerNameH + barGap);
-                    const nama = namesArr[idx] ?? ""; // jika tidak ada → bar kosong
+                {/* BAR NAMA (1 nama = 1 bar) */}
+                {Array.from({length: Math.max(1, namesArr.length || 0)}).map((_, idx) => {
+                    const y = yBarsStart + idx * (28 + 6);
+                    const nama = namesArr[idx] ?? "";
                     return (
                         <g key={idx}>
-                            <rect
-                                x={barsX}
-                                y={y}
-                                width={barsW}
-                                height={barPerNameH}
-                                rx={4}
-                                ry={4}
-                                fill="#ffffff"
-                                stroke="#c4c4c4"
-                            />
+                            <rect x={barsX} y={y} width={barsW} height={28} rx={4} ry={4} fill="#ffffff"
+                                  stroke="#c4c4c4"/>
                             {nama && (
-                                <text
-                                    x={barsX + barsW / 2}
-                                    y={y + barPerNameH / 2}
-                                    textAnchor="middle"
-                                    alignmentBaseline="central"
-                                    fill="#111827"
-                                    stroke="none"
-                                    strokeWidth={0}
-                                    style={{fontSize: "12px", fontWeight: 800}}
-                                >
+                                <text x={barsX + barsW / 2} y={y + 14} textAnchor="middle" alignmentBaseline="central"
+                                      stroke="none"
+                                      strokeWidth={0}
+                                      fill="#111827" style={{fontSize: "12px", fontWeight: 800}}>
                                     {nama}
                                 </text>
                             )}
@@ -532,10 +819,10 @@ export default function StrukturOrganisasiClient() {
                     );
                 })}
 
-                {/* Kotak metrik angka (di bawah label, sejajar bar nama paling atas) */}
-                {metricBox(metricsX + (boxW + gap) * 0, yBarsStart, boxW, metricsH, fmtNum(bez))}
-                {metricBox(metricsX + (boxW + gap) * 1, yBarsStart, boxW, metricsH, fmtNum(keb))}
-                {metricBox(metricsX + (boxW + gap) * 2, yBarsStart, boxW, metricsH, fmtNum(sel), selColor)}
+                {/* METRIK */}
+                {metricBox(metricsX + (48 + 8) * 0, yBarsStart, 48, 30, fmtNum(bez))}
+                {metricBox(metricsX + (48 + 8) * 1, yBarsStart, 48, 30, fmtNum(keb))}
+                {metricBox(metricsX + (48 + 8) * 2, yBarsStart, 48, 30, fmtNum(sel), selColor)}
 
                 {/* Panah collapse/expand */}
                 {hasChildren && (
@@ -550,37 +837,70 @@ export default function StrukturOrganisasiClient() {
                 )}
             </g>
         );
-    }, [toggleByDatum, lineHeight, kelasH, metricsH, cardPadX, cardPadY, cardWidth]);
+    }, [toggleByDatum]);
 
     const translate = useMemo(() => ({x: Math.max(40, containerSize.w / 2), y: 110}), [containerSize]);
 
     return (
         <div className="flex flex-col gap-3 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-semibold mr-2">Struktur Organisasi</h1>
-                <button onClick={load} disabled={loading}
-                        className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50">
-                    {loading ? "Memuat…" : "Reload"}
-                </button>
-                <div className="ml-auto flex items-center gap-2">
+            {/* BARIS ATAS: Judul — Search & Fullscreen */}
+            <div className="flex items-center justify-between gap-3">
+                <h1 className="text-2xl font-semibold">Struktur Organisasi</h1>
+
+                <div className="flex items-center gap-2">
                     <input
                         placeholder="Cari Jabatan"
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="px-3 py-1.5 rounded border text-sm w-[220px]"
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        className="px-3 py-2 rounded border text-sm w-[320px]"
                     />
-                    <button onClick={() => setFilter("")}
-                            className="px-2 py-1.5 rounded border text-sm hover:bg-gray-50">
+                    <button
+                        onClick={() => setFilterText("")}
+                        className="ml-2 px-2 py-1.5 rounded border text-sm hover:bg-gray-50"
+                    >
                         Reset
                     </button>
                     {!isFullscreen ? (
-                        <button onClick={enterFullscreen}
-                                className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50">Fullscreen</button>
+                        <button
+                            onClick={enterFullscreen}
+                            className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                        >
+                            Fullscreen
+                        </button>
                     ) : (
-                        <button onClick={exitFullscreen}
-                                className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50">Exit Fullscreen</button>
+                        <button
+                            onClick={exitFullscreen}
+                            className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                        >
+                            Exit Fullscreen
+                        </button>
                     )}
                 </div>
+            </div>
+
+            {/* BARIS BAWAH: Reload + Toggle saklar */}
+            <div className="mt-2 flex flex-wrap items-center gap-4">
+                <button
+                    onClick={load}
+                    disabled={loading}
+                    className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
+                >
+                    {loading ? "Memuat…" : "Reload"}
+                </button>
+
+                <Switch
+                    label="Pusat"
+                    checked={filterPusat}
+                    onChange={setFilterPusat}
+                    id="switch-pusat"
+                />
+                <Switch
+                    label="Fungsional"
+                    checked={includeFungsional}
+                    onChange={setIncludeFungsional}
+                    id="switch-fungsional"
+                />
+
             </div>
 
             {err && <div className="text-sm text-red-600">{err}</div>}
@@ -607,7 +927,7 @@ export default function StrukturOrganisasiClient() {
                 )}
                 {!loading && rd3Data.length === 0 && (
                     <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
-                        {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter."}
+                        {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter/cari."}
                     </div>
                 )}
             </div>
