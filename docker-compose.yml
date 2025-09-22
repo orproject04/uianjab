@@ -4,7 +4,7 @@ name: anjab-stack
 
 services:
   anjab-db:
-    image: postgres:16
+    image: postgres:17-alpine
     container_name: anjab-db
     environment:
       POSTGRES_USER: postgres
