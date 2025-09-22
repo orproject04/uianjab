@@ -201,7 +201,7 @@ const AppSidebar: React.FC = () => {
     const navItems: NavItem[] = [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
-        {name: "Struktur Organisasi", icon: <GroupIcon/>, path: "/struktur-organisasi", subItems: []}
+        {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/struktur-organisasi", subItems: []}
     ];
     const othersItems: NavItem[] = [];
 

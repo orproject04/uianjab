@@ -744,7 +744,7 @@ export default function StrukturOrganisasiClient() {
         <div className="flex flex-col gap-3 p-4">
             {/* BARIS ATAS: Judul — Search & Fullscreen */}
             <div className="flex items-center justify-between gap-3">
-                <h1 className="text-2xl font-semibold">Struktur Organisasi</h1>
+                <h1 className="text-2xl font-semibold">Peta Jabatan</h1>
                 <div className="flex items-center gap-2">
                     <input
                         placeholder="Cari Jabatan"
