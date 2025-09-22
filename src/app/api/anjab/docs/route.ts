@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
         const formData = await req.formData();
         const slug = (formData.get("slug") as string | null)?.trim() || null;
-        const struktur_id = ((formData.get("struktur_id") as string | null) || null);
+        const peta_id = ((formData.get("peta_id") as string | null) || null);
 
         if (!slug) {
             return NextResponse.json({error: "slug wajib dikirim"}, {status: 400});
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
                     `
                         INSERT INTO jabatan
                         (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan,
-                         prestasi_diharapkan, slug, struktur_id, created_at, updated_at)
+                         prestasi_diharapkan, slug, peta_id, created_at, updated_at)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id
                     `,
                     [
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
                         kelas_jabatan || "",
                         prestasi_yang_diharapkan || "",
                         slug,
-                        struktur_id,
+                        peta_id,
                     ]
                 );
                 const jabatanUUID = insJabatan.rows[0].id;
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
                 );
 
                 // ==========================
-                // tugas_pokok + tahapan (HANYA struktur baru: detail_uraian_tugas)
+                // tugas_pokok + tahapan + detail_uraian_tugas
                 // ==========================
                 for (const tugas of Array.isArray(tugas_pokok) ? tugas_pokok : []) {
                     const nomor_tugas = parseInt(tugas.no) || null;
@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
                         message: "Upload & insert sukses",
                         jabatan_id: jabatanUUID,
                         slug,
-                        struktur_id,
+                        peta_id,
                     },
                     {status: 201}
                 );

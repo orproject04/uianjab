@@ -69,7 +69,7 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         });
     };
 
-    // --- Helpers slug & struktur_id (tetap) ---
+    // --- Helpers slug & peta_id (tetap) ---
     const getSlugFromPath = (): string | null => {
         try {
             const path = String(pathname || "");
@@ -89,7 +89,7 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         }
     };
 
-    const getStrukturIdFromLocalStorage = (): string | null => {
+    const getPetaIdFromLocalStorage = (): string | null => {
         try {
             const path = String(pathname || "");
             const parts = path.split('/').filter(Boolean);
@@ -178,9 +178,9 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
             return;
         }
 
-        // Wajib: struktur_id harus ada
-        const struktur_id = getStrukturIdFromLocalStorage();
-        if (!struktur_id) {
+        // Wajib: peta_id harus ada
+        const peta_id = getPetaIdFromLocalStorage();
+        if (!peta_id) {
             await MySwal.fire({
                 icon: "error",
                 title: "Gagal",
@@ -206,7 +206,7 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         const formData = new FormData();
         formData.append('file', f);
         formData.append('slug', slug);
-        formData.append('struktur_id', struktur_id);
+        formData.append('peta_id', peta_id);
 
         setIsLoading(true);
         try {
@@ -218,7 +218,7 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
           <ul class="list-disc pl-5">
             ${result.jabatan_id ? `<li><b>jabatan_id:</b> <code>${result.jabatan_id}</code></li>` : ''}
             ${result.slug ? `<li><b>slug:</b> <code>${result.slug}</code></li>` : ''}
-            ${result.struktur_id ? `<li><b>struktur_id:</b> <code>${result.struktur_id}</code></li>` : ''}
+            ${result.peta_id ? `<li><b>peta_id:</b> <code>${result.peta_id}</code></li>` : ''}
           </ul>
         `;
                 await showResultModal(true, result.message || 'Upload berhasil', details);

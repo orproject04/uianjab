@@ -1,4 +1,4 @@
-// src/app/api/struktur-organisasi/route.ts
+// src/app/api/peta-jabatan/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth";
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         COALESCE(t.nama_pejabat, ARRAY[]::text[]) AS nama_pejabat
       FROM tree t
       LEFT JOIN jabatan j
-        ON j.struktur_id = t.id
+        ON j.peta_id = t.id
       ORDER BY t.sort_path
     `;
 
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
             ARRAY[
               lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
             ]::text[] AS sort_path
-          FROM struktur_organisasi
+          FROM peta_jabatan
           WHERE id = $1::uuid
 
           UNION ALL
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
             t.sort_path || (
               lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
             )
-          FROM struktur_organisasi c
+          FROM peta_jabatan c
           JOIN tree t ON c.parent_id = t.id
         )
         ${FINAL_SELECT}
@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
           ARRAY[
             lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
           ]::text[] AS sort_path
-        FROM struktur_organisasi
+        FROM peta_jabatan
         WHERE parent_id IS NULL
 
         UNION ALL
@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
           t.sort_path || (
             lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
           )
-        FROM struktur_organisasi c
+        FROM peta_jabatan c
         JOIN tree t ON c.parent_id = t.id
       )
       ${FINAL_SELECT}
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
         if (parent_id) {
             const p = await pool.query(
                 `SELECT 1
-                 FROM struktur_organisasi
+                 FROM peta_jabatan
                  WHERE id = $1::uuid LIMIT 1`,
                 [parent_id]
             );
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
         const dup = await pool.query<{ exists: boolean }>(
             `
                 SELECT EXISTS(SELECT 1
-                              FROM struktur_organisasi
+                              FROM peta_jabatan
                               WHERE parent_id IS NOT DISTINCT FROM $1::uuid
                     AND slug = $2) AS exists
             `,
@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
         const {rows} = await pool.query<Row>(
             `
                 WITH parent AS (SELECT id, level
-                                FROM struktur_organisasi
+                                FROM peta_jabatan
                                 WHERE id = $1
                     ::uuid
                     )
@@ -258,12 +258,12 @@ export async function POST(req: NextRequest) {
                     ELSE (SELECT level FROM parent) + 1
                     END AS lvl, COALESCE (
                               $5:: int, (SELECT COALESCE (MAX (order_index) + 1, 0)
-                    FROM struktur_organisasi
+                    FROM peta_jabatan
                     WHERE parent_id IS NOT DISTINCT FROM (SELECT id FROM parent))
                     ) AS ord
                     ), ins AS (
                 INSERT
-                INTO struktur_organisasi
+                INTO peta_jabatan
                 (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan)
                 VALUES
                     ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'))

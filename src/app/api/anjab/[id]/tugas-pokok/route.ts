@@ -224,15 +224,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             [newId]
         );
 
-        // Update agregat struktur_organisasi (CEIL SUM)
+        // Update agregat peta_jabatan (CEIL SUM)
         await client.query(
-            `UPDATE struktur_organisasi so
+            `UPDATE peta_jabatan so
              SET kebutuhan_pegawai = COALESCE(
                      (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric, 0))
                       FROM tugas_pokok tp
                       WHERE tp.jabatan_id = $1 ::uuid), 0),
                  updated_at        = NOW()
-             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+             WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
             [id]
         );
 
@@ -438,15 +438,15 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             );
         }
 
-        // Update kebutuhan_pegawai (dibulatkan ke atas) di struktur_organisasi
+        // Update kebutuhan_pegawai (dibulatkan ke atas) di peta_jabatan
         await client.query(
-            `UPDATE struktur_organisasi so
+            `UPDATE peta_jabatan so
        SET kebutuhan_pegawai = COALESCE(
              (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric, 0))
               FROM tugas_pokok tp
               WHERE tp.jabatan_id = $1::uuid), 0),
            updated_at = NOW()
-       WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+       WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
             [id]
         );
 

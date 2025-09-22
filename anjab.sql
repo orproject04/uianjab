@@ -93,11 +93,11 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_user       ON password_reset(user_
 CREATE INDEX IF NOT EXISTS idx_password_reset_expires    ON password_reset(expires_at);
 
 /* ============================================================================
-   2) STRUKTUR ORGANISASI
+   2) PETA JABATAN
    ============================================================================ */
-CREATE TABLE IF NOT EXISTS struktur_organisasi (
+CREATE TABLE IF NOT EXISTS peta_jabatan (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  parent_id    uuid NULL REFERENCES struktur_organisasi(id) ON DELETE CASCADE,
+  parent_id    uuid NULL REFERENCES peta_jabatan(id) ON DELETE CASCADE,
   nama_jabatan text NOT NULL,
   unit_kerja   text,
   slug         text NOT NULL,
@@ -112,13 +112,13 @@ CREATE TABLE IF NOT EXISTS struktur_organisasi (
   updated_at   timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT uq_so_parent_slug UNIQUE (parent_id, slug)
 );
-CREATE INDEX IF NOT EXISTS idx_so_parent      ON struktur_organisasi(parent_id);
-CREATE INDEX IF NOT EXISTS idx_so_parent_ord  ON struktur_organisasi(parent_id, order_index);
-CREATE INDEX IF NOT EXISTS idx_so_level       ON struktur_organisasi(level);
+CREATE INDEX IF NOT EXISTS idx_so_parent      ON peta_jabatan(parent_id);
+CREATE INDEX IF NOT EXISTS idx_so_parent_ord  ON peta_jabatan(parent_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_so_level       ON peta_jabatan(level);
 
-DROP TRIGGER IF EXISTS so_touch ON struktur_organisasi;
+DROP TRIGGER IF EXISTS so_touch ON peta_jabatan;
 CREATE TRIGGER so_touch
-BEFORE UPDATE ON struktur_organisasi
+BEFORE UPDATE ON peta_jabatan
 FOR EACH ROW EXECUTE FUNCTION trg_touch_updated_at();
 
 CREATE OR REPLACE FUNCTION so_set_level()
@@ -128,20 +128,20 @@ BEGIN
   IF NEW.parent_id IS NULL THEN
     NEW.level := 0;
   ELSE
-    SELECT level INTO v_parent_level FROM struktur_organisasi WHERE id = NEW.parent_id;
+    SELECT level INTO v_parent_level FROM peta_jabatan WHERE id = NEW.parent_id;
     NEW.level := COALESCE(v_parent_level, -1) + 1;
   END IF;
   RETURN NEW;
 END$$;
 
-DROP TRIGGER IF EXISTS so_set_level_ins ON struktur_organisasi;
+DROP TRIGGER IF EXISTS so_set_level_ins ON peta_jabatan;
 CREATE TRIGGER so_set_level_ins
-BEFORE INSERT ON struktur_organisasi
+BEFORE INSERT ON peta_jabatan
 FOR EACH ROW EXECUTE FUNCTION so_set_level();
 
-DROP TRIGGER IF EXISTS so_set_level_upd ON struktur_organisasi;
+DROP TRIGGER IF EXISTS so_set_level_upd ON peta_jabatan;
 CREATE TRIGGER so_set_level_upd
-BEFORE UPDATE OF parent_id ON struktur_organisasi
+BEFORE UPDATE OF parent_id ON peta_jabatan
 FOR EACH ROW EXECUTE FUNCTION so_set_level();
 
 /* ============================================================================
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS jabatan (
   kelas_jabatan       text,
   prestasi_diharapkan text,
   slug                text,
-  struktur_id         uuid REFERENCES struktur_organisasi(id) ON DELETE SET NULL,
+  peta_id             uuid REFERENCES peta_jabatan(id) ON DELETE SET NULL,
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
@@ -444,7 +444,7 @@ FOR EACH ROW EXECUTE FUNCTION touch_parent_jabatan();
    ============================================================================ */
 CREATE INDEX IF NOT EXISTS idx_jabatan_id           ON jabatan (id);
 CREATE INDEX IF NOT EXISTS idx_jabatan_slug         ON jabatan (slug);
-CREATE INDEX IF NOT EXISTS idx_jabatan_struktur_id  ON jabatan (struktur_id);
+CREATE INDEX IF NOT EXISTS idx_jabatan_peta_id      ON jabatan (peta_id);
 CREATE INDEX IF NOT EXISTS idx_jabatan_updated_at   ON jabatan (updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_unit_kerja_jabatan       ON unit_kerja (jabatan_id);

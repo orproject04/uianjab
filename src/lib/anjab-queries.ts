@@ -118,7 +118,7 @@ const SELECT_ANJAB = (whereClause: string) => `
            COALESCE(tp.tugas_pokok, '[]')               AS tugas_pokok
 
     FROM jabatan j
-             LEFT JOIN struktur_organisasi so ON so.id = j.struktur_id
+             LEFT JOIN peta_jabatan so ON so.id = j.peta_id
              LEFT JOIN unit_kerja u ON u.jabatan_id = j.id
              LEFT JOIN kualifikasi_jabatan k ON k.jabatan_id = j.id
 
@@ -285,13 +285,13 @@ const SELECT_ANJAB = (whereClause: string) => `
 export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | null> {
     const isUuid = UUID_RE.test(idOrSlug);
 
-    // Kalau UUID → coba id & struktur_id
+    // Kalau UUID → coba id & peta_id
     if (isUuid) {
         const byId = await pool.query<AnjabRow>(SELECT_ANJAB("j.id = $1::uuid"), [idOrSlug]);
         if (byId.rows[0]) return byId.rows[0];
 
-        const byStruktur = await pool.query<AnjabRow>(SELECT_ANJAB("j.struktur_id = $1::uuid"), [idOrSlug]);
-        return byStruktur.rows[0] ?? null;
+        const byPeta = await pool.query<AnjabRow>(SELECT_ANJAB("j.peta_id = $1::uuid"), [idOrSlug]);
+        return byPeta.rows[0] ?? null;
     }
 
     // Selain itu → anggap slug

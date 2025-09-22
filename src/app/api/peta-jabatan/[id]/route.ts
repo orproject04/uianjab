@@ -1,4 +1,4 @@
-// src/app/api/struktur-organisasi/[id]/route.ts
+// src/app/api/peta-jabatan/[id]/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth"; // ✅ [BARU]
@@ -87,7 +87,7 @@ export async function PATCH(
 
         // 1) Ambil node saat ini
         const curRes = await client.query(
-            "SELECT id, parent_id, level, slug FROM struktur_organisasi WHERE id = $1::uuid",
+            "SELECT id, parent_id, level, slug FROM peta_jabatan WHERE id = $1::uuid",
             [id]
         );
         if (curRes.rowCount === 0) {
@@ -116,7 +116,7 @@ export async function PATCH(
             }
             if (newParentId) {
                 const p = await client.query(
-                    "SELECT id, level FROM struktur_organisasi WHERE id = $1::uuid",
+                    "SELECT id, level FROM peta_jabatan WHERE id = $1::uuid",
                     [newParentId]
                 );
                 if (p.rowCount === 0) {
@@ -129,11 +129,11 @@ export async function PATCH(
                 const sub = await client.query(
                     `
                         WITH RECURSIVE subtree AS (SELECT id
-                                                   FROM struktur_organisasi
+                                                   FROM peta_jabatan
                                                    WHERE id = $1::uuid
                         UNION ALL
                         SELECT c.id
-                        FROM struktur_organisasi c
+                        FROM peta_jabatan c
                                  JOIN subtree s ON c.parent_id = s.id )
                         SELECT id::text AS id
                         FROM subtree
@@ -156,7 +156,7 @@ export async function PATCH(
             const dup = await client.query<{ exists: boolean }>(
                 `
                     SELECT EXISTS(SELECT 1
-                                  FROM struktur_organisasi
+                                  FROM peta_jabatan
                                   WHERE parent_id IS NOT DISTINCT FROM $1::uuid
                         AND slug = $2
                         AND id <> $3::uuid) AS exists
@@ -177,7 +177,7 @@ export async function PATCH(
             let newLevel: number;
             if (newParentId) {
                 const p = await client.query(
-                    "SELECT level FROM struktur_organisasi WHERE id = $1::uuid",
+                    "SELECT level FROM peta_jabatan WHERE id = $1::uuid",
                     [newParentId]
                 );
                 newLevel = Number(p.rows[0].level) + 1;
@@ -188,7 +188,7 @@ export async function PATCH(
             const deltaLevel = newLevel - cur.level;
 
             await client.query(
-                "UPDATE struktur_organisasi SET parent_id = $1::uuid, level = $2, updated_at = NOW() WHERE id = $3::uuid",
+                "UPDATE peta_jabatan SET parent_id = $1::uuid, level = $2, updated_at = NOW() WHERE id = $3::uuid",
                 [newParentId, newLevel, id]
             );
 
@@ -196,13 +196,13 @@ export async function PATCH(
                 await client.query(
                     `
                         WITH RECURSIVE subtree AS (SELECT id
-                                                   FROM struktur_organisasi
+                                                   FROM peta_jabatan
                                                    WHERE id = $1::uuid
                         UNION ALL
                         SELECT c.id
-                        FROM struktur_organisasi c
+                        FROM peta_jabatan c
                                  JOIN subtree s ON c.parent_id = s.id )
-                        UPDATE struktur_organisasi t
+                        UPDATE peta_jabatan t
                         SET level      = t.level + $2,
                             updated_at = NOW()
                         WHERE t.id IN (SELECT id FROM subtree WHERE id <> $3::uuid)
@@ -231,7 +231,7 @@ export async function PATCH(
 
         if (fields.length) {
             const q = `
-                UPDATE struktur_organisasi
+                UPDATE peta_jabatan
                 SET ${fields.join(", ")},
                     updated_at = NOW()
                 WHERE id = $${fields.length + 1}::uuid
@@ -248,7 +248,7 @@ export async function PATCH(
     } catch (e: any) {
         await client.query("ROLLBACK").catch(() => {
         });
-        console.error("[struktur-organisasi][PATCH]", e);
+        console.error("[peta-jabatan][PATCH]", e);
         if (e?.code === "23505") {
             return NextResponse.json(
                 {error: "Slug sudah dipakai di parent yang sama"},
@@ -288,7 +288,7 @@ export async function DELETE(
 
         // pastikan ada
         const exists = await pool.query<{ exists: boolean }>(
-            `SELECT EXISTS(SELECT 1 FROM struktur_organisasi WHERE id = $1::uuid) AS exists`,
+            `SELECT EXISTS(SELECT 1 FROM peta_jabatan WHERE id = $1::uuid) AS exists`,
             [id]
         );
         if (!exists.rows[0]?.exists) {
@@ -299,14 +299,14 @@ export async function DELETE(
         const {rowCount} = await pool.query(
             `
                 WITH RECURSIVE subtree AS (SELECT id
-                                           FROM struktur_organisasi
+                                           FROM peta_jabatan
                                            WHERE id = $1::uuid
                 UNION ALL
                 SELECT c.id
-                FROM struktur_organisasi c
+                FROM peta_jabatan c
                          JOIN subtree s ON c.parent_id = s.id )
                 DELETE
-                FROM struktur_organisasi
+                FROM peta_jabatan
                 WHERE id IN (SELECT id FROM subtree)
             `,
             [id]
@@ -322,16 +322,16 @@ export async function DELETE(
     }
 }
 
-/** Helper: rebuild slug jabatan berdasarkan 2 segmen terakhir jalur struktur */
+/** Helper: rebuild slug jabatan berdasarkan 2 segmen terakhir  */
 async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
     await client.query(
         `
             WITH RECURSIVE subtree AS (SELECT id, parent_id, slug, level
-                                       FROM struktur_organisasi
+                                       FROM peta_jabatan
                                        WHERE id = $1::uuid
             UNION ALL
             SELECT so.id, so.parent_id, so.slug, so.level
-            FROM struktur_organisasi so
+            FROM peta_jabatan so
                      JOIN subtree s ON so.parent_id = s.id ),
       upwalk AS (
         SELECT s.id AS node_id, s.id AS anc_id, s.slug AS anc_slug, s.level AS anc_level, s.parent_id
@@ -339,7 +339,7 @@ async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
         UNION ALL
         SELECT u.node_id, p.id, p.slug, p.level, p.parent_id
         FROM upwalk u
-        JOIN struktur_organisasi p ON p.id = u.parent_id
+        JOIN peta_jabatan p ON p.id = u.parent_id
         WHERE u.parent_id IS NOT NULL
       ),
       parts AS (
@@ -374,7 +374,7 @@ async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
             UPDATE jabatan
             SET slug       = paths.short_slug,
                 updated_at = NOW() FROM paths
-            WHERE jabatan.struktur_id = paths.node_id
+            WHERE jabatan.peta_id = paths.node_id
         `,
         [rootId]
     );

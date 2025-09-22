@@ -197,14 +197,14 @@ export async function POST(req: NextRequest) {
                     updated++;
                 }
 
-                // Tulis total (dibulatkan) ke struktur_organisasi.kebutuhan_pegawai
+                // Tulis total (dibulatkan) ke peta_jabatan.kebutuhan_pegawai
                 const totalRounded = Math.round(totalKebutuhanPegawai);
                 await client.query(
                     `
-                        UPDATE struktur_organisasi
+                        UPDATE peta_jabatan
                         SET kebutuhan_pegawai = $1,
                             updated_at        = NOW()
-                        WHERE id = (SELECT struktur_id FROM jabatan WHERE id = $2::uuid)
+                        WHERE id = (SELECT peta_id FROM jabatan WHERE id = $2::uuid)
                     `,
                     [totalRounded, id]
                 );

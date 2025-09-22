@@ -175,7 +175,7 @@ const AppSidebar: React.FC = () => {
         setLoadingAnjab(true);
         setAnjabError(null);
         try {
-            const res = await apiFetch("/api/struktur-organisasi", {cache: "no-store"});
+            const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
             if (!res.ok) throw new Error(`Gagal memuat Anjab (${res.status})`);
             const flat: APIRow[] = await res.json();
             setAnjabSubs(buildTreeFromFlat(flat));
@@ -201,7 +201,7 @@ const AppSidebar: React.FC = () => {
     const navItems: NavItem[] = [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
-        {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/struktur-organisasi", subItems: []}
+        {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []}
     ];
     const othersItems: NavItem[] = [];
 
@@ -285,7 +285,7 @@ const AppSidebar: React.FC = () => {
         });
         if (!resSwal.isConfirmed) return;
 
-        let res = await apiFetch(`/api/struktur-organisasi/${encodeURIComponent(node.id)}`, {
+        let res = await apiFetch(`/api/peta-jabatan/${encodeURIComponent(node.id)}`, {
             method: "DELETE",
         });
 
@@ -305,7 +305,7 @@ const AppSidebar: React.FC = () => {
 
     // ====== EDIT ======
     const fetchParentOptions = useCallback(async (currentId: string) => {
-        const res = await apiFetch("/api/struktur-organisasi", {cache: "no-store"});
+        const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
         if (!res.ok) throw new Error("Gagal memuat pilihan parent");
         const flat: APIRow[] = await res.json();
 
@@ -437,7 +437,7 @@ const AppSidebar: React.FC = () => {
         try {
             setSaving(true);
             setSaveErr(null);
-            const res = await apiFetch(`/api/struktur-organisasi/${encodeURIComponent(id)}`, {
+            const res = await apiFetch(`/api/peta-jabatan/${encodeURIComponent(id)}`, {
                 method: "PATCH",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify(body),
@@ -548,7 +548,7 @@ const AppSidebar: React.FC = () => {
         try {
             setAdding(true);
             setAddErr(null);
-            const res = await apiFetch("/api/struktur-organisasi", {
+            const res = await apiFetch("/api/peta-jabatan", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify(body),

@@ -24,12 +24,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         let row: { id: string } | undefined;
 
         if (isUuid) {
-            // Jika UUID → coba cocokkan sebagai struktur_id (dan fallback: id langsung)
+            // Jika UUID → coba cocokkan sebagai peta_id (dan fallback: id langsung)
             const q = await pool.query<{ id: string }>(
                 `
                     SELECT j.id
                     FROM jabatan j
-                    WHERE j.struktur_id = $1::uuid
+                    WHERE j.peta_id = $1::uuid
              OR j.id = $1::uuid
                         LIMIT 1
                 `,

@@ -139,8 +139,8 @@ const AppHeader: React.FC = () => {
         setLoading(true);
         setErr(null);
         try {
-            const res = await apiFetch("/api/struktur-organisasi", {cache: "no-store"});
-            if (!res.ok) throw new Error(`Gagal memuat struktur (${res.status})`);
+            const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
+            if (!res.ok) throw new Error(`Gagal memuat peta jabatan (${res.status})`);
             const flat: APIRow[] = await res.json();
             const items = buildItemsFromFlat(flat);
             setAllItems(items);

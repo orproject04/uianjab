@@ -165,15 +165,15 @@ export async function PATCH(
             [id, tugasId]
         );
 
-        // Update agregat struktur_organisasi
+        // Update agregat peta_jabatan
         await client.query(
-            `UPDATE struktur_organisasi so
+            `UPDATE peta_jabatan so
              SET kebutuhan_pegawai = COALESCE(
                      (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric, 0))
                       FROM tugas_pokok tp
                       WHERE tp.jabatan_id = $1 ::uuid), 0),
                  updated_at        = NOW()
-             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+             WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
             [id]
         );
 
@@ -294,13 +294,13 @@ export async function DELETE(
         }
 
         await pool.query(
-            `UPDATE struktur_organisasi so
+            `UPDATE peta_jabatan so
              SET kebutuhan_pegawai = COALESCE(
                      (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric, 0))
                       FROM tugas_pokok tp
                       WHERE tp.jabatan_id = $1 ::uuid), 0),
                  updated_at        = NOW()
-             WHERE so.id = (SELECT struktur_id FROM jabatan WHERE id = $1::uuid)`,
+             WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
             [id]
         );
 

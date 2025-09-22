@@ -24,17 +24,17 @@ export default function AnjabCreateByIdPage() {
         // slug dash (contoh: "setjen-depmin")
         const slugRaw = String(id || "").trim();
 
-        // ===== Ambil struktur_id dari localStorage (WAJIB) =====
-        let struktur_id: string | undefined;
+        // ===== Ambil peta_id dari localStorage (WAJIB) =====
+        let peta_id: string | undefined;
         try {
             const key = `so:${slugRaw}`; // hanya 2 segmen terakhir, pakai '-'
             const got = localStorage.getItem(key);
-            if (got && typeof got === "string" && got.trim()) struktur_id = got.trim();
+            if (got && typeof got === "string" && got.trim()) peta_id = got.trim();
         } catch {
             // abaikan error storage
         }
 
-        if (!struktur_id) {
+        if (!peta_id) {
             await MySwal.fire({
                 icon: "error",
                 title: "Gagal",
@@ -50,7 +50,7 @@ export default function AnjabCreateByIdPage() {
             ikhtisar_jabatan: String(form.ikhtisar_jabatan.value || "").trim() || null,
             kelas_jabatan: String(form.kelas_jabatan.value || "").trim() || null,
             prestasi_diharapkan: String(form.prestasi_diharapkan.value || "").trim() || null,
-            struktur_id, // WAJIB
+            peta_id, // WAJIB
         };
 
         if (!payload.nama_jabatan || !payload.kode_jabatan) {
@@ -73,8 +73,8 @@ export default function AnjabCreateByIdPage() {
 
             const json = await res.json().catch(() => ({}));
 
-            // Jika 400 terkait struktur_id → tampilkan pesan khusus
-            if (res.status === 400 && json?.error && String(json.error).toLowerCase().includes("struktur")) {
+            // Jika 400 terkait peta_id → tampilkan pesan khusus
+            if (res.status === 400 && json?.error && String(json.error).toLowerCase().includes("peta")) {
                 await MySwal.fire({
                     icon: "error",
                     title: "Gagal",

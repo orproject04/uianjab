@@ -256,7 +256,7 @@ function Segmented<T extends string>({
 type ScopeOpt = "PUSAT" | "DAERAH";
 type FungsionalOpt = "STRUKTURAL" | "FUNGSIONAL";
 
-export default function StrukturOrganisasiClient() {
+export default function PetaJabatanClient() {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [containerSize, setContainerSize] = useState({w: 0, h: 0});
 
@@ -277,7 +277,7 @@ export default function StrukturOrganisasiClient() {
         setLoading(true);
         setErr(null);
         try {
-            const res = await apiFetch("/api/struktur-organisasi", {cache: "no-store"});
+            const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
             if (!res.ok) throw new Error(`Gagal mengambil data (${res.status})`);
             const data: APIRow[] = await res.json();
             setAllRows(data);
