@@ -7,15 +7,13 @@ import {usePathname} from "next/navigation";
 
 import {useSidebar} from "../context/SidebarContext";
 import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon} from "../icons/index";
-import SidebarWidget from "./SidebarWidget";
+
 import {useMe} from "@/context/MeContext";
 import {createPortal} from "react-dom";
 import Swal from "sweetalert2";
 import {apiFetch} from "@/lib/apiFetch";
 
-// ⬇️ pakai komponen Select milikmu (lihat file Select di bawah)
-
-/** ====== TIPE API (flat) ====== */
+// Tipe API dan Internal tetap sama
 type APIRow = {
     id: string;
     parent_id: string | null;
@@ -24,18 +22,16 @@ type APIRow = {
     unit_kerja: string | null;
     level: number;
     order_index: number;
-    // nilai baru dari API (pastikan GET sudah mengembalikan ini)
     is_pusat?: boolean;
     jenis_jabatan?: string | null;
 };
 
-/** ====== TIPE INTERNAL ====== */
 type SubNavItem = {
     id: string;
     name: string;
     slug: string;
     unit_kerja?: string | null;
-    path: string; // "anjab/<slug>/<child-slug>"
+    path: string;
     subItems?: SubNavItem[];
 };
 
@@ -51,16 +47,14 @@ const AppSidebar: React.FC = () => {
     const pathname = usePathname();
     const {isAdmin, loading: meLoading} = useMe();
 
-    // ====== STATE data anjab ======
+    // State tetap sama seperti kode asli
     const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
     const [loadingAnjab, setLoadingAnjab] = useState<boolean>(false);
     const [anjabError, setAnjabError] = useState<string | null>(null);
-
-    // ====== STATE menu & dropdown ======
     const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
     const [openNestedSubmenus, setOpenNestedSubmenus] = useState<Record<string, boolean>>({});
-
-    // ====== STATE: Edit modal ======
+    
+    // State untuk Edit modal
     const [showEdit, setShowEdit] = useState(false);
     const [editFor, setEditFor] = useState<SubNavItem | null>(null);
     const [editName, setEditName] = useState("");
@@ -68,32 +62,26 @@ const AppSidebar: React.FC = () => {
     const [editOrder, setEditOrder] = useState<string>("");
     const [editParentId, setEditParentId] = useState<string | "">("");
     const [editUnitKerja, setEditUnitKerja] = useState<string>("");
-
-    // NEW: field baru
-    const [editIsPusat, setEditIsPusat] = useState<string>("true");    // "true" | "false"
-    const [editJenisJabatan, setEditJenisJabatan] = useState<string>(""); // "" | salah satu opsi
-
+    const [editIsPusat, setEditIsPusat] = useState<string>("true");
+    const [editJenisJabatan, setEditJenisJabatan] = useState<string>("");
     const [parentOptions, setParentOptions] = useState<Array<{ id: string | ""; label: string }>>([]);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
-    // ====== STATE: Add Child modal ======
+    // State untuk Add Child modal
     const [showAdd, setShowAdd] = useState(false);
     const [addParentFor, setAddParentFor] = useState<SubNavItem | null>(null);
     const [addName, setAddName] = useState("Unit Baru");
     const [addSlug, setAddSlug] = useState("unitbaru");
     const [addOrder, setAddOrder] = useState<string>("");
     const [addUnitKerja, setAddUnitKerja] = useState<string>("");
-
-    // NEW: field baru
     const [addIsPusat, setAddIsPusat] = useState<string>("true");
     const [addJenisJabatan, setAddJenisJabatan] = useState<string>("");
-
     const [addErr, setAddErr] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
     const [slugTouched, setSlugTouched] = useState(false);
 
-    // ====== UTIL ======
+    // Utility functions tetap sama
     const toSlug = (s: string) => {
         if (!s) return "unit";
         const caps = (s.match(/[A-Z]/g) || []).join("").toLowerCase();
@@ -109,7 +97,6 @@ const AppSidebar: React.FC = () => {
             arr.push(r);
             children.set(r.parent_id, arr);
         }
-        // urut per parent: order_index ASC, lalu nama ASC
         for (const [k, arr] of children.entries()) {
             arr.sort(
                 (a, b) =>
@@ -136,7 +123,6 @@ const AppSidebar: React.FC = () => {
         return roots.map((r) => buildNode(r, null));
     };
 
-    // ====== LOCAL STORAGE HELPERS ======
     const pathSegments = (fullPath: string) =>
         fullPath.replace(/^anjab\/?/, "").replace(/^\/+/, "").split("/").filter(Boolean);
 
@@ -197,7 +183,6 @@ const AppSidebar: React.FC = () => {
         };
     }, [loadData]);
 
-    // ====== NAV items ======
     const navItems: NavItem[] = [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
@@ -205,7 +190,6 @@ const AppSidebar: React.FC = () => {
     ];
     const othersItems: NavItem[] = [];
 
-    // ====== ACTIVE helpers ======
     const isExactActive = useCallback(
         (path?: string) => {
             if (!path) return false;
@@ -272,7 +256,6 @@ const AppSidebar: React.FC = () => {
         });
     };
 
-    // ====== DELETE ======
     const handleDeleteNode = async (node: SubNavItem) => {
         const resSwal = await Swal.fire({
             title: "Hapus Node?",
@@ -303,7 +286,6 @@ const AppSidebar: React.FC = () => {
         await Swal.fire({icon: "success", title: "Terhapus", timer: 1200, showConfirmButton: false});
     };
 
-    // ====== EDIT ======
     const fetchParentOptions = useCallback(async (currentId: string) => {
         const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
         if (!res.ok) throw new Error("Gagal memuat pilihan parent");
@@ -358,8 +340,6 @@ const AppSidebar: React.FC = () => {
         const currentParent = current?.parent_id ?? "";
         const currentOrder = current?.order_index ?? "";
         const currentUnitKerja = current?.unit_kerja ?? "";
-
-        // NEW: ambil default is_pusat & jenis_jabatan
         const currentIsPusat = (current?.is_pusat ?? true) ? "true" : "false";
         const currentJenisJabatan = current?.jenis_jabatan ?? "";
 
@@ -390,7 +370,6 @@ const AppSidebar: React.FC = () => {
                 setEditParentId(currentParent);
                 setEditOrder(currentOrder === "0" ? "0" : currentOrder);
                 setEditUnitKerja(currentUnitKerja || "");
-                // NEW
                 setEditIsPusat(currentIsPusat);
                 setEditJenisJabatan(currentJenisJabatan || "");
 
@@ -420,7 +399,6 @@ const AppSidebar: React.FC = () => {
             return;
         }
 
-        // NEW: konversi ke boolean + null
         const is_pusat = editIsPusat === "true" || editIsPusat === true;
         const jenis_jabatan = editJenisJabatan || null;
 
@@ -445,7 +423,6 @@ const AppSidebar: React.FC = () => {
             const json = await res.json().catch(() => ({}));
             if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menyimpan (${res.status})`);
 
-            // (sisanya tetap persis seperti punyamu)
             try {
                 const curNode = editFor && findNodeById(editFor.id, anjabSubs);
                 if (curNode) {
@@ -502,7 +479,6 @@ const AppSidebar: React.FC = () => {
         }
     }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, loadData, anjabSubs]);
 
-    // ====== ADD CHILD ======
     const openAddModal = (parent: SubNavItem) => {
         setAddParentFor(parent);
         setAddErr(null);
@@ -556,7 +532,6 @@ const AppSidebar: React.FC = () => {
             const json = await res.json().catch(() => ({}));
             if (!res.ok || json?.ok === false) throw new Error(json?.error || `Gagal menambah (${res.status})`);
 
-            // simpan mapping
             try {
                 const newId: string | undefined = json?.node?.id;
                 if (newId && addParentFor) {
@@ -578,7 +553,6 @@ const AppSidebar: React.FC = () => {
         }
     }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, addIsPusat, addJenisJabatan, loadData]);
 
-    // ====== Node actions menu (⋯) ======
     const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({node}) => {
         if (!isAdmin) return null;
         const [open, setOpen] = useState(false);
@@ -706,9 +680,8 @@ const AppSidebar: React.FC = () => {
         );
     };
 
-    // ====== Renderers ======
     const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
-        <ul className={`mt-2 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
+        <ul className={`mt-1 space-y-0.5 ${level === 0 ? "ml-9" : "ml-4"}`}>
             {subItems.map((subItem) => {
                 const hasSubItems = !!subItem.subItems?.length;
                 const isNestedOpen = openNestedSubmenus[subItem.path];
@@ -721,10 +694,10 @@ const AppSidebar: React.FC = () => {
                                 <div className="relative isolate flex items-center">
                                     <Link
                                         href={href}
-                                        className={`relative z-0 flex-1 menu-dropdown-item ${
+                                        className={`relative z-0 flex-1 block px-3 py-2 rounded-md text-sm transition-colors ${
                                             isExactActive(subItem.path)
-                                                ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
-                                                : "menu-dropdown-item-inactive"
+                                                ? "bg-purple-50 text-purple-700 font-medium"
+                                                : "text-gray-700 hover:bg-gray-50"
                                         }`}
                                         title={subItem.unit_kerja || undefined}
                                     >
@@ -754,10 +727,10 @@ const AppSidebar: React.FC = () => {
                             <div className="relative isolate flex items-center">
                                 <Link
                                     href={href}
-                                    className={`relative z-0 flex-1 menu-dropdown-item ${
+                                    className={`relative z-0 flex-1 block px-3 py-2 rounded-md text-sm transition-colors ${
                                         isExactActive(subItem.path)
-                                            ? "menu-dropdown-item-active bg-purple-100 text-purple-700 font-semibold"
-                                            : "menu-dropdown-item-inactive"
+                                            ? "bg-purple-50 text-purple-700 font-medium"
+                                            : "text-gray-700 hover:bg-gray-50"
                                     }`}
                                     title={subItem.unit_kerja || undefined}
                                 >
@@ -773,9 +746,9 @@ const AppSidebar: React.FC = () => {
     );
 
     const renderMenuItems = (items: NavItem[], menuType: "main" | "others") => (
-        <ul className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-1">
             {items.map((nav, index) => {
-                const isAnjab = nav.name === "anjab";
+                const isAnjab = nav.name === "Anjab";
                 const hasChildren = isAnjab || !!nav.subItems?.length;
 
                 return (
@@ -794,23 +767,23 @@ const AppSidebar: React.FC = () => {
                                             return {type: menuType, index};
                                         })
                                     }
-                                    className={`menu-item group ${
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
                                         openSubmenu?.type === menuType && openSubmenu.index === index
-                                            ? "menu-item-active bg-purple-100 text-purple-700 font-semibold"
-                                            : "menu-item-inactive"
+                                            ? "bg-purple-50 text-purple-700 font-medium"
+                                            : "text-gray-700 hover:bg-gray-50"
                                     } ${!isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"}`}
                                 >
-                                    <span>{nav.icon}</span>
+                                    <span className="flex-shrink-0">{nav.icon}</span>
                                     {(isExpanded || isHovered || isMobileOpen) && (
                                         <>
-                      <span className="menu-item-text">
-                        {nav.name}
-                          {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
-                          {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
-                      </span>
+                                            <span className="flex-1 text-left">
+                                                {nav.name}
+                                                {isAnjab && loadingAnjab && <span className="ml-2 text-xs text-gray-400">(loading…)</span>}
+                                                {isAnjab && anjabError && <span className="ml-2 text-xs text-red-500">({anjabError})</span>}
+                                            </span>
                                             <ChevronDownIcon
-                                                className={`ml-auto w-5 h-5 transition-transform duration-300 ${
-                                                    openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-500" : ""
+                                                className={`w-4 h-4 flex-shrink-0 transition-transform duration-300 ${
+                                                    openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-purple-600" : ""
                                                 }`}
                                             />
                                         </>
@@ -833,15 +806,16 @@ const AppSidebar: React.FC = () => {
                         ) : (
                             <Link
                                 href={nav.path || "/"}
-                                className={`menu-item group ${
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
                                     isExactActive(nav.path)
-                                        ? "menu-item-active bg-purple-100 text-purple-700 font-semibold"
-                                        : "menu-item-inactive"
-                                }`}
+                                        ? "bg-purple-50 text-purple-700 font-medium"
+                                        : "text-gray-700 hover:bg-gray-50"
+                                } ${!isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"}`}
                             >
-                                <span>{nav.icon}</span>
-                                {(isExpanded || isHovered || isMobileOpen) &&
-                                    <span className="menu-item-text">{nav.name}</span>}
+                                <span className="flex-shrink-0">{nav.icon}</span>
+                                {(isExpanded || isHovered || isMobileOpen) && (
+                                    <span className="flex-1 text-left">{nav.name}</span>
+                                )}
                             </Link>
                         )}
                     </li>
@@ -850,7 +824,6 @@ const AppSidebar: React.FC = () => {
         </ul>
     );
 
-    // Auto-expand sesuai URL aktif
     useEffect(() => {
         const expandNested = (items: SubNavItem[]) => {
             items.forEach((item) => {
@@ -881,7 +854,6 @@ const AppSidebar: React.FC = () => {
         });
     }, [pathname, anjabSubs]);
 
-    // Seed mapping localStorage utk admin
     useEffect(() => {
         if (!isAdmin || !anjabSubs.length) return;
         try {
@@ -902,67 +874,75 @@ const AppSidebar: React.FC = () => {
     return (
         <>
             <aside
-                className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
-                    isExpanded || isMobileOpen ? "w-[350px]" : isHovered ? "w-[350px]" : "w-[90px]"
+                className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-4 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
+                    isExpanded || isMobileOpen ? "w-[280px]" : isHovered ? "w-[280px]" : "w-[90px]"
                 } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
                 onMouseEnter={() => !isExpanded && setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
-                <div className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
-                    <Link href="/">
+                <div className="py-6 flex justify-center items-center">
+                    <Link href="/" className="flex flex-col items-center">
                         {isExpanded || isHovered || isMobileOpen ? (
                             <>
-                                <Image className="dark:hidden" src="/images/logo/full-logo.svg" alt="Logo" width={150}
-                                       height={40}/>
+                                <Image className="dark:hidden" src="/images/logo/pandawa-icon.png" alt="Logo" width={80} height={80}/>
                                 <Image
                                     className="hidden dark:block"
-                                    src="/images/logo/full-logo-white.svg"
+                                    src="/images/logo/pandawa-icon.png"
                                     alt="Logo"
-                                    width={150}
-                                    height={40}
+                                    width={80}
+                                    height={80}
                                 />
+                                <div className="mt-3 text-center">
+                                    <h1 className="text-lg font-bold text-gray-900 dark:text-white">PANDAWA</h1>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Portal Anjab dan ABK</p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">Berbasis Web Terintegrasi</p>
+                                </div>
                             </>
                         ) : (
-                            <Image src="/images/logo/setjen.svg" alt="Logo" width={32} height={32}/>
+                            <Image src="/images/logo/pandawa-icon.png" alt="Logo" width={40} height={40}/>
                         )}
                     </Link>
                 </div>
 
-                <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+                <div className="flex-1 flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
                     <nav className="mb-6">
-                        <div className="flex flex-col gap-4">
+                        <div className="flex flex-col">
                             <div>
-                                <h2
-                                    className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                                        !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-                                    }`}
-                                >
-                                    {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots/>}
-                                </h2>
+                                {(isExpanded || isHovered || isMobileOpen) && (
+                                    <h2 className="mb-3 px-3 text-xs uppercase tracking-wide text-gray-400 font-semibold">
+                                        MENU
+                                    </h2>
+                                )}
                                 {renderMenuItems(navItems, "main")}
                             </div>
                         </div>
                     </nav>
-                    {(isExpanded || isHovered || isMobileOpen) && <SidebarWidget/>}
+                    
+                    <div className="mt-auto px-4 pt-8 pb-6 flex justify-center">
+                        <Image
+                            src="/images/logo/setjen.svg"
+                            alt="Setjen DPD RI"
+                            width={60}
+                            height={60}
+                            className="opacity-60"
+                        />
+                    </div>
                 </div>
             </aside>
 
-            {/* ===== Modal Edit Node ===== */}
             {showEdit && editFor && (
-                <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center">
-                    {/* container diperpendek + scroll di isi */}
-                    <div className="bg-white rounded-xl w-full max-w-lg shadow-lg max-h-[80vh] flex flex-col">
-                        <div className="px-4 pt-4">
-                            <h3 className="text-lg font-semibold">Edit Node</h3>
+                <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl w-full max-w-lg shadow-lg max-h-[85vh] flex flex-col">
+                        <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+                            <h3 className="text-lg font-semibold text-gray-900">Edit Node</h3>
                         </div>
 
-                        {/* isi form scrollable */}
-                        <div className="px-4 pb-2 mt-3 overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-3">
+                        <div className="px-5 py-4 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label className="text-sm block mb-1">Nama</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Nama</label>
                                     <input
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editName}
                                         onChange={(e) => {
                                             const v = e.target.value;
@@ -973,29 +953,28 @@ const AppSidebar: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Slug</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Slug</label>
                                     <input
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editSlug}
                                         onChange={(e) => setEditSlug(toSlug(e.target.value))}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Unit Kerja</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Unit Kerja</label>
                                     <input
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editUnitKerja}
                                         onChange={(e) => setEditUnitKerja(e.target.value)}
                                         placeholder="Opsional"
                                     />
                                 </div>
 
-                                {/* === NEW: Pusat / Daerah === */}
                                 <div>
-                                    <label className="text-sm block mb-1">Pusat / Daerah</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Pusat / Daerah</label>
                                     <select
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editIsPusat}
                                         onChange={(e) => setEditIsPusat(e.target.value)}
                                     >
@@ -1004,11 +983,10 @@ const AppSidebar: React.FC = () => {
                                     </select>
                                 </div>
 
-                                {/* === NEW: Jenis Jabatan === */}
                                 <div>
-                                    <label className="text-sm block mb-1">Jenis Jabatan</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Jenis Jabatan</label>
                                     <select
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editJenisJabatan}
                                         onChange={(e) => setEditJenisJabatan(e.target.value)}
                                     >
@@ -1025,10 +1003,10 @@ const AppSidebar: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Order index</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>
                                     <input
                                         type="number"
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editOrder}
                                         onChange={(e) => setEditOrder(e.target.value)}
                                         placeholder="Kosongkan untuk auto"
@@ -1036,9 +1014,9 @@ const AppSidebar: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Parent</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Parent</label>
                                     <select
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editParentId}
                                         onChange={(e) => setEditParentId(e.target.value as any)}
                                     >
@@ -1048,22 +1026,24 @@ const AppSidebar: React.FC = () => {
                                             </option>
                                         ))}
                                     </select>
-                                    <p className="mt-1 text-xs text-gray-500">
+                                    <p className="mt-1.5 text-xs text-gray-500">
                                         Memindahkan node juga memindahkan seluruh subtree ke parent baru.
                                     </p>
                                 </div>
                             </div>
 
-                            {saveErr && <div className="mt-2 text-sm text-red-600">{saveErr}</div>}
+                            {saveErr && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveErr}</div>}
                         </div>
 
-                        {/* footer tetap terlihat */}
-                        <div className="px-4 pb-4 mt-2 flex justify-end gap-2 border-t border-gray-100 pt-3">
-                            <button className="px-3 py-1.5 rounded bg-gray-200" onClick={() => setShowEdit(false)}>
+                        <div className="px-5 py-4 flex justify-end gap-2 border-t border-gray-100">
+                            <button 
+                                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors" 
+                                onClick={() => setShowEdit(false)}
+                            >
                                 Batal
                             </button>
                             <button
-                                className="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-60"
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 disabled={saving}
                                 onClick={submitEdit}
                             >
@@ -1074,22 +1054,19 @@ const AppSidebar: React.FC = () => {
                 </div>
             )}
 
-            {/* ===== Modal Tambah Child ===== */}
             {showAdd && addParentFor && (
-                <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center">
-                    {/* container diperpendek + scroll di isi */}
-                    <div className="bg-white rounded-xl w-full max-w-lg shadow-lg max-h-[80vh] flex flex-col">
-                        <div className="px-4 pt-4">
-                            <h3 className="text-lg font-semibold">Tambah Child untuk: {addParentFor.name}</h3>
+                <div className="fixed inset-0 bg-black/40 z-[2000] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl w-full max-w-lg shadow-lg max-h-[85vh] flex flex-col">
+                        <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+                            <h3 className="text-lg font-semibold text-gray-900">Tambah Child untuk: {addParentFor.name}</h3>
                         </div>
 
-                        {/* isi form scrollable */}
-                        <div className="px-4 pb-2 mt-3 overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-3">
+                        <div className="px-5 py-4 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label className="text-sm block mb-1">Nama</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Nama</label>
                                     <input
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={addName}
                                         onChange={(e) => {
                                             const v = e.target.value;
@@ -1101,9 +1078,9 @@ const AppSidebar: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Slug</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Slug</label>
                                     <input
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={addSlug}
                                         onChange={(e) => {
                                             setAddSlug(toSlug(e.target.value));
@@ -1114,20 +1091,19 @@ const AppSidebar: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Unit Kerja</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Unit Kerja</label>
                                     <input
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={addUnitKerja}
                                         onChange={(e) => setAddUnitKerja(e.target.value)}
                                         placeholder="Opsional"
                                     />
                                 </div>
 
-                                {/* === NEW: Pusat / Daerah === */}
                                 <div>
-                                    <label className="text-sm block mb-1">Pusat / Daerah</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Pusat / Daerah</label>
                                     <select
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={addIsPusat}
                                         onChange={(e) => setAddIsPusat(e.target.value)}
                                     >
@@ -1136,11 +1112,10 @@ const AppSidebar: React.FC = () => {
                                     </select>
                                 </div>
 
-                                {/* === NEW: Jenis Jabatan === */}
                                 <div>
-                                    <label className="text-sm block mb-1">Jenis Jabatan</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Jenis Jabatan</label>
                                     <select
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={addJenisJabatan}
                                         onChange={(e) => setAddJenisJabatan(e.target.value)}
                                     >
@@ -1157,10 +1132,10 @@ const AppSidebar: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm block mb-1">Order index</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>
                                     <input
                                         type="number"
-                                        className="w-full border rounded px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={addOrder}
                                         onChange={(e) => setAddOrder(e.target.value)}
                                         placeholder="Kosongkan untuk auto"
@@ -1168,16 +1143,18 @@ const AppSidebar: React.FC = () => {
                                 </div>
                             </div>
 
-                            {addErr && <div className="mt-2 text-sm text-red-600">{addErr}</div>}
+                            {addErr && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addErr}</div>}
                         </div>
 
-                        {/* footer tetap terlihat */}
-                        <div className="px-4 pb-4 mt-2 flex justify-end gap-2 border-t border-gray-100 pt-3">
-                            <button className="px-3 py-1.5 rounded bg-gray-200" onClick={() => setShowAdd(false)}>
+                        <div className="px-5 py-4 flex justify-end gap-2 border-t border-gray-100">
+                            <button 
+                                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors" 
+                                onClick={() => setShowAdd(false)}
+                            >
                                 Batal
                             </button>
                             <button
-                                className="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-60"
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 disabled={adding}
                                 onClick={submitAdd}
                             >

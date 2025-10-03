@@ -101,11 +101,8 @@ export default function AuthLayoutClient({children}: { children: React.ReactNode
                         <div className="relative items-center justify-center flex z-1">
                             <div className="flex flex-col items-center max-w-xs">
                                 <Link href="/" className="block mb-4">
-                                    <Image width={231} height={48} src="/images/logo/full-logo-white.svg" alt="Logo"/>
+                                    <Image width={231} height={48} src="/images/logo/pandawa5.png" alt="Logo"/>
                                 </Link>
-                                <p className="text-center text-gray-200 dark:text-white/60">
-                                    Aplikasi Analisis Jabatan & Beban Kerja
-                                </p>
                             </div>
                         </div>
                     </div>
