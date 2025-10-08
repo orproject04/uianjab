@@ -16,6 +16,10 @@
   --breakpoint-xl: 1280px;
   --breakpoint-2xl: 1536px;
 
+  /* Header height used by AppHeader and layout padding. Change here to adjust spacing globally */
+  --header-height: 88px;
+  /* Responsive header height note: see below for the responsive override */
+
   --text-title-2xl: 72px;
   --text-title-2xl--line-height: 90px;
   --text-title-xl: 60px;
@@ -53,8 +57,8 @@
 
   --color-blue-light-25: #f5fbff;
   --color-blue-light-50: #f0f9ff;
-  --color-blue-light-100: #e0f2fe;
   --color-blue-light-200: #b9e6fe;
+  /* header height moved to :root below (keeps @theme block pure custom properties) */
   --color-blue-light-300: #7cd4fd;
   --color-blue-light-400: #36bffa;
   --color-blue-light-500: #0ba5ec;
@@ -165,6 +169,13 @@
   --z-index-9999: 9999;
   --z-index-99999: 99999;
   --z-index-999999: 999999;
+}
+
+/* Responsive header height: smaller on mobile to save vertical space */
+@media (max-width: 1024px) {
+  :root {
+    --header-height: 72px;
+  }
 }
 
 /*
@@ -737,4 +748,9 @@ span.flatpickr-weekday,
     0 1px 2px 0 rgba(16, 24, 40, 0.06);
   opacity: 0.8;
   cursor: grabbing; /* Changes the cursor to indicate dragging */
+}
+
+/* Helper: ensure header search popovers appear above other chrome elements */
+.header-search-popover {
+  z-index: var(--z-index-9999);
 }

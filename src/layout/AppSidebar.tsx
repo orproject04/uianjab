@@ -399,7 +399,7 @@ const AppSidebar: React.FC = () => {
             return;
         }
 
-        const is_pusat = editIsPusat === "true" || editIsPusat === true;
+    const is_pusat = editIsPusat === "true";
         const jenis_jabatan = editJenisJabatan || null;
 
         const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan};
@@ -508,7 +508,7 @@ const AppSidebar: React.FC = () => {
             return;
         }
 
-        const is_pusat = addIsPusat === "true" || addIsPusat === true;
+    const is_pusat = addIsPusat === "true";
         const jenis_jabatan = addJenisJabatan || null;
 
         const body: any = {parent_id, nama_jabatan, slug, unit_kerja, is_pusat, jenis_jabatan};
@@ -918,15 +918,17 @@ const AppSidebar: React.FC = () => {
                         </div>
                     </nav>
                     
-                    <div className="mt-auto px-4 pt-8 pb-6 flex justify-center">
+                    <div className="mt-auto px-4 pt-8 pb-6 flex justify-end">
                         <Image
                             src="/images/logo/setjen.svg"
                             alt="Setjen DPD RI"
-                            width={60}
-                            height={60}
+                            width={isExpanded || isHovered || isMobileOpen ? 60 : 40}
+                            height={isExpanded || isHovered || isMobileOpen ? 60 : 40}
                             className="opacity-60"
                         />
                     </div>
+                    
+                    {(isExpanded || isHovered || isMobileOpen)}
                 </div>
             </aside>
 

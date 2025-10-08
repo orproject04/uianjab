@@ -2,10 +2,9 @@
 
 import UserDropdown from "@/components/header/UserDropdown";
 import {useSidebar} from "@/context/SidebarContext";
-import Link from "next/link";
-import React, {useState, useEffect, useRef, useCallback} from "react";
-import {useRouter} from "next/navigation";
+import {useRouter, usePathname} from "next/navigation";
 import {apiFetch} from "@/lib/apiFetch";
+import React, {useState, useEffect, useRef, useCallback} from "react";
 
 /** ====== TIPE API (flat) ====== */
 type APIRow = {
@@ -28,8 +27,10 @@ type SearchItem = {
 };
 
 const AppHeader: React.FC = () => {
-    const {isMobileOpen, toggleSidebar, toggleMobileSidebar} = useSidebar();
+    const {isMobileOpen, isExpanded, isHovered, toggleSidebar, toggleMobileSidebar} = useSidebar();
     const router = useRouter();
+    const pathname = usePathname();
+    const isHomePage = pathname === "/";
 
     // Toggle sidebar
     const handleToggle = () => {
@@ -55,7 +56,7 @@ const AppHeader: React.FC = () => {
     const [listHover, setListHover] = useState(false);
     const [keyboardNav, setKeyboardNav] = useState(false);
 
-    // --- Drag vs Tap detection for list items ---
+    // Drag vs Tap detection for list items
     const draggingRef = useRef(false);
     const downPosRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -63,18 +64,22 @@ const AppHeader: React.FC = () => {
         downPosRef.current = {x: e.clientX, y: e.clientY};
         draggingRef.current = false;
     };
+
     const onListPointerMove: React.PointerEventHandler = (e) => {
         if (!downPosRef.current) return;
         const dx = Math.abs(e.clientX - downPosRef.current.x);
         const dy = Math.abs(e.clientY - downPosRef.current.y);
-        if (dx > 6 || dy > 6) draggingRef.current = true; // threshold
-    };
-    const onListPointerUp: React.PointerEventHandler = () => {
-        // biarkan onClick membaca flag; reset setelah onClick
+        if (dx > 6 || dy > 6) draggingRef.current = true;
     };
 
-    // Shortcut ⌘K / Ctrl+K → fokus input
+    const onListPointerUp: React.PointerEventHandler = () => {
+        // Let onClick handle the flag; reset after onClick
+    };
+
+    // Shortcut ⌘K / Ctrl+K → focus input
     useEffect(() => {
+        if (isHomePage) return; // Don't bind shortcut onhomepage
+
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
                 event.preventDefault();
@@ -84,9 +89,8 @@ const AppHeader: React.FC = () => {
         };
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, []);
+    }, [isHomePage]);
 
-    // Build items (path sama seperti Sidebar)
     const buildItemsFromFlat = useCallback((rows: APIRow[]): SearchItem[] => {
         const byId = new Map<string, APIRow>();
         const children = new Map<string | null, APIRow[]>();
@@ -97,7 +101,7 @@ const AppHeader: React.FC = () => {
             arr.push(r);
             children.set(r.parent_id, arr);
         }
-        // sort per parent
+
         for (const [k, arr] of children.entries()) {
             arr.sort(
                 (a, b) =>
@@ -118,34 +122,28 @@ const AppHeader: React.FC = () => {
             return `anjab/${segs.join("/")}`;
         };
 
-        return rows.map((r) => {
-            const path = calcPath(r);
-            const searchable = [r.nama_jabatan, r.unit_kerja ?? "", r.slug, path]
+        return rows.map((r) => ({
+            id: r.id,
+            name: r.nama_jabatan,
+            unit_kerja: r.unit_kerja,
+            path: calcPath(r),
+            searchable: [r.nama_jabatan, r.unit_kerja ?? "", r.slug, calcPath(r)]
                 .join(" ")
-                .toLowerCase();
-            return {
-                id: r.id,
-                name: r.nama_jabatan,
-                unit_kerja: r.unit_kerja,
-                path,
-                searchable,
-            };
-        });
+                .toLowerCase(),
+        }));
     }, []);
 
-    // Load data sekali
     const ensureLoaded = useCallback(async () => {
         if (allItems.length) return;
         setLoading(true);
         setErr(null);
         try {
             const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
-            if (!res.ok) throw new Error(`Gagal memuat peta jabatan (${res.status})`);
+            if (!res.ok) throw new Error(`Failed to load peta jabatan (${res.status})`);
             const flat: APIRow[] = await res.json();
-            const items = buildItemsFromFlat(flat);
-            setAllItems(items);
+            setAllItems(buildItemsFromFlat(flat));
         } catch (e: any) {
-            setErr(e?.message || "Gagal memuat data");
+            setErr(e?.message || "Failed to load data");
         } finally {
             setLoading(false);
         }
@@ -155,7 +153,6 @@ const AppHeader: React.FC = () => {
         void ensureLoaded();
     }, [ensureLoaded]);
 
-    // Filter hasil (debounce)
     useEffect(() => {
         if (!open && q.length === 0) return;
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -163,7 +160,7 @@ const AppHeader: React.FC = () => {
             const needle = q.trim().toLowerCase();
             if (!needle) {
                 setResults(allItems.slice(0, 20));
-                setActiveIdx(-1);           // ⬅️ TIDAK auto pilih pertama
+                setActiveIdx(-1);
                 setKeyboardNav(false);
                 return;
             }
@@ -171,7 +168,7 @@ const AppHeader: React.FC = () => {
                 .filter((it) => it.searchable.includes(needle))
                 .slice(0, 20);
             setResults(filtered);
-            setActiveIdx(-1);             // ⬅️ tetap -1
+            setActiveIdx(-1);
             setKeyboardNav(false);
         }, 120);
         return () => {
@@ -179,44 +176,38 @@ const AppHeader: React.FC = () => {
         };
     }, [q, open, allItems]);
 
-    // Click outside (cek container mobile & desktop)
     useEffect(() => {
         if (!open) return;
         const onDown = (e: PointerEvent | MouseEvent) => {
             const t = e.target as Node;
             const inMobile = containerRefMobile.current?.contains(t);
             const inDesktop = containerRefDesktop.current?.contains(t);
-            if (inMobile || inDesktop) return; // interaksi di dalam
+            if (inMobile || inDesktop) return;
             setOpen(false);
             setActiveIdx(-1);
             setKeyboardNav(false);
         };
         document.addEventListener("pointerdown", onDown as any);
-        return () => {
-            document.removeEventListener("pointerdown", onDown as any);
-        };
+        return () => document.removeEventListener("pointerdown", onDown as any);
     }, [open]);
 
-    // Navigasi
     const goToItem = (item: SearchItem) => {
         setOpen(false);
         setActiveIdx(-1);
         setKeyboardNav(false);
         const href = `/${item.path.replace(/^\/+/, "")}`;
         router.push(href);
-        // reset flags
         draggingRef.current = false;
         downPosRef.current = null;
     };
 
-    // Keyboard navigation
     const onKeyDownInput: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
         if (!open) return;
         if (e.key === "ArrowDown") {
             e.preventDefault();
             setKeyboardNav(true);
             setActiveIdx((i) => {
-                if (i < 0) return results.length ? 0 : -1; // ⬅️ mulai dari 0 hanya saat keyboard
+                if (i < 0) return results.length ? 0 : -1;
                 return Math.min((results.length || 0) - 1, i + 1);
             });
         } else if (e.key === "ArrowUp") {
@@ -236,12 +227,8 @@ const AppHeader: React.FC = () => {
         }
     };
 
-    // util render item (pakai kondisi highlight baru)
     const renderItem = (it: SearchItem, idx: number) => {
         const href = `/${it.path.replace(/^\/+/, "")}`;
-        // highlight hanya saat:
-        // - mouse berada di list (listHover) DAN idx aktif, atau
-        // - sedang navigasi keyboard (keyboardNav) DAN idx aktif
         const active = idx === activeIdx && (listHover || keyboardNav);
 
         return (
@@ -277,13 +264,16 @@ const AppHeader: React.FC = () => {
 
     return (
         <header
-            className="sticky top-0 flex w-full bg-white border-gray-200 z-40 dark:border-gray-800 dark:bg-gray-900 lg:border-b">
-            <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-6">
-                <div
-                    className="flex items-center justify-between w-full gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
+            style={{ height: 'var(--header-height)' }}
+            className={`fixed top-0 bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 shadow-sm transition-all duration-300 ${
+                isExpanded || (!isExpanded && isHovered) ? 'lg:ml-[280px]' : 'lg:ml-[80px]'
+            } right-0 left-0 z-[60]`}
+        >
+            <div className="flex flex-grow flex-col lg:flex-row w-full h-full">
+                <div className="flex flex-shrink-0 items-center justify-between w-full gap-2 px-6 sm:gap-4 lg:px-8 h-full">
                     {/* Toggle sidebar */}
                     <button
-                        className="items-center justify-center w-10 h-10 text-gray-500 border-gray-200 rounded-lg z-50 dark:border-gray-800 lg:flex dark:text-gray-400 lg:h-11 lg:w-11 lg:border"
+                        className="flex items-center justify-center w-10 h-10 text-gray-500 border border-gray-200 rounded-lg z-50 dark:border-gray-800 dark:text-gray-400 lg:h-11 lg:w-11 hover:bg-gray-50 dark:hover:bg-white/[0.02]"
                         onClick={handleToggle}
                         aria-label="Toggle Sidebar"
                     >
@@ -308,103 +298,28 @@ const AppHeader: React.FC = () => {
                         )}
                     </button>
 
-                    <Link href="/" className="lg:hidden" aria-label="Home"/>
-
-                    {/* ========= MOBILE: Search + User ========= */}
+                    {/* Mobile: Search + User */}
                     <div
-                        className="flex lg:hidden w-full items-center gap-3 ml-2 relative z-[60]"
+                        className="flex lg:hidden flex-1 items-center gap-3 ml-2 relative z-[60]"
                         ref={containerRefMobile}
                     >
-                        <div className="flex-1 relative">
-              <span className="absolute -translate-y-1/2 left-3 top-1/2 pointer-events-none">
-                <svg className="fill-gray-500 dark:fill-gray-400" width="18" height="18" viewBox="0 0 20 20">
-                  <path
-                      fillRule="evenodd"
-                      clipRule="evenodd"
-                      d="M3.04175 9.37363C3.04175 5.87693 5.87711 3.04199 9.37508 3.04199C12.8731 3.04199 15.7084 5.87693 15.7084 9.37363C15.7084 12.8703 12.8731 15.7053 9.37508 15.7053C5.87711 15.7053 3.04175 12.8703 3.04175 9.37363ZM9.37508 1.54199C5.04902 1.54199 1.54175 5.04817 1.54175 9.37363C1.54175 13.6991 5.04902 17.2053 9.37508 17.2053C11.2674 17.2053 13.003 16.5344 14.357 15.4176L17.177 18.238C17.4699 18.5309 17.9448 18.5309 18.2377 18.238C18.5306 17.9451 18.5306 17.4703 18.2377 17.1774L15.418 14.3573C16.5365 13.0033 17.2084 11.2669 17.2084 9.37363C17.2084 5.04817 13.7011 1.54199 9.37508 1.54199Z"
-                  />
-                </svg>
-              </span>
-
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                placeholder="Cari Jabatan/Unit…"
-                                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-10 pr-3 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
-                                value={q}
-                                onFocus={() => {
-                                    setOpen(true);
-                                    void ensureLoaded();
-                                }}
-                                onChange={(e) => {
-                                    setQ(e.target.value);
-                                    setOpen(true);
-                                }}
-                                onKeyDown={(e) => {
-                                    setKeyboardNav(true);
-                                    onKeyDownInput(e);
-                                }}
-                            />
-
-                            {open && (
-                                <div
-                                    className="absolute left-0 right-0 top-full z-[1000] mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900 overscroll-contain"
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onWheel={(e) => e.stopPropagation()}
-                                    onTouchMove={(e) => e.stopPropagation()}
-                                >
-                                    {loading ? (
-                                        <div
-                                            className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Memuat…</div>
-                                    ) : err ? (
-                                        <div className="px-3 py-2 text-sm text-red-600">{err}</div>
-                                    ) : results.length === 0 ? (
-                                        <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Tidak ada
-                                            hasil</div>
-                                    ) : (
-                                        <ul
-                                            className="max-h-80 overflow-auto py-1 overscroll-contain touch-pan-y"
-                                            onPointerDown={onListPointerDown}
-                                            onPointerMove={onListPointerMove}
-                                            onPointerUp={onListPointerUp}
-                                            onMouseEnter={() => setListHover(true)}
-                                            onMouseLeave={() => {
-                                                setListHover(false);
-                                                if (!keyboardNav) setActiveIdx(-1);
-                                            }}
-                                        >
-                                            {results.map((it, idx) => renderItem(it, idx))}
-                                        </ul>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="ml-auto">
-                            <UserDropdown/>
-                        </div>
-                    </div>
-
-                    {/* ========= DESKTOP: Search kiri — User kanan ========= */}
-                    <div className="hidden lg:flex items-center justify-between w-full">
-                        <div className="flex-1 max-w-[430px] relative z-[60]" ref={containerRefDesktop}>
-                            <div className="relative">
-                <span className="absolute -translate-y-1/2 left-4 top-1/2 pointer-events-none">
-                  <svg className="fill-gray-500 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20">
-                    <path
-                        fillRule="evenodd"
-                        clipRule="evenodd"
-                        d="M3.04175 9.37363C3.04175 5.87693 5.87711 3.04199 9.37508 3.04199C12.8731 3.04199 15.7084 5.87693 15.7084 9.37363C15.7084 12.8703 12.8731 15.7053 9.37508 15.7053C5.87711 15.7053 3.04175 12.8703 3.04175 9.37363ZM9.37508 1.54199C5.04902 1.54199 1.54175 5.04817 1.54175 9.37363C1.54175 13.6991 5.04902 17.2053 9.37508 17.2053C11.2674 17.2053 13.003 16.5344 14.357 15.4176L17.177 18.238C17.4699 18.5309 17.9448 18.5309 18.2377 18.238C18.5306 17.9451 18.5306 17.4703 18.2377 17.1774L15.418 14.3573C16.5365 13.0033 17.2084 11.2669 17.2084 9.37363C17.2084 5.04817 13.7011 1.54199 9.37508 1.54199Z"
-                    />
-                  </svg>
-                </span>
+                        {!isHomePage && (
+                            <div className="flex-1 relative">
+                                <span className="absolute -translate-y-1/2 left-3 top-1/2 pointer-events-none">
+                                    <svg className="fill-gray-500 dark:fill-gray-400" width="18" height="18" viewBox="0 0 20 20">
+                                        <path
+                                            fillRule="evenodd"
+                                            clipRule="evenodd"
+                                            d="M3.04175 9.37363C3.04175 5.87693 5.87711 3.04199 9.37508 3.04199C12.8731 3.04199 15.7084 5.87693 15.7084 9.37363C15.7084 12.8703 12.8731 15.7053 9.37508 15.7053C5.87711 15.7053 3.04175 12.8703 3.04175 9.37363ZM9.37508 1.54199C5.04902 1.54199 1.54175 5.04817 1.54175 9.37363C1.54175 13.6991 5.04902 17.2053 9.37508 17.2053C11.2674 17.2053 13.003 16.5344 14.357 15.4176L17.177 18.238C17.4699 18.5309 17.9448 18.5309 18.2377 18.238C18.5306 17.9451 18.5306 17.4703 18.2377 17.1774L15.418 14.3573C16.5365 13.0033 17.2084 11.2669 17.2084 9.37363C17.2084 5.04817 13.7011 1.54199 9.37508 1.54199Z"
+                                        />
+                                    </svg>
+                                </span>
 
                                 <input
                                     ref={inputRef}
                                     type="text"
                                     placeholder="Cari Jabatan/Unit…"
-                                    className="h-11 w-full rounded-lg border border-gray-200 bg-transparent py-2.5 pl-12 pr-14 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                                    className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-10 pr-3 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
                                     value={q}
                                     onFocus={() => {
                                         setOpen(true);
@@ -420,31 +335,20 @@ const AppHeader: React.FC = () => {
                                     }}
                                 />
 
-                                <button
-                                    type="button"
-                                    tabIndex={-1}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 border border-gray-200 bg-gray-50 px-[7px] py-[4.5px] text-xs text-gray-500 rounded-lg dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                >
-                                    ⌘K
-                                </button>
-
                                 {open && (
                                     <div
-                                        className="absolute z-[1000] mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900 overscroll-contain"
+                                        className="absolute left-0 right-0 top-full z-[1000] mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900 overscroll-contain"
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onWheel={(e) => e.stopPropagation()}
                                         onTouchMove={(e) => e.stopPropagation()}
                                     >
                                         {loading ? (
-                                            <div
-                                                className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Memuat…</div>
+                                            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Memuat…</div>
                                         ) : err ? (
                                             <div className="px-3 py-2 text-sm text-red-600">{err}</div>
                                         ) : results.length === 0 ? (
-                                            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Tidak
-                                                ada hasil</div>
+                                            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Tidak ada hasil</div>
                                         ) : (
                                             <ul
                                                 className="max-h-80 overflow-auto py-1 overscroll-contain touch-pan-y"
@@ -463,10 +367,94 @@ const AppHeader: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        )}
 
-                        <div className="ml-auto">
-                            <UserDropdown/>
+                        <div className={!isHomePage ? "ml-auto" : "w-full flex justify-end"}>
+                            <UserDropdown />
+                        </div>
+                    </div>
+
+                    {/* Desktop: Search left — User right */}
+                    <div className="hidden lg:flex lg:flex-1 items-center justify-between">
+                        {!isHomePage && (
+                            <div className="flex-1 max-w-[640px] mx-auto relative z-[60]" ref={containerRefDesktop}>
+                                <div className="relative">
+                                    <span className="absolute -translate-y-1/2 left-4 top-1/2 pointer-events-none">
+                                        <svg className="fill-gray-500 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20">
+                                            <path
+                                                fillRule="evenodd"
+                                                clipRule="evenodd"
+                                                d="M3.04175 9.37363C3.04175 5.87693 5.87711 3.04199 9.37508 3.04199C12.8731 3.04199 15.7084 5.87693 15.7084 9.37363C15.7084 12.8703 12.8731 15.7053 9.37508 15.7053C5.87711 15.7053 3.04175 12.8703 3.04175 9.37363ZM9.37508 1.54199C5.04902 1.54199 1.54175 5.04817 1.54175 9.37363C1.54175 13.6991 5.04902 17.2053 9.37508 17.2053C11.2674 17.2053 13.003 16.5344 14.357 15.4176L17.177 18.238C17.4699 18.5309 17.9448 18.5309 18.2377 18.238C18.5306 17.9451 18.5306 17.4703 18.2377 17.1774L15.418 14.3573C16.5365 13.0033 17.2084 11.2669 17.2084 9.37363C17.2084 5.04817 13.7011 1.54199 9.37508 1.54199Z"
+                                            />
+                                        </svg>
+                                    </span>
+
+                                    <input
+                                        ref={inputRef}
+                                        type="text"
+                                        placeholder="Cari Jabatan/Unit…"
+                                        className="h-11 w-full rounded-lg border border-gray-200 bg-transparent py-2.5 pl-12 pr-14 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                                        value={q}
+                                        onFocus={() => {
+                                            setOpen(true);
+                                            void ensureLoaded();
+                                        }}
+                                        onChange={(e) => {
+                                            setQ(e.target.value);
+                                            setOpen(true);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            setKeyboardNav(true);
+                                            onKeyDownInput(e);
+                                        }}
+                                    />
+
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 border border-gray-200 bg-gray-50 px-[7px] py-[4.5px] text-xs text-gray-500 rounded-lg dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                    >
+                                        ⌘K
+                                    </button>
+
+                                    {open && (
+                                        <div
+                                            className="absolute z-[1000] mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900 overscroll-contain"
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            onWheel={(e) => e.stopPropagation()}
+                                            onTouchMove={(e) => e.stopPropagation()}
+                                        >
+                                            {loading ? (
+                                                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Memuat…</div>
+                                            ) : err ? (
+                                                <div className="px-3 py-2 text-sm text-red-600">{err}</div>
+                                            ) : results.length === 0 ? (
+                                                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Tidak ada hasil</div>
+                                            ) : (
+                                                <ul
+                                                    className="max-h-80 overflow-auto py-1 overscroll-contain touch-pan-y"
+                                                    onPointerDown={onListPointerDown}
+                                                    onPointerMove={onListPointerMove}
+                                                    onPointerUp={onListPointerUp}
+                                                    onMouseEnter={() => setListHover(true)}
+                                                    onMouseLeave={() => {
+                                                        setListHover(false);
+                                                        if (!keyboardNav) setActiveIdx(-1);
+                                                    }}
+                                                >
+                                                    {results.map((it, idx) => renderItem(it, idx))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className={!isHomePage ? "ml-auto" : "w-full flex justify-end"}>
+                            <UserDropdown />
                         </div>
                     </div>
                 </div>

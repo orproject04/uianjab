@@ -5,6 +5,7 @@ import {useParams} from "next/navigation";
 import React, {useEffect, useMemo, useState} from "react";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
 import {apiFetch} from "@/lib/apiFetch";
+import Button from "@/components/ui/button/Button";
 
 type Status = "idle" | "loading" | "ok" | "notfound" | "error";
 
@@ -205,14 +206,18 @@ export default function InformasiJabatanPage() {
     // === Tanpa slug/id ===
     if (!id) {
         return (
-            <div className="p-8 max-w-xl mx-auto text-center space-y-4">
+            <div className="pt-16 p-8 max-w-xl mx-auto text-center space-y-4">
                 <p className="text-gray-700">Silakan pilih jabatan untuk ditampilkan.</p>
             </div>
         );
     }
 
     if (status === "loading" || status === "idle") {
-        return <p style={{padding: 20}}>Loading...</p>;
+        return (
+            <div className="pt-16">
+                <p style={{padding: 20}}>Loading...</p>
+            </div>
+        );
     }
 
     // === NOT FOUND / ERROR
@@ -222,7 +227,7 @@ export default function InformasiJabatanPage() {
         // Non-admin: pesan sederhana (tanpa aksi)
         if (!isAdmin) {
             return (
-                <div className="w-full min-h-[calc(100dvh-200px)] flex items-center justify-center px-6">
+                <div className="pt-16 w-full min-h-[calc(100dvh-200px)] flex items-center justify-center px-6">
                     <div className="max-w-3xl text-center space-y-3">
                         <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
                             {isNotFound ? (
@@ -248,7 +253,7 @@ export default function InformasiJabatanPage() {
 
         // Admin: tampilkan opsi unggah/buat manual
         return (
-            <div className="p-8 max-w-5xl mx-auto space-y-6">
+            <div className="pt-16 p-8 max-w-5xl mx-auto space-y-6">
                 <div className="text-center space-y-2">
                     <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
                         {isNotFound ? (
@@ -280,11 +285,10 @@ export default function InformasiJabatanPage() {
                             <p className="text-sm text-gray-600">
                                 Mulai dari form kosong.
                             </p>
-                            <Link
-                                href={`/anjab/create/${encodeURIComponent(id)}`}
-                                className="inline-block rounded bg-green-600 text-white px-4 py-2 hover:bg-green-700"
-                            >
-                                + Buat Anjab Manual
+                            <Link href={`/anjab/create/${encodeURIComponent(id)}`}>
+                                <Button className="w-full" size="sm">
+                                    Masuk
+                                </Button>
                             </Link>
                         </div>
                     </div>
@@ -295,7 +299,7 @@ export default function InformasiJabatanPage() {
 
     // === OK → tampilkan PDF dari blob; SEDIAKAN tombol "Unduh" (download attribute) agar nama file sesuai
     return (
-        <>
+        <div className="pt-16">
             {/* Bar atas */}
             <div
                 style={{
@@ -339,8 +343,8 @@ export default function InformasiJabatanPage() {
                 )}
             </div>
 
-            {/* iframe full viewport height */}
-            <div style={{width: "100%", height: "100dvh"}}>
+            {/* iframe reduced height to account for header (4rem) + top bar (~56px) */}
+            <div style={{width: "100%", height: "calc(100dvh - 4rem - 56px)"}}>
                 {pdfSrc ? (
                     <iframe
                         src={pdfSrc}
@@ -358,6 +362,6 @@ export default function InformasiJabatanPage() {
                     </div>
                 )}
             </div>
-        </>
+        </div>
     );
 }
