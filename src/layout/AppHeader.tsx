@@ -7,24 +7,7 @@ import {apiFetch} from "@/lib/apiFetch";
 import React, {useState, useEffect, useRef, useCallback} from "react";
 
 /** ====== TIPE API (flat) ====== */
-type APIRow = {
-    id: string;
-    parent_id: string | null;
-    nama_jabatan: string;
-    slug: string;
-    unit_kerja: string | null;
-    level: number;
-    order_index: number;
-};
-
-/** ====== TIPE RESULT SEARCH ====== */
-type SearchItem = {
-    id: string;
-    name: string;
-    unit_kerja: string | null;
-    path: string; // "anjab/<slug>/<child-slug>"
-    searchable: string;
-};
+import { APIRow, SearchItem, buildItemsFromFlat } from "@/lib/search";
 
 const AppHeader: React.FC = () => {
     const {isMobileOpen, isExpanded, isHovered, toggleSidebar, toggleMobileSidebar} = useSidebar();
@@ -91,47 +74,7 @@ const AppHeader: React.FC = () => {
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [isHomePage]);
 
-    const buildItemsFromFlat = useCallback((rows: APIRow[]): SearchItem[] => {
-        const byId = new Map<string, APIRow>();
-        const children = new Map<string | null, APIRow[]>();
-
-        for (const r of rows) {
-            byId.set(r.id, r);
-            const arr = children.get(r.parent_id) || [];
-            arr.push(r);
-            children.set(r.parent_id, arr);
-        }
-
-        for (const [k, arr] of children.entries()) {
-            arr.sort(
-                (a, b) =>
-                    (a.order_index ?? 0) - (b.order_index ?? 0) ||
-                    a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
-            );
-            children.set(k, arr);
-        }
-
-        const calcPath = (node: APIRow): string => {
-            const segs: string[] = [];
-            let cur: APIRow | null | undefined = node;
-            while (cur) {
-                segs.push(cur.slug);
-                cur = cur.parent_id ? byId.get(cur.parent_id) ?? null : null;
-            }
-            segs.reverse();
-            return `anjab/${segs.join("/")}`;
-        };
-
-        return rows.map((r) => ({
-            id: r.id,
-            name: r.nama_jabatan,
-            unit_kerja: r.unit_kerja,
-            path: calcPath(r),
-            searchable: [r.nama_jabatan, r.unit_kerja ?? "", r.slug, calcPath(r)]
-                .join(" ")
-                .toLowerCase(),
-        }));
-    }, []);
+    // use buildItemsFromFlat imported from src/lib/search
 
     const ensureLoaded = useCallback(async () => {
         if (allItems.length) return;
@@ -147,7 +90,7 @@ const AppHeader: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [allItems.length, buildItemsFromFlat]);
+    }, [allItems.length]);
 
     useEffect(() => {
         void ensureLoaded();
