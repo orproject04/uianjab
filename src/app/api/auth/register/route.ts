@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
         if (password.length < 8) return Response.json({ error: "Password minimal 8 karakter" }, { status: 400 });
 
         const { rows: exist } = await pool.query(`SELECT 1 FROM user_anjab WHERE email=$1`, [email]);
-        if (exist.length) return Response.json({ error: "Email sudah terdaftar" }, { status: 409 });
+        if (exist.length) return Response.json({ error: "Email sudah terdafta" }, { status: 409 });
 
         const password_hash = await hashPassword(password);
         const { rows } = await pool.query(
