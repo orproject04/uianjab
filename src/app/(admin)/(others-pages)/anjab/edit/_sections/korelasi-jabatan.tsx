@@ -1,4 +1,4 @@
-// src/app/(admin)/(others-pages)/AnjabEdit/_sections/korelasi-jabatan.tsx
+﻿// src/app/(admin)/(others-pages)/AnjabEdit/_sections/korelasi-jabatan.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
 import { apiFetch } from "@/lib/apiFetch";
+import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/EditSectionWrapper";
 
 const MySwal = withReactContent(Swal);
 
@@ -35,49 +36,79 @@ function ListInput({
     useEffect(() => { setItems(value ?? []); }, [value]);
 
     const sync = (n: string[]) => { setItems(n); onChange(n); };
-    const add = (after?: number) => {
-        const n = [...items];
-        const idx = typeof after === "number" ? after + 1 : items.length;
-        n.splice(idx, 0, "");
+    
+    const add = () => {
+        const n = [...items, ""];
         sync(n);
-        setTimeout(() => refs.current[idx]?.focus(), 0);
+        setTimeout(() => refs.current[items.length]?.focus(), 0);
     };
-    const remove = (i: number) => sync(items.filter((_, x) => x !== i));
-    const update = (i: number, v: string) => { const n = [...items]; n[i] = v; sync(n); };
+    
+    const remove = (i: number) => {
+        if (items.length <= 1) return; // Minimal 1 item
+        sync(items.filter((_, x) => x !== i));
+    };
+    
+    const update = (i: number, v: string) => { 
+        const n = [...items]; 
+        n[i] = v; 
+        sync(n); 
+    };
+
+    const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        // Enter: tambah item baru di bawah
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const n = [...items];
+            n.splice(i + 1, 0, "");
+            sync(n);
+            setTimeout(() => refs.current[i + 1]?.focus(), 0);
+        }
+        // Ctrl+Backspace: hapus item kosong
+        if (e.key === "Backspace" && e.ctrlKey && items[i] === "" && items.length > 1) {
+            e.preventDefault();
+            remove(i);
+            setTimeout(() => refs.current[Math.max(0, i - 1)]?.focus(), 0);
+        }
+    };
 
     return (
-        <div className="space-y-2">
-            <label className="block text-sm font-medium">{title}</label>
-            {items.map((_, i) => (
-                <div key={i} className="flex items-center gap-2">
-                    <input
-                        ref={(el) => (refs.current[i] = el)}
-                        type="text"
-                        value={items[i] ?? ""}
-                        onChange={(e) => update(i, e.target.value)}
-                        placeholder={placeholder}
-                        className="flex-1 rounded border px-3 py-2"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => add(i)}
-                        className="w-9 h-9 flex items-center justify-center rounded bg-green-600 text-white hover:bg-green-700"
-                        title="Tambah item di bawah"
-                    >+</button>
-                    <button
-                        type="button"
-                        onClick={() => remove(i)}
-                        className="w-9 h-9 flex items-center justify-center rounded bg-red-600 text-white hover:bg-red-700"
-                        title="Hapus item ini"
-                    >✕</button>
-                </div>
-            ))}
+        <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{title}</label>
+            <div className="space-y-2">
+                {items.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                        <input
+                            ref={(el) => { refs.current[i] = el; }}
+                            type="text"
+                            value={item ?? ""}
+                            onChange={(e) => update(i, e.target.value)}
+                            onKeyDown={(e) => handleKeyDown(i, e)}
+                            placeholder={placeholder}
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => remove(i)}
+                            disabled={items.length <= 1}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title="Hapus item (atau tekan Ctrl+Backspace pada item kosong)"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                ))}
+            </div>
             <button
                 type="button"
-                onClick={() => add()}
-                className="rounded px-3 py-2 bg-green-600 text-white hover:bg-green-700"
+                onClick={add}
+                className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 dark:hover:border-brand-400 dark:hover:text-brand-400 transition-colors flex items-center justify-center gap-2 text-sm"
             >
-                + Tambah {title}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah {title}
             </button>
         </div>
     );
@@ -247,101 +278,194 @@ export default function KorelasiJabatanForm({
         }
     }
 
-    // Pesan “key tidak ditemukan di localStorage” → sama seperti modul lain
+    // Pesan "key tidak ditemukan di localStorage" â†’ sama seperti modul lain
     if (!hasKey || !resolvedId) {
         return (
-            <div className="p-6 space-y-3">
-                <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
-                <p className="text-sm text-gray-600">
-                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
-                    lalu kembali ke halaman ini.
-                </p>
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>Coba lagi</button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
+            <EditSectionWrapper
+                title="Korelasi Jabatan"
+                description="ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal"
+                icon={
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                }
+            >
+                <div className="text-center py-12">
+                    <div className="text-red-600 mb-4">
+                        <p>ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                        <p className="text-sm text-gray-600 mt-2">
+                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
+                            lalu kembali ke halaman ini.
+                        </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                        <button
+                            className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                            onClick={retry}
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`} 
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
-    if (loading) return <div className="p-6">Memuat…</div>;
+    if (loading) {
+        return (
+            <EditSectionWrapper
+                title="Korelasi Jabatan"
+                description="Memuat data korelasi jabatan..."
+                icon={
+                    <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                }
+            >
+                <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Memuat data...</p>
+                    </div>
+                </div>
+            </EditSectionWrapper>
+        );
+    }
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between">
-                <button
-                    type="button"
-                    onClick={addRow}
-                    className="rounded px-4 py-2 bg-green-600 text-white hover:bg-green-700"
-                >
-                    + Tambah Item Korelasi Jabatan
-                </button>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
-                    Kembali
-                </Link>
-            </div>
+        <EditSectionWrapper
+            title="Korelasi Jabatan"
+            description="Kelola korelasi jabatan dengan jabatan lain dalam organisasi"
+            icon={
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            }
+        >
+            {rows.length === 0 ? (
+                <div className="text-center py-12">
+                    <div className="mx-auto w-16 h-16 mb-4 text-gray-400">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        Belum ada korelasi jabatan yang ditambahkan
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        Mulai dengan menambahkan korelasi jabatan pertama
+                    </p>
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Korelasi Jabatan
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {rows.map((row, idx) => {
+                        const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
+                        const isSaving = saving === row.id || saving === "new";
 
-            {rows.length === 0 && (
-                <p className="text-gray-600">Belum ada item. Klik “+ Tambah Item Korelasi Jabatan”.</p>
+                        return (
+                            <FormSection key={key} title={`Korelasi Jabatan ${idx + 1}`}>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Jabatan Terkait <span className="text-red-600">*</span>
+                                            </label>
+                                            <input
+                                                ref={idx === rows.length - 1 ? firstRef : undefined}
+                                                type="text"
+                                                value={row.jabatan_terkait ?? ""}
+                                                onChange={(e) => updateLocal(idx, { jabatan_terkait: e.target.value })}
+                                                placeholder="Contoh: Analis Kebijakan Madya"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Unit Kerja/Instansi
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={row.unit_kerja_instansi ?? ""}
+                                                onChange={(e) => updateLocal(idx, { unit_kerja_instansi: e.target.value })}
+                                                placeholder="Contoh: Biro Perencanaan"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <ListInput
+                                        title="Dalam Hal"
+                                        value={row.dalam_hal ?? []}
+                                        onChange={(v) => updateLocal(idx, { dalam_hal: v })}
+                                        placeholder="Contoh: Koordinasi penyusunan data dan pelaporan"
+                                    />
+
+                                    <div className="flex items-center gap-3 pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => saveRow(idx)}
+                                            disabled={isSaving}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isSaving ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                                    Menyimpan...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Simpan
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteRow(idx)}
+                                            className="inline-flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                            Hapus
+                                        </button>
+                                    </div>
+                                </div>
+                            </FormSection>
+                        );
+                    })}
+
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 dark:hover:border-brand-400 dark:hover:text-brand-400 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Korelasi Jabatan Baru
+                    </button>
+                </div>
             )}
 
-            {rows.map((row, idx) => {
-                const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
-                return (
-                    <div key={key} className="rounded border p-4 space-y-4">
-                        <h3 className="font-medium text-lg">Item {idx + 1}</h3>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Jabatan Terkait *</label>
-                                <input
-                                    ref={idx === rows.length - 1 ? firstRef : undefined}
-                                    type="text"
-                                    value={row.jabatan_terkait ?? ""}
-                                    onChange={(e) => updateLocal(idx, { jabatan_terkait: e.target.value })}
-                                    placeholder="Mis. Analis Kebijakan Madya"
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Unit Kerja/Instansi</label>
-                                <input
-                                    type="text"
-                                    value={row.unit_kerja_instansi ?? ""}
-                                    onChange={(e) => updateLocal(idx, { unit_kerja_instansi: e.target.value })}
-                                    placeholder="Mis. Biro Perencanaan"
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                        </div>
-
-                        <ListInput
-                            title="Dalam Hal"
-                            value={row.dalam_hal ?? []}
-                            onChange={(v) => updateLocal(idx, { dalam_hal: v })}
-                            placeholder="Mis. Koordinasi penyusunan data"
-                        />
-
-                        <div className="flex gap-2 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => saveRow(idx)}
-                                disabled={saving === row.id || saving === "new"}
-                                className="rounded px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                            >
-                                {saving === row.id || saving === "new" ? "Menyimpan…" : "Simpan"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => deleteRow(idx)}
-                                className="rounded px-4 py-2 border bg-red-50 hover:bg-red-100"
-                            >
-                                Hapus
-                            </button>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
+        </EditSectionWrapper>
     );
 }

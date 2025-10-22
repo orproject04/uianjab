@@ -4,6 +4,13 @@ import './globals.css';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { MeProvider } from '@/context/MeContext';
+import { icons } from 'lucide-react';
+
+export const metadata = {
+  icons: {
+    icon: '/images/favicon.ico',
+    },
+  };
 
 const outfit = Outfit({
   subsets: ["latin"],

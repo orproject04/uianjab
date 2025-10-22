@@ -6,6 +6,7 @@ import Link from "next/link";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { apiFetch } from "@/lib/apiFetch";
+import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/EditSectionWrapper";
 
 const MySwal = withReactContent(Swal);
 
@@ -81,48 +82,72 @@ function ArrayInput({
     }
 
     return (
-        <div>
-            <label className="block text-sm font-medium mb-2">{label}</label>
-            <div className="space-y-2">
-                {items.map((v, i) => (
-                    <div key={i} className="flex gap-2">
-                        <input
-                            ref={(el) => (inputsRef.current[i] = el)}
-                            type="text"
-                            name={`${name}[${i}]`}
-                            value={v}
-                            onChange={(e) => updateItem(i, e.target.value)}
-                            onKeyDown={(e) => onKeyDown(e, i)}
-                            className="flex-1 rounded border px-3 py-2"
-                            placeholder={placeholder}
-                            autoFocus={autoFocus && i === 0}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => addItem(i)}
-                            title="Tambah baris di bawah"
-                            className="w-9 h-9 flex items-center justify-center rounded bg-green-500 text-white hover:bg-green-600"
-                        >
-                            +
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => removeItem(i)}
-                            title="Hapus baris ini"
-                            className="w-9 h-9 flex items-center justify-center rounded bg-red-500 text-white hover:bg-red-600"
-                        >
-                            ✕
-                        </button>
+        <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {label}
+            </label>
+            
+            {items.length === 0 ? (
+                <div className="text-center py-8 px-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    <svg className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Belum ada {label.toLowerCase()}</p>
+                    <button
+                        type="button"
+                        onClick={() => addItem()}
+                        className="text-sm px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors inline-flex items-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Item Pertama
+                    </button>
+                </div>
+            ) : (
+                <>
+                    <div className="space-y-2">
+                        {items.map((v, i) => (
+                            <div key={i} className="flex gap-2">
+                                <input
+                                    ref={(el) => { inputsRef.current[i] = el; }}
+                                    type="text"
+                                    name={`${name}[${i}]`}
+                                    value={v}
+                                    onChange={(e) => updateItem(i, e.target.value)}
+                                    onKeyDown={(e) => onKeyDown(e, i)}
+                                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                                    placeholder={placeholder}
+                                    autoFocus={autoFocus && i === 0}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removeItem(i)}
+                                    title="Hapus baris ini"
+                                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        ))}
                     </div>
-                ))}
-                <button
-                    type="button"
-                    onClick={() => addItem()}
-                    className="rounded px-3 py-2 bg-green-500 text-white hover:bg-green-600"
-                >
-                    + Tambah
-                </button>
-            </div>
+                    
+                    <button
+                        type="button"
+                        onClick={() => addItem()}
+                        className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Item
+                    </button>
+                    
+                </>
+            )}
+            
             {/* Hidden input sebagai JSON agar mudah diparse */}
             <input type="hidden" name={name} value={JSON.stringify(items)} />
         </div>
@@ -264,101 +289,177 @@ export default function KualifikasiForm({
         setLastError(null);
     };
 
-    // === UI konsisten (error text-only + tombol Coba lagi/Kembali) ===
-    if (!storageInfo.exists || lastError) {
-        const isMissingKey = lastError === "__NOT_FOUND_KEY__";
+    // === UI konsisten dengan EditSectionWrapper ===
+    if (!resolvedId) {
         return (
-            <div className="p-6 space-y-3">
-                {isMissingKey ? (
-                    <>
-                        <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
-                        <p className="text-sm text-gray-600">
-                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu kembali ke
-                            halaman ini.
+            <EditSectionWrapper
+                title="Kualifikasi Jabatan"
+                description="ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal"
+                icon={
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                }
+            >
+                <div className="text-center py-12">
+                    <div className="text-red-600 mb-4">
+                        <p>ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                        <p className="text-sm text-gray-600 mt-2">
+                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
+                            lalu kembali ke halaman ini.
                         </p>
-                    </>
-                ) : (
-                    <p className="text-red-600">{lastError}</p>
-                )}
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>
-                        Coba lagi
-                    </button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
-                        Kembali
-                    </Link>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                        <button
+                            className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                            onClick={retry}
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`} 
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
-    if (loading) return <div className="p-6">Memuat…</div>;
+    if (loading) {
+        return (
+            <EditSectionWrapper
+                title="Kualifikasi Jabatan"
+                description="Memuat data kualifikasi..."
+                icon={
+                    <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                }
+            >
+                <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Memuat data...</p>
+                    </div>
+                </div>
+            </EditSectionWrapper>
+        );
+    }
+
     if (!data) {
         return (
-            <div className="p-6 space-y-3">
-                <p className="text-red-600">Data tidak ditemukan.</p>
-                {lastError && <p className="text-sm text-gray-600">Detail: {lastError}</p>}
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>
-                        Coba lagi
-                    </button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
-                        Kembali
-                    </Link>
+            <EditSectionWrapper
+                title="Kualifikasi Jabatan"
+                description="Data tidak ditemukan"
+                icon={
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                }
+            >
+                <div className="text-center py-12">
+                    <p className="text-red-600 mb-4">Data tidak ditemukan.</p>
+                    {lastError && <p className="text-sm text-gray-600">Detail: {lastError}</p>}
+                    <div className="flex items-center justify-center gap-3 mt-4">
+                        <button
+                            className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                            onClick={retry}
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`} 
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
     // === Form ===
     return (
-        <form onSubmit={onSubmit} className="space-y-6">
-            <div ref={firstFocus}>
-                <ArrayInput
-                    label="Pendidikan Formal"
-                    name="pendidikan_formal"
-                    defaultItems={data.pendidikan_formal ?? []}
-                    placeholder="Contoh: S-1 Administrasi Negara"
-                    autoFocus
-                />
-            </div>
+        <EditSectionWrapper
+            title="Kualifikasi Jabatan"
+            description="Edit persyaratan kualifikasi untuk jabatan ini"
+            icon={
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            }
+        >
+            <form onSubmit={onSubmit} className="space-y-6">
+                <FormSection title="Pendidikan dan Pelatihan">
+                    <div ref={firstFocus} className="space-y-4">
+                        <ArrayInput
+                            label="Pendidikan Formal"
+                            name="pendidikan_formal"
+                            defaultItems={data.pendidikan_formal ?? []}
+                            placeholder="Contoh: S-1 Administrasi Negara"
+                            autoFocus
+                        />
+                    </div>
 
-            <ArrayInput
-                label="Diklat Penjenjangan"
-                name="diklat_penjenjangan"
-                defaultItems={data.diklat_penjenjangan ?? []}
-                placeholder="Contoh: PIM IV / PKP"
-            />
+                    <div className="space-y-4 mt-4">
+                        <ArrayInput
+                            label="Diklat Penjenjangan"
+                            name="diklat_penjenjangan"
+                            defaultItems={data.diklat_penjenjangan ?? []}
+                            placeholder="Contoh: PIM IV / PKP"
+                        />
 
-            <ArrayInput
-                label="Diklat Teknis"
-                name="diklat_teknis"
-                defaultItems={data.diklat_teknis ?? []}
-                placeholder="Contoh: Manajemen Proyek Pemerintahan"
-            />
+                        <ArrayInput
+                            label="Diklat Teknis"
+                            name="diklat_teknis"
+                            defaultItems={data.diklat_teknis ?? []}
+                            placeholder="Contoh: Manajemen Proyek Pemerintahan"
+                        />
 
-            <ArrayInput
-                label="Diklat Fungsional"
-                name="diklat_fungsional"
-                defaultItems={data.diklat_fungsional ?? []}
-                placeholder="Contoh: Fungsional Analis Kebijakan"
-            />
+                        <ArrayInput
+                            label="Diklat Fungsional"
+                            name="diklat_fungsional"
+                            defaultItems={data.diklat_fungsional ?? []}
+                            placeholder="Contoh: Fungsional Analis Kebijakan"
+                        />
+                    </div>
+                </FormSection>
 
-            <ArrayInput
-                label="Pengalaman Kerja"
-                name="pengalaman_kerja"
-                defaultItems={data.pengalaman_kerja ?? []}
-                placeholder="Contoh: Analis kebijakan 2 tahun di ..."
-            />
+                <FormSection title="Pengalaman">
+                    <ArrayInput
+                        label="Pengalaman Kerja"
+                        name="pengalaman_kerja"
+                        defaultItems={data.pengalaman_kerja ?? []}
+                        placeholder="Contoh: Analis kebijakan 2 tahun di ..."
+                    />
+                </FormSection>
 
-            <div className="pt-2 flex items-center gap-3">
-                <button type="submit" disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-60">
-                    {saving ? "Menyimpan..." : "Simpan"}
-                </button>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
-                    Batal
-                </Link>
-            </div>
-        </form>
+                <FormActions>
+                    <button 
+                        type="submit" 
+                        disabled={saving} 
+                        className="px-6 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                        {saving && (
+                            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        )}
+                        {saving ? "Menyimpan..." : "Simpan Perubahan"}
+                    </button>
+                    <Link 
+                        href={`/anjab/${viewerPath}`} 
+                        className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        Batal
+                    </Link>
+                </FormActions>
+            </form>
+        </EditSectionWrapper>
     );
 }

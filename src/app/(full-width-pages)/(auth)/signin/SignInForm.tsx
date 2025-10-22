@@ -170,11 +170,19 @@ export default function SignInForm() {
                             </Button>
                         </div>
 
-                        <div className="text-sm text-center">
-                            Belum punya akun?{" "}
-                            <Link href="/signup" className="text-blue-600 hover:underline">
-                                Daftar
-                            </Link>
+                        <div className="text-sm text-center space-y-2">
+                            <div>
+                                Belum punya akun?{" "}
+                                <Link href="/signup" className="text-blue-600 hover:underline">
+                                    Daftar
+                                </Link>
+                            </div>
+                            <div>
+                                Belum terima email verifikasi?{" "}
+                                <Link href="/resend-verification" className="text-blue-600 hover:underline">
+                                    Kirim ulang
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </form>

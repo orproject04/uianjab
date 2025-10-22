@@ -5,6 +5,8 @@ import Link from "next/link";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { apiFetch } from "@/lib/apiFetch";
+import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/EditSectionWrapper";
+import { Input } from "@/components/ui/form/FormControls";
 
 const MySwal = withReactContent(Swal);
 
@@ -145,103 +147,185 @@ export default function UnitKerjaForm({
         setLastError(null);
     };
 
-    // === UI konsisten (error text-only + tombol Coba lagi/Kembali) ===
-    if (!storageInfo.exists || lastError) {
-        const isMissingKey = lastError === "__NOT_FOUND_KEY__";
+    // === UI untuk ID belum ditemukan ===
+    if (!resolvedId) {
         return (
-            <div className="p-6 space-y-3">
-                {isMissingKey ? (
-                    <>
-                        <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
-                        <p className="text-sm text-gray-600">
-                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu kembali ke
-                            halaman ini.
+            <EditSectionWrapper
+                title="Unit Kerja"
+                description="ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal"
+                icon={
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                }
+            >
+                <div className="text-center py-12">
+                    <div className="text-red-600 mb-4">
+                        <p>ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                        <p className="text-sm text-gray-600 mt-2">
+                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
+                            lalu kembali ke halaman ini.
                         </p>
-                    </>
-                ) : (
-                    <p className="text-red-600">{lastError}</p>
-                )}
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>
-                        Coba lagi
-                    </button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
-                        Kembali
-                    </Link>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                        <button
+                            className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                            onClick={retry}
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`} 
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
-    if (loading) return <div className="p-6">Memuat…</div>;
+    if (loading) {
+        return (
+            <EditSectionWrapper
+                title="Unit Kerja"
+                description="Memuat data unit kerja..."
+                icon={
+                    <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                }
+            >
+                <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Memuat data...</p>
+                    </div>
+                </div>
+            </EditSectionWrapper>
+        );
+    }
+
     if (!data) {
         return (
-            <div className="p-6 space-y-3">
-                <p className="text-red-600">Data tidak ditemukan.</p>
-                {lastError && <p className="text-sm text-gray-600">Detail: {lastError}</p>}
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>
-                        Coba lagi
-                    </button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+            <EditSectionWrapper
+                title="Unit Kerja"
+                description="Data tidak ditemukan"
+                icon={
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                }
+            >
+                <div className="text-center py-12">
+                    <p className="text-red-600 mb-4">Data tidak ditemukan.</p>
+                    <Link 
+                        href={`/anjab/${viewerPath}`} 
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
                         Kembali
                     </Link>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
     // === Form ===
     return (
-        <form onSubmit={onSubmit} className="space-y-6">
-            <div>
-                <label className="block text-sm font-medium mb-1">JPT Utama</label>
-                <input
-                    type="text"
-                    ref={firstRef}
-                    name="jpt_utama"
-                    defaultValue={data.jpt_utama ?? ""}
-                    className="w-full rounded border px-3 py-2"
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium mb-1">JPT Madya</label>
-                <input type="text" name="jpt_madya" defaultValue={data.jpt_madya ?? ""} className="w-full rounded border px-3 py-2" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium mb-1">JPT Pratama</label>
-                <input type="text" name="jpt_pratama" defaultValue={data.jpt_pratama ?? ""} className="w-full rounded border px-3 py-2" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium mb-1">Administrator</label>
-                <input type="text" name="administrator" defaultValue={data.administrator ?? ""} className="w-full rounded border px-3 py-2" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium mb-1">Pengawas</label>
-                <input type="text" name="pengawas" defaultValue={data.pengawas ?? ""} className="w-full rounded border px-3 py-2" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium mb-1">Pelaksana</label>
-                <input type="text" name="pelaksana" defaultValue={data.pelaksana ?? ""} className="w-full rounded border px-3 py-2" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium mb-1">Jabatan Fungsional</label>
-                <input
-                    type="text"
-                    name="jabatan_fungsional"
-                    defaultValue={data.jabatan_fungsional ?? ""}
-                    className="w-full rounded border px-3 py-2"
-                />
-            </div>
+        <EditSectionWrapper
+            title="Unit Kerja"
+            description="Edit informasi unit kerja dan tingkatan jabatan"
+            icon={
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+            }
+        >
+            <form onSubmit={onSubmit} className="space-y-6">
+                <FormSection title="Tingkatan Jabatan">
+                    <div className="space-y-4">
+                        <Input
+                            ref={firstRef}
+                            name="jpt_utama"
+                            label="JPT Utama"
+                            hint="Jabatan Pimpinan Tinggi Utama"
+                            defaultValue={data.jpt_utama ?? ""}
+                            placeholder="Contoh: Sekretaris Jenderal"
+                        />
 
-            <div className="pt-2 flex items-center gap-3">
-                <button type="submit" disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-60">
-                    {saving ? "Menyimpan..." : "Simpan"}
-                </button>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
-                    Batal
-                </Link>
-            </div>
-        </form>
+                        <Input
+                            name="jpt_madya"
+                            label="JPT Madya"
+                            hint="Jabatan Pimpinan Tinggi Madya"
+                            defaultValue={data.jpt_madya ?? ""}
+                            placeholder="Contoh: Direktur Jenderal"
+                        />
+
+                        <Input
+                            name="jpt_pratama"
+                            label="JPT Pratama"
+                            hint="Jabatan Pimpinan Tinggi Pratama"
+                            defaultValue={data.jpt_pratama ?? ""}
+                            placeholder="Contoh: Kepala Biro"
+                        />
+
+                        <Input
+                            name="administrator"
+                            label="Administrator"
+                            hint="Jabatan Administrator"
+                            defaultValue={data.administrator ?? ""}
+                            placeholder="Contoh: Kepala Bagian"
+                        />
+
+                        <Input
+                            name="pengawas"
+                            label="Pengawas"
+                            hint="Jabatan Pengawas"
+                            defaultValue={data.pengawas ?? ""}
+                            placeholder="Contoh: Kepala Subbagian"
+                        />
+
+                        <Input
+                            name="pelaksana"
+                            label="Pelaksana"
+                            hint="Jabatan Pelaksana"
+                            defaultValue={data.pelaksana ?? ""}
+                            placeholder="Contoh: Staf Pelaksana"
+                        />
+
+                        <Input
+                            name="jabatan_fungsional"
+                            label="Jabatan Fungsional"
+                            hint="Jabatan Fungsional yang terkait"
+                            defaultValue={data.jabatan_fungsional ?? ""}
+                            placeholder="Contoh: Analis Kebijakan"
+                        />
+                    </div>
+                </FormSection>
+
+                <FormActions>
+                    <button 
+                        type="submit" 
+                        disabled={saving} 
+                        className="px-6 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                        {saving && (
+                            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        )}
+                        {saving ? "Menyimpan..." : "Simpan Perubahan"}
+                    </button>
+                    <Link 
+                        href={`/anjab/${viewerPath}`} 
+                        className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        Batal
+                    </Link>
+                </FormActions>
+            </form>
+        </EditSectionWrapper>
     );
 }

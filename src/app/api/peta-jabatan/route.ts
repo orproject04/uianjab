@@ -276,7 +276,26 @@ export async function POST(req: NextRequest) {
             [parent_id, nama_jabatan.trim(), slug.trim(), unit_kerja, order_index, is_pusat, jenis_jabatan]
         );
 
-        return NextResponse.json({ok: true, node: rows[0]});
+        const newNode = rows[0];
+
+        // Build full path by traversing parents
+        const pathParts: string[] = [];
+        let currentId: string | null = newNode.id;
+        
+        while (currentId) {
+            const nodeRes = await pool.query<{id: string; parent_id: string | null; slug: string}>(
+                `SELECT id, parent_id, slug FROM peta_jabatan WHERE id = $1`,
+                [currentId]
+            );
+            if (nodeRes.rows.length === 0) break;
+            const node = nodeRes.rows[0];
+            pathParts.unshift(node.slug);
+            currentId = node.parent_id;
+        }
+
+        const fullPath = pathParts.join('/');
+
+        return NextResponse.json({ok: true, node: newNode, path: fullPath});
     } catch (e: any) {
         if (e?.code === "23505") {
             return NextResponse.json(

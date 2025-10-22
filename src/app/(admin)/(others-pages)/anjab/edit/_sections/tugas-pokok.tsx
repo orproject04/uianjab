@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import {useEffect, useMemo, useRef, useState} from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import {apiFetch} from "@/lib/apiFetch";
+import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/EditSectionWrapper";
 
 const MySwal = withReactContent(Swal);
 
@@ -91,60 +92,72 @@ function ArrayInput({
         setAndEmit(next);
     }
 
-    function add(after?: number) {
-        const next = [...items];
-        if (typeof after === "number") next.splice(after + 1, 0, "");
-        else next.push("");
+    function add() {
+        const next = [...items, ""];
         setAndEmit(next);
-        setTimeout(() => {
-            const idx = typeof after === "number" ? after + 1 : next.length - 1;
-            refs.current[idx]?.focus();
-        }, 0);
+        setTimeout(() => refs.current[items.length]?.focus(), 0);
     }
 
     function remove(i: number) {
+        if (items.length <= 1) return;
         const next = items.filter((_, idx) => idx !== i);
         setAndEmit(next);
     }
 
+    const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const next = [...items];
+            next.splice(i + 1, 0, "");
+            setAndEmit(next);
+            setTimeout(() => refs.current[i + 1]?.focus(), 0);
+        }
+        if (e.key === "Backspace" && e.ctrlKey && items[i] === "" && items.length > 1) {
+            e.preventDefault();
+            remove(i);
+            setTimeout(() => refs.current[Math.max(0, i - 1)]?.focus(), 0);
+        }
+    };
+
     return (
-        <div className="space-y-2">
-            <label className="block text-sm font-medium">{label}</label>
-            {items.map((v, i) => (
-                <div key={i} className="flex gap-2">
-                    <input
-                        ref={(el) => (refs.current[i] = el)}
-                        type="text"
-                        value={v}
-                        onChange={(e) => update(i, e.target.value)}
-                        className="flex-1 rounded border px-3 py-2"
-                        placeholder={placeholder}
-                        autoFocus={autoFocus && i === 0}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => add(i)}
-                        className="w-9 h-9 flex items-center justify-center rounded bg-green-500 text-white hover:bg-green-600"
-                        title="Tambah baris di bawah"
-                    >
-                        +
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => remove(i)}
-                        className="w-9 h-9 flex items-center justify-center rounded bg-red-500 text-white hover:bg-red-600"
-                        title="Hapus baris ini"
-                    >
-                        ✕
-                    </button>
-                </div>
-            ))}
+        <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            <div className="space-y-2">
+                {items.map((v, i) => (
+                    <div key={i} className="flex gap-2">
+                        <input
+                            ref={(el) => { refs.current[i] = el; }}
+                            type="text"
+                            value={v}
+                            onChange={(e) => update(i, e.target.value)}
+                            onKeyDown={(e) => handleKeyDown(i, e)}
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            placeholder={placeholder}
+                            autoFocus={autoFocus && i === 0}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => remove(i)}
+                            disabled={items.length <= 1}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title="Hapus item"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                ))}
+            </div>
             <button
                 type="button"
-                onClick={() => add()}
-                className="rounded px-3 py-2 bg-green-500 text-white hover:bg-green-600"
+                onClick={add}
+                className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 dark:hover:border-brand-400 dark:hover:text-brand-400 transition-colors flex items-center justify-center gap-2 text-sm"
             >
-                + Tambah
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah
             </button>
         </div>
     );
@@ -159,6 +172,7 @@ function DetailUraianTugasEditor({
     onChange: (v: TahapanDetail[]) => void;
 }) {
     const [items, setItems] = useState<TahapanDetail[]>(value ?? []);
+    const tahapanRefs = useRef<Array<HTMLInputElement | null>>([]);
 
     useEffect(() => {
         setItems(value ?? []);
@@ -179,6 +193,16 @@ function DetailUraianTugasEditor({
             {nomor_tahapan: items.length + 1, tahapan: "", detail_tahapan: []},
         ]);
         setAndEmit(next);
+        
+        // Auto-focus dan scroll ke tahapan baru setelah render
+        setTimeout(() => {
+            const lastIndex = next.length - 1;
+            const inputElement = tahapanRefs.current[lastIndex];
+            if (inputElement) {
+                inputElement.focus();
+                inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
     }
 
     function remove(i: number) {
@@ -195,20 +219,44 @@ function DetailUraianTugasEditor({
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium">
-                    Detail Uraian Tugas (Tahapan &amp; Rincian)
-                </label>
+                <div className="flex items-center gap-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Detail Uraian Tugas (Tahapan &amp; Rincian)
+                    </label>
+                    {items.length > 0 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            {items.length} tahapan
+                        </span>
+                    )}
+                </div>
                 <button
                     type="button"
                     onClick={addNew}
-                    className="rounded px-3 py-1 bg-green-600 text-white hover:bg-green-700"
+                    className="rounded px-3 py-1 bg-brand-500 text-white hover:bg-green-700 active:scale-95 transition-transform flex items-center gap-1"
                 >
-                    + Tambah Tahapan
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Tambah Tahapan
                 </button>
             </div>
 
+            {items.length === 0 && (
+                <div className="text-center py-6 px-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                    <svg className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Belum ada tahapan. Klik "Tambah Tahapan" untuk mulai menambahkan.
+                    </p>
+                </div>
+            )}
+
             {items.map((it, i) => (
-                <div key={i} className="rounded border p-3 space-y-3 bg-gray-50">
+                <div 
+                    key={i} 
+                    className="rounded border p-3 space-y-3 bg-gray-50 dark:bg-gray-800 transition-all duration-300 animate-in fade-in slide-in-from-top-2"
+                >
                     <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
                         <div>
                             <label className="block text-xs mb-1">Nomor Tahapan</label>
@@ -229,11 +277,12 @@ function DetailUraianTugasEditor({
                         <div className="md:col-span-5">
                             <label className="block text-xs mb-1">Judul Tahapan</label>
                             <input
+                                ref={(el) => { tahapanRefs.current[i] = el; }}
                                 type="text"
                                 value={it.tahapan}
                                 onChange={(e) => update(i, {tahapan: e.target.value})}
-                                className="w-full rounded border px-2 py-1"
-                                placeholder="Contoh: Mengidentifikasi kebutuhan anggaran …"
+                                className="w-full rounded border px-2 py-1 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                                placeholder="Contoh: Mengidentifikasi kebutuhan anggaran"
                             />
                         </div>
                     </div>
@@ -242,14 +291,14 @@ function DetailUraianTugasEditor({
                         label="Detail Tahapan"
                         value={it.detail_tahapan ?? []}
                         onChange={(arr) => update(i, {detail_tahapan: arr})}
-                        placeholder="Contoh: Mengidentifikasi & mempelajari peraturan …"
+                        placeholder="Contoh: Mengidentifikasi & mempelajari peraturan"
                     />
 
                     <div className="flex gap-2">
                         <button
                             type="button"
                             onClick={() => remove(i)}
-                            className="rounded px-3 py-1 bg-red-50 hover:bg-red-100 border"
+                            className="rounded px-3 py-1 bg-red-100 hover:bg-red-100 border"
                         >
                             Hapus Tahapan
                         </button>
@@ -559,138 +608,221 @@ export default function TugasPokokForm({
 
     if (!storageInfo.exists || lastError === "__NOT_FOUND_KEY__") {
         return (
-            <div className="p-6 space-y-3">
-                <p className="text-red-600">
-                    ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.
-                </p>
-                <p className="text-sm text-gray-600">
-                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat
-                    sehingga ID tersimpan, lalu kembali ke halaman ini.
-                </p>
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>
-                        Coba lagi
-                    </button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
-                        Kembali
-                    </Link>
+            <EditSectionWrapper
+                icon={
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                }
+                title="Tugas Pokok"
+                description="ID (UUID) untuk path ini belum ditemukan. Buka halaman create terlebih dahulu."
+            >
+                <div className="text-center py-8">
+                    <p className="text-red-600 dark:text-red-400 mb-4">
+                        ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                        Buka halaman create terlebih dahulu atau pastikan item pernah dibuat
+                        sehingga ID tersimpan, lalu kembali ke halaman ini.
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                        <button 
+                            onClick={retry}
+                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`}
+                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
-    if (loading) return <div className="p-6">Memuat…</div>;
+    if (loading) {
+        return (
+            <EditSectionWrapper
+                icon={
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                }
+                title="Tugas Pokok"
+                description="Memuat data tugas pokok..."
+            >
+                <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500"></div>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400">Memuat data...</p>
+                </div>
+            </EditSectionWrapper>
+        );
+    }
+
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between">
-                <button
-                    type="button"
-                    onClick={addNew}
-                    className="rounded px-4 py-2 bg-green-600 text-white hover:bg-green-700"
-                >
-                    + Tambah Tugas
-                </button>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
-                    Kembali
-                </Link>
+        <EditSectionWrapper
+            icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+            }
+            title="Tugas Pokok"
+            description="Kelola tugas pokok dan rincian pekerjaan untuk jabatan ini"
+        >
+            <div className="space-y-6">
+                <Summary totalKebutuhan={totalKebutuhan} pembulatan={pembulatan}/>
+
+                {list.length === 0 ? (
+                    <div className="text-center py-12 px-4">
+                        <svg className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                            Belum ada tugas pokok yang ditambahkan
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 mb-6">
+                            Tambahkan tugas pokok untuk jabatan ini
+                        </p>
+                        <button
+                            type="button"
+                            onClick={addNew}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tambah Tugas Pokok
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {list.map((row, idx) => {
+                            const key = row.id || row._tmpKey || `row-${idx}`;
+                            return (
+                                <FormSection key={key} title={`Tugas Pokok ${idx + 1}`}>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <NumberInput
+                                                label="Nomor"
+                                                value={row.nomor_tugas}
+                                                onChange={(v) => updateLocal(idx, {nomor_tugas: v})}
+                                            />
+                                            <NumberInput
+                                                label="Jumlah Hasil"
+                                                value={row.jumlah_hasil}
+                                                onChange={(v) => updateLocal(idx, {jumlah_hasil: v})}
+                                            />
+                                            <NumberInput
+                                                label="Waktu Penyelesaian (jam)"
+                                                value={row.waktu_penyelesaian_jam}
+                                                onChange={(v) => updateLocal(idx, {waktu_penyelesaian_jam: v})}
+                                            />
+                                            <NumberInput
+                                                label="Waktu Efektif"
+                                                value={row.waktu_efektif}
+                                                onChange={(v) => updateLocal(idx, {waktu_efektif: v})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Kebutuhan Pegawai
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.0001"
+                                                value={row.kebutuhan_pegawai ?? 0}
+                                                readOnly
+                                                disabled
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Uraian Tugas</label>
+                                            <textarea
+                                                ref={idx === list.length - 1 ? firstRef : undefined}
+                                                value={row.uraian_tugas ?? ""}
+                                                onChange={(e) => updateLocal(idx, {uraian_tugas: e.target.value})}
+                                                rows={3}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-y"
+                                            />
+                                        </div>
+
+                                        <DetailUraianTugasEditor
+                                            value={row.detail_uraian_tugas ?? []}
+                                            onChange={(v) => updateLocal(idx, {detail_uraian_tugas: v})}
+                                        />
+
+                                        <ArrayInput
+                                            label="Hasil Kerja"
+                                            value={row.hasil_kerja ?? []}
+                                            onChange={(v) => updateLocal(idx, {hasil_kerja: v})}
+                                            placeholder="Contoh: Dokumen laporan"
+                                        />
+
+                                        <div className="flex gap-3 pt-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => saveItem(idx)}
+                                                disabled={savingId === row.id || savingId === "new"}
+                                                className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2"
+                                            >
+                                                {savingId === row.id || savingId === "new" ? (
+                                                    <>
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                        Menyimpan...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        Simpan
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => deleteItem(idx)}
+                                                className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors inline-flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                Hapus
+                                            </button>
+                                        </div>
+                                    </div>
+                                </FormSection>
+                            );
+                        })}
+
+                        <button
+                            type="button"
+                            onClick={addNew}
+                            className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 dark:hover:border-brand-400 dark:hover:text-brand-400 transition-colors inline-flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tambah Tugas Pokok Baru
+                        </button>
+                    </div>
+                )}
             </div>
 
-            <Summary totalKebutuhan={totalKebutuhan} pembulatan={pembulatan}/>
-
-            {list.length === 0 && (
-                <p className="text-gray-600">
-                    Belum ada Tugas Pokok. Klik “+ Tambah Tugas”.
-                </p>
-            )}
-
-            {list.map((row, idx) => {
-                const key = row.id || row._tmpKey || `row-${idx}`;
-                return (
-                    <div key={key} className="rounded border p-4 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <NumberInput
-                                label="Nomor"
-                                value={row.nomor_tugas}
-                                onChange={(v) => updateLocal(idx, {nomor_tugas: v})}
-                            />
-                            <NumberInput
-                                label="Jumlah Hasil"
-                                value={row.jumlah_hasil}
-                                onChange={(v) => updateLocal(idx, {jumlah_hasil: v})}
-                            />
-                            <NumberInput
-                                label="Waktu Penyelesaian (jam)"
-                                value={row.waktu_penyelesaian_jam}
-                                onChange={(v) => updateLocal(idx, {waktu_penyelesaian_jam: v})}
-                            />
-                            <NumberInput
-                                label="Waktu Efektif"
-                                value={row.waktu_efektif}
-                                onChange={(v) => updateLocal(idx, {waktu_efektif: v})}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium mb-1">
-                                Kebutuhan Pegawai
-                            </label>
-                            <input
-                                type="number"
-                                step="0.0001"
-                                value={row.kebutuhan_pegawai ?? 0}
-                                readOnly
-                                disabled
-                                className="w-full rounded border px-3 py-2 bg-gray-100"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Uraian Tugas</label>
-                            <textarea
-                                ref={idx === list.length - 1 ? firstRef : undefined}
-                                value={row.uraian_tugas ?? ""}
-                                onChange={(e) => updateLocal(idx, {uraian_tugas: e.target.value})}
-                                rows={3}
-                                className="w-full rounded border px-3 py-2"
-                            />
-                        </div>
-
-                        <DetailUraianTugasEditor
-                            value={row.detail_uraian_tugas ?? []}
-                            onChange={(v) => updateLocal(idx, {detail_uraian_tugas: v})}
-                        />
-
-                        <ArrayInput
-                            label="Hasil Kerja"
-                            value={row.hasil_kerja ?? []}
-                            onChange={(v) => updateLocal(idx, {hasil_kerja: v})}
-                            placeholder="Contoh: Dokumen laporan …"
-                        />
-
-                        <div className="flex gap-2 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => saveItem(idx)}
-                                disabled={savingId === row.id || savingId === "new"}
-                                className="rounded px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                            >
-                                {savingId === row.id ? "Menyimpan…" : "Simpan"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => deleteItem(idx)}
-                                className="rounded px-4 py-2 border bg-red-50 hover:bg-red-100"
-                            >
-                                Hapus
-                            </button>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
+        </EditSectionWrapper>
     );
 }
+
+
+
 
 /** ====== Small subcomponents ====== */
 function NumberInput({
@@ -745,3 +877,4 @@ function Summary({totalKebutuhan, pembulatan}: { totalKebutuhan: number; pembula
         </div>
     );
 }
+

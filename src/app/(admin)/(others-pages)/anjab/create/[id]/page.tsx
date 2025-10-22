@@ -6,6 +6,9 @@ import { useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { apiFetch } from "@/lib/apiFetch";
+import AnjabBreadcrumb from "@/components/common/AnjabBreadcrumb";
+import JabatanInfoCard from "@/components/common/JabatanInfoCard";
+import { slugToTitle } from "@/lib/text-utils";
 
 const MySwal = withReactContent(Swal);
 
@@ -129,8 +132,19 @@ export default function AnjabCreateByIdPage() {
         }
     }
 
+    // Convert slug dash to segments for breadcrumb
+    const rawSlugSegments = id ? id.replace(/-/g, '/').split('/') : [];
+
     return (
         <div className="max-w-3xl mx-auto p-6">
+            <AnjabBreadcrumb 
+                currentId={id || ""} 
+                currentTitle={`Buat Anjab Baru - ${id ? slugToTitle(id) : 'Unknown'}`} 
+                rawSlug={rawSlugSegments}
+            />
+            
+            <JabatanInfoCard currentId={id || ""} className="mb-6" />
+            
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-semibold">Buat Anjab Baru</h1>
                 <Link

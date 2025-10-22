@@ -4,6 +4,8 @@ import { useParams } from "next/navigation";
 import { useMemo } from "react";
 import Link from "next/link";
 import { SECTION_COMPONENTS, SECTION_LABELS } from "../../_sections/registry";
+import AnjabBreadcrumb from "@/components/common/AnjabBreadcrumb";
+import { slugToTitle } from "@/lib/text-utils";
 
 export default function EditAnySectionPage() {
     const params = useParams() as { section: string; slug?: string[] };
@@ -22,12 +24,17 @@ export default function EditAnySectionPage() {
     // path viewer pakai "/"
     const viewerPath = useMemo(() => rawSlug.join("/"), [rawSlug]);
 
-    const SectionForm = SECTION_COMPONENTS[params.section];
+    const SectionForm = (SECTION_COMPONENTS as any)[params.section];
 
     if (!SectionForm) {
         return (
             <div className="p-6">
-                <p className="text-red-600">Bagian “{params.section}” tidak dikenali.</p>
+                <AnjabBreadcrumb 
+                    currentId={id} 
+                    currentTitle={`Edit ${params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`} 
+                    rawSlug={rawSlug}
+                />
+                <p className="text-red-600">Bagian "{params.section}" tidak dikenali.</p>
                 <Link className="underline text-blue-600" href={`/anjab/${viewerPath}`}>
                     Lihat PDF
                 </Link>
@@ -37,9 +44,15 @@ export default function EditAnySectionPage() {
 
     return (
         <div className="max-w-4xl mx-auto p-6">
+            <AnjabBreadcrumb 
+                currentId={id} 
+                currentTitle={`Edit ${(SECTION_LABELS as any)[params.section] ?? params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`} 
+                rawSlug={rawSlug}
+            />
+            
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-semibold">
-                    Edit {SECTION_LABELS[params.section] ?? params.section}
+                    Edit {(SECTION_LABELS as any)[params.section] ?? params.section}
                 </h1>
                 <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
                     Lihat PDF

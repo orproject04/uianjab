@@ -1,4 +1,4 @@
-// src/app/(admin)/(others-pages)/AnjabEdit/_sections/wewenang.tsx
+﻿// src/app/(admin)/(others-pages)/AnjabEdit/_sections/wewenang.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
 import { apiFetch } from "@/lib/apiFetch";
+import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/EditSectionWrapper";
 
 const MySwal = withReactContent(Swal);
 
@@ -30,7 +31,7 @@ export default function WewenangForm({
     const [saving, setSaving] = useState<number | "new" | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
 
-    const firstRef = useRef<HTMLInputElement>(null);
+    const firstRef = useRef<HTMLTextAreaElement>(null);
 
     function resolveFromStorage(vpath: string) {
         const storageKey = vpath.split("/").filter(Boolean).slice(-2).join("/");
@@ -187,79 +188,184 @@ export default function WewenangForm({
         }
     }
 
-    // Bila UUID belum ada di localStorage → Teks (bukan SweetAlert), sama dengan modul lain
+    // Bila UUID belum ada di localStorage â†’ Teks (bukan SweetAlert), sama dengan modul lain
     if (!storageInfo.exists || lastError === "__NOT_FOUND_KEY__") {
         return (
-            <div className="p-6 space-y-3">
-                <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
-                <p className="text-sm text-gray-600">
-                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan, lalu kembali ke halaman ini.
-                </p>
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>Coba lagi</button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
+            <EditSectionWrapper
+                title="Wewenang"
+                description="ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal"
+                icon={
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                }
+            >
+                <div className="text-center py-12">
+                    <div className="text-red-600 mb-4">
+                        <p>ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                        <p className="text-sm text-gray-600 mt-2">
+                            Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
+                            lalu kembali ke halaman ini.
+                        </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                        <button
+                            className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                            onClick={retry}
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`} 
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
-    if (loading) return <div className="p-6">Memuat…</div>;
+    if (loading) {
+        return (
+            <EditSectionWrapper
+                title="Wewenang"
+                description="Memuat data wewenang..."
+                icon={
+                    <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                }
+            >
+                <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Memuat data...</p>
+                    </div>
+                </div>
+            </EditSectionWrapper>
+        );
+    }
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between">
-                <button
-                    type="button"
-                    onClick={addRow}
-                    className="rounded px-4 py-2 bg-green-600 text-white hover:bg-green-700"
-                >
-                    + Tambah Item Wewenang
-                </button>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
-                    Kembali
-                </Link>
-            </div>
+        <EditSectionWrapper
+            title="Wewenang"
+            description="Kelola wewenang yang dimiliki oleh jabatan ini"
+            icon={
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+            }
+        >
+            {rows.length === 0 ? (
+                <div className="text-center py-12">
+                    <div className="mx-auto w-16 h-16 mb-4 text-gray-400">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        Belum ada wewenang yang ditambahkan
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        Mulai dengan menambahkan wewenang pertama untuk jabatan ini
+                    </p>
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Wewenang
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {rows.map((row, idx) => {
+                        const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
+                        const isSaving = saving === row.id || saving === "new";
 
-            {rows.length === 0 && (
-                <p className="text-gray-600">Belum ada item. Klik “+ Tambah Item Wewenang”.</p>
+                        return (
+                            <FormSection key={key} title={`Wewenang ${idx + 1}`}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Uraian Wewenang
+                                        </label>
+                                        <textarea
+                                            ref={idx === rows.length - 1 ? firstRef : undefined}
+                                            value={row.uraian_wewenang ?? ""}
+                                            onChange={(e) => updateLocal(idx, { uraian_wewenang: e.target.value })}
+                                            placeholder="Contoh: Menyetujui rencana kerja triwulanan dan mengalokasikan anggaran"
+                                            rows={3}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-y"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => saveRow(idx)}
+                                            disabled={isSaving}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isSaving ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                                    Menyimpan...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Simpan
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteRow(idx)}
+                                            className="inline-flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                            Hapus
+                                        </button>
+                                    </div>
+                                </div>
+                            </FormSection>
+                        );
+                    })}
+
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 dark:hover:border-brand-400 dark:hover:text-brand-400 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Wewenang Baru
+                    </button>
+                </div>
             )}
 
-            {rows.map((row, idx) => {
-                const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
-                return (
-                    <div key={key} className="rounded border p-4 space-y-3">
-                        <h3 className="font-medium text-lg">Item {idx + 1}</h3>
-
-                        <div className="flex items-start gap-2">
-                            <input
-                                ref={idx === rows.length - 1 ? firstRef : undefined}
-                                type="text"
-                                value={row.uraian_wewenang ?? ""}
-                                onChange={(e) => updateLocal(idx, { uraian_wewenang: e.target.value })}
-                                placeholder="Uraian wewenang (mis. Menyetujui rencana kerja triwulanan)"
-                                className="flex-1 rounded border px-3 py-2"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => saveRow(idx)}
-                                disabled={saving === row.id || saving === "new"}
-                                className="rounded px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                                title="Simpan item ini"
-                            >
-                                {saving === row.id || saving === "new" ? "Menyimpan…" : "Simpan"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => deleteRow(idx)}
-                                className="w-9 h-9 flex items-center justify-center rounded bg-red-600 text-white hover:bg-red-700"
-                                title="Hapus item ini"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
+            <FormActions>
+                <Link
+                    href={`/anjab/${viewerPath}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Kembali
+                </Link>
+            </FormActions>
+        </EditSectionWrapper>
     );
 }

@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
 import { apiFetch } from "@/lib/apiFetch";
+import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/EditSectionWrapper";
 
 const MySwal = withReactContent(Swal);
 
@@ -177,91 +178,176 @@ export default function RisikoBahayaForm({
 
     if (!hasKey || !resolvedId) {
         return (
-            <div className="p-6 space-y-3">
-                <p className="text-red-600">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
-                <p className="text-sm text-gray-600">
-                    Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
-                    lalu kembali ke halaman ini.
-                </p>
-                <div className="flex items-center gap-3">
-                    <button className="rounded border px-3 py-1.5" onClick={retry}>Coba lagi</button>
-                    <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">Kembali</Link>
+            <EditSectionWrapper
+                icon={
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                }
+                title="Risiko Bahaya"
+                description="ID (UUID) untuk path ini belum ditemukan. Buka halaman create terlebih dahulu."
+            >
+                <div className="text-center py-8">
+                    <p className="text-red-600 dark:text-red-400 mb-4">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                        Buka halaman create terlebih dahulu atau pastikan item pernah dibuat sehingga ID tersimpan,
+                        lalu kembali ke halaman ini.
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                        <button 
+                            onClick={retry}
+                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Coba lagi
+                        </button>
+                        <Link 
+                            href={`/anjab/${viewerPath}`} 
+                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Kembali
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </EditSectionWrapper>
         );
     }
 
-    if (loading) return <div className="p-6">Memuat…</div>;
+    
+
+    if (loading) {
+        return (
+            <EditSectionWrapper
+                icon={
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                }
+                title="Risiko Bahaya"
+                description="Memuat data risiko bahaya..."
+            >
+                <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500"></div>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400">Memuat data...</p>
+                </div>
+            </EditSectionWrapper>
+        );
+    }
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between">
-                <button
-                    type="button"
-                    onClick={addRow}
-                    className="rounded px-4 py-2 bg-green-600 text-white hover:bg-green-700"
-                >
-                    + Tambah Item Risiko
-                </button>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-4 py-2">
-                    Kembali
-                </Link>
-            </div>
+        <EditSectionWrapper
+            icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            }
+            title="Risiko Bahaya"
+            description="Kelola informasi risiko dan bahaya untuk jabatan ini"
+        >
+            {rows.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                    <svg className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        Belum ada risiko bahaya yang ditambahkan
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6">
+                        Tambahkan risiko dan bahaya yang mungkin terjadi untuk jabatan ini
+                    </p>
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Risiko Bahaya
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {rows.map((row, idx) => {
+                        const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
+                        return (
+                            <FormSection key={key} title={`Risiko Bahaya ${idx + 1}`}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Nama Risiko <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            ref={idx === rows.length - 1 ? firstRef : undefined}
+                                            type="text"
+                                            value={row.nama_risiko ?? ""}
+                                            onChange={(e) => updateLocal(idx, { nama_risiko: e.target.value })}
+                                            placeholder="Mis. Paparan bahan kimia, Terpeleset"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Penyebab
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={row.penyebab ?? ""}
+                                            onChange={(e) => updateLocal(idx, { penyebab: e.target.value })}
+                                            placeholder="Mis. Kebocoran reagen, lantai licin"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
 
-            {rows.length === 0 && (
-                <p className="text-gray-600">Belum ada item. Klik “+ Tambah Item Risiko”.</p>
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => saveRow(idx)}
+                                        disabled={saving === row.id || saving === "new"}
+                                        className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2"
+                                    >
+                                        {saving === row.id || saving === "new" ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                Menyimpan...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                Simpan
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => deleteRow(idx)}
+                                        className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors inline-flex items-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Hapus
+                                    </button>
+                                </div>
+                            </FormSection>
+                        );
+                    })}
+
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 dark:hover:border-brand-400 dark:hover:text-brand-400 transition-colors inline-flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Risiko Bahaya Baru
+                    </button>
+                </div>
             )}
 
-            {rows.map((row, idx) => {
-                const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
-                return (
-                    <div key={key} className="rounded border p-4 space-y-3">
-                        <h3 className="font-medium text-lg">Item {idx + 1}</h3>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Nama Risiko *</label>
-                                <input
-                                    ref={idx === rows.length - 1 ? firstRef : undefined}
-                                    type="text"
-                                    value={row.nama_risiko ?? ""}
-                                    onChange={(e) => updateLocal(idx, { nama_risiko: e.target.value })}
-                                    placeholder="Mis. Paparan bahan kimia, Terpeleset"
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Penyebab (opsional)</label>
-                                <input
-                                    type="text"
-                                    value={row.penyebab ?? ""}
-                                    onChange={(e) => updateLocal(idx, { penyebab: e.target.value })}
-                                    placeholder="Mis. Kebocoran reagen, lantai licin"
-                                    className="w-full rounded border px-3 py-2"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => saveRow(idx)}
-                                disabled={saving === row.id || saving === "new"}
-                                className="rounded px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                            >
-                                {saving === row.id || saving === "new" ? "Menyimpan…" : "Simpan"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => deleteRow(idx)}
-                                className="rounded px-4 py-2 border bg-red-50 hover:bg-red-100"
-                            >
-                                Hapus
-                            </button>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
+        </EditSectionWrapper>
     );
 }

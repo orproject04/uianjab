@@ -16,6 +16,10 @@
   --breakpoint-xl: 1280px;
   --breakpoint-2xl: 1536px;
 
+  /* Header height used by AppHeader and layout padding. Change here to adjust spacing globally */
+  --header-height: 88px;
+  /* Responsive header height note: see below for the responsive override */
+
   --text-title-2xl: 72px;
   --text-title-2xl--line-height: 90px;
   --text-title-xl: 60px;
@@ -41,20 +45,20 @@
   --color-brand-25: #f2f7ff;
   --color-brand-50: #ecf3ff;
   --color-brand-100: #dde9ff;
-  --color-brand-200: #B3A2F5;
-  --color-brand-300: #9cb9ff;
-  --color-brand-400: #7592ff;
-  --color-brand-500: #5932EA;
-  --color-brand-600: #3641f5;
-  --color-brand-700: #2a31d8;
+  --color-brand-200: #E9CDFE;
+  --color-brand-300: #CF90FD;
+  --color-brand-400: #BD65FC;
+  --color-brand-500: #9810FA;
+  --color-brand-600: #870EDE;
+  --color-brand-700: #5B039A;
   --color-brand-800: #252dae;
   --color-brand-900: #262e89;
   --color-brand-950: #1F0B6B;
 
   --color-blue-light-25: #f5fbff;
   --color-blue-light-50: #f0f9ff;
-  --color-blue-light-100: #e0f2fe;
   --color-blue-light-200: #b9e6fe;
+  /* header height moved to :root below (keeps @theme block pure custom properties) */
   --color-blue-light-300: #7cd4fd;
   --color-blue-light-400: #36bffa;
   --color-blue-light-500: #0ba5ec;
@@ -165,6 +169,13 @@
   --z-index-9999: 9999;
   --z-index-99999: 99999;
   --z-index-999999: 999999;
+}
+
+/* Responsive header height: smaller on mobile to save vertical space */
+@media (max-width: 1024px) {
+  :root {
+    --header-height: 72px;
+  }
 }
 
 /*
@@ -737,4 +748,119 @@ span.flatpickr-weekday,
     0 1px 2px 0 rgba(16, 24, 40, 0.06);
   opacity: 0.8;
   cursor: grabbing; /* Changes the cursor to indicate dragging */
+}
+
+/* Helper: ensure header search popovers appear above other chrome elements */
+.header-search-popover {
+  z-index: var(--z-index-9999);
+}
+
+/* Custom scrollbar styles for sidebar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.scrollbar-thumb-gray-300 {
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
+.scrollbar-track-gray-100::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.hover\:scrollbar-thumb-gray-400:hover {
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+/* Dark mode scrollbar */
+.dark .scrollbar-thin {
+  scrollbar-color: #4b5563 #374151;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-track {
+  background: #374151;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Better text wrapping for sidebar job titles */
+.hyphens-auto {
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+}
+
+.break-words {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Sidebar scrollbar */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+  border: 1px solid #f9fafb;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Dark mode sidebar scrollbar */
+.dark .sidebar-scrollbar {
+  scrollbar-color: #4b5563 #374151;
+}
+
+.dark .sidebar-scrollbar::-webkit-scrollbar-track {
+  background: #374151;
+}
+
+.dark .sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-color: #374151;
+}
+
+.dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
