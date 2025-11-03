@@ -11,6 +11,174 @@ function renderNumberList(arr?: string[]) {
     return `<ol style="margin:0; padding-left:15px;">${arr.map(item => `<li>${item}</li>`).join("")}</ol>`;
 }
 
+function renderPendidikanFormalList(arr?: string[]) {
+    if (!arr || arr.length === 0) return "-";
+
+    const liContainerStyle = `
+        margin:0;
+        padding-left:15px;
+        list-style-type:none;
+    `;
+    const subLiStyle = `
+        text-indent:-10px;
+        padding-left:0;
+    `;
+
+    // 1) cari semua index yang merupakan "dari kalangan ..."
+    const kalanganIndexes: number[] = [];
+    arr.forEach((val, idx) => {
+        const v = val?.trim().toLowerCase() || "";
+        if (v.startsWith("dari kalangan pns") || v.startsWith("dari kalangan non-pns")) {
+            kalanganIndexes.push(idx);
+        }
+    });
+
+    if (kalanganIndexes.length === 0) {
+        // tidak ada "dari kalangan ..." ya sudah tampilkan semua apa adanya
+        return arr.join("<br>");
+    }
+
+    const lastKalanganIdx = kalanganIndexes[kalanganIndexes.length - 1];
+
+    let html = "<ol style='margin:0; padding-left:15px;'>";
+
+    for (let k = 0; k < kalanganIndexes.length; k++) {
+        const i = kalanganIndexes[k];
+        const item = arr[i].trim();
+
+        html += `<li>${item}`;
+
+        // cek 1 elemen setelahnya: kalau bukan kalangan -> jadikan sublist "-"
+        const next = arr[i + 1];
+        const nextIsKalangan =
+            next &&
+            (next.trim().toLowerCase().startsWith("dari kalangan pns") ||
+                next.trim().toLowerCase().startsWith("dari kalangan non-pns"));
+
+        let skipNext = false;
+        if (next && !nextIsKalangan) {
+            html += `<ul style="${liContainerStyle}">
+                <li style="${subLiStyle}">- ${next.trim()}</li>
+            </ul>`;
+            skipNext = true;
+        }
+
+        html += `</li>`;
+
+        // kalau kita bukan di kalangan terakhir, loop akan lanjut ke kalangan berikutnya
+        // dan kita TIDAK memasukkan teks tambahan ke dalam li ini
+        if (skipNext) {
+            // kita hanya "melewati" di perhitungan luar
+            // tapi karena kita pakai index dari kalanganIndexes, tidak perlu modifikasi di sini
+        }
+    }
+
+    html += "</ol>";
+
+    // 2) ambil semua elemen SETELAH kalangan terakhir (plus 1 kemungkinan sublist-nya)
+    const tail: string[] = [];
+    let startTailAt = lastKalanganIdx + 1;
+
+    // kalau elemen setelah kalangan terakhir tadi sudah dipakai sebagai sublist, lompat 1
+    const afterLast = arr[lastKalanganIdx + 1];
+    if (
+        afterLast &&
+        !afterLast.trim().toLowerCase().startsWith("dari kalangan pns") &&
+        !afterLast.trim().toLowerCase().startsWith("dari kalangan non-pns")
+    ) {
+        // elemen ini dipakai jadi sublist di atas, jadi tail mulai sesudahnya
+        startTailAt = lastKalanganIdx + 2;
+    }
+
+    for (let t = startTailAt; t < arr.length; t++) {
+        tail.push(arr[t].trim());
+    }
+
+    // 3) render tail di luar <ol> supaya sejajar dengan angka 1/2
+    if (tail.length > 0) {
+        html += tail.map(t => `<div style="margin-top:4px;">${t}</div>`).join("");
+    }
+
+    return html;
+}
+
+function renderPengalamanKerjaList(arr?: string[]) {
+    if (!arr || arr.length === 0) return "-";
+
+    // cek dulu: ada nggak yang dimulai "dari kalangan ..."
+    const hasKalangan = arr.some(item => {
+        const t = item?.trim().toLowerCase() || "";
+        return (
+            t.startsWith("dari kalangan pns") ||
+            t.startsWith("dari kalangan non-pns")
+        );
+    });
+
+    // kalau gak ada sama sekali → pakai logic lama
+    if (!hasKalangan) {
+        return renderNumberList(arr);
+    }
+
+    // === logic lama yang pakai grup "dari kalangan ..." ===
+    let html = "<ol style='margin:0; padding-left:15px;'>";
+    let subItems: string[] = [];
+
+    const liStyle = `
+        margin:0;
+        padding-left:15px;
+        list-style-type:none;
+    `;
+
+    const subLiStyle = `
+        text-indent:-10px;
+        padding-left:0;
+    `;
+
+    for (let i = 0; i < arr.length; i++) {
+        const item = arr[i]?.trim();
+        const isKalangan =
+            item.toLowerCase().startsWith("dari kalangan pns") ||
+            item.toLowerCase().startsWith("dari kalangan non-pns");
+
+        if (isKalangan) {
+            // tutup sublist sebelumnya
+            if (subItems.length > 0) {
+                html += `<ul style="${liStyle}">${subItems
+                    .map(sub => `<li style="${subLiStyle}">- ${sub}</li>`)
+                    .join("")}</ul>`;
+                subItems = [];
+            }
+            // buka item baru
+            html += `<li>${item}`;
+        } else {
+            // kumpulkan jadi sublist
+            subItems.push(item);
+        }
+
+        const nextItem = arr[i + 1];
+        const nextIsKalangan =
+            nextItem &&
+            (
+                nextItem.toLowerCase().startsWith("dari kalangan pns") ||
+                nextItem.toLowerCase().startsWith("dari kalangan non-pns")
+            );
+
+        // kalau habis atau ketemu kalangan baru → render sublist + tutup li
+        if (nextIsKalangan || i === arr.length - 1) {
+            if (subItems.length > 0) {
+                html += `<ul style="${liStyle}">${subItems
+                    .map(sub => `<li style="${subLiStyle}">- ${sub}</li>`)
+                    .join("")}</ul>`;
+                subItems = [];
+            }
+            html += `</li>`;
+        }
+    }
+
+    html += "</ol>";
+    return html;
+}
+
 function renderBulletList(value: string | string[]) {
     if (Array.isArray(value)) {
         return `
@@ -315,7 +483,7 @@ export function buildAnjabHtml(data: any): string {
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">a. Pendidikan Formal</td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.pendidikan_formal)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderPendidikanFormalList(data.pendidikan_formal)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px;">b. Pendidikan dan Pelatihan</td>
@@ -325,40 +493,40 @@ export function buildAnjabHtml(data: any): string {
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
           ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
             ? "Diklat Penjenjangan"
             : "Manajerial"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_penjenjangan)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.diklat_penjenjangan)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
           ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
             ? "Diklat Teknis"
             : "Teknis"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_teknis)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.diklat_teknis)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
           ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
             ? "Diklat Fungsional"
             : "Fungsional"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_fungsional)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.diklat_fungsional)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">c. Pengalaman Kerja</td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.pengalaman_kerja)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderPengalamanKerjaList(data.pengalaman_kerja)}</td>
       </tr>
     </table>
   </div>
