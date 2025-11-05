@@ -217,6 +217,110 @@ function renderTableList(value: string | string[]) {
     return value;
 }
 
+function renderHasilKerjaList(value: any): string {
+    const escapeHtml = (s: string) =>
+        s.replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+
+    const alphaLabel = (i: number): string => {
+        const base = 26;
+        let n = i, out = "";
+        do {
+            out = String.fromCharCode(97 + (n % base)) + out; // a..z, aa..az...
+            n = Math.floor(n / base) - 1;
+        } while (n >= 0);
+        return out;
+    };
+
+    const getText = (n: any): string => (typeof n === "string" ? n : n?.text ?? "");
+    const isLeaf = (n: any): boolean => typeof n === "string" || !n?.children || n.children.length === 0;
+
+    const tryParseJson = (s: string) => {
+        const t = s.trim();
+        if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+            try { return JSON.parse(t); } catch { }
+        }
+        return s;
+    };
+
+    const normalize = (v: any): any[] => {
+        if (v == null) return [];
+
+        if (typeof v === "string") {
+            const parsed = tryParseJson(v);
+            if (parsed !== v) return normalize(parsed);
+            return [v];
+        }
+
+        if (Array.isArray(v)) {
+            return v.map((item) => {
+                if (typeof item === "string") {
+                    const parsed = tryParseJson(item);
+                    return typeof parsed === "string" ? parsed : normalize(parsed)[0];
+                }
+                if (item && typeof item === "object") {
+                    return { text: item.text ?? "", children: Array.isArray(item.children) ? item.children : [] };
+                }
+                return String(item);
+            });
+        }
+
+        if (typeof v === "object") {
+            return [{ text: v.text ?? "", children: Array.isArray(v.children) ? v.children : [] }];
+        }
+
+        return [String(v)];
+    };
+
+    const renderList = (nodes: any[]): string => {
+        if (!nodes.length) return "";
+
+        // ✅ jika lebih dari 1 item, item pertama tetap bernomor
+        const multipleItems = nodes.length > 1;
+        const firstLooksLikeHeader = getText(nodes[0]).trim().endsWith(":");
+        const firstIsHeader = firstLooksLikeHeader && !multipleItems; // kalau >1 item, header juga dikasih label
+
+        const items = nodes.map((node, i) => {
+            const isHeader = i === 0 && firstIsHeader;
+            const labelIndex = isHeader ? -1 : i - (firstIsHeader ? 1 : 0);
+            const text = escapeHtml(getText(node));
+            const hasChild = !isLeaf(node);
+            const label = labelIndex >= 0 ? alphaLabel(labelIndex) + "." : "";
+
+            if (isHeader) {
+                const childHtml = hasChild ? renderList(node.children) : "";
+                return `
+<li style="margin:0; padding:0;">
+  <span style="display:block;">${text}</span>
+  ${childHtml}
+</li>`;
+            }
+
+            const childHtml = hasChild ? renderList(node.children) : "";
+            return `
+<li style="margin:0; padding:0; display:flex;">
+  <span style="flex-shrink:0; width:1.5em;">${label}</span>
+  <span style="flex:1;">
+    ${text}
+    ${childHtml ? `<div>${childHtml}</div>` : ""}
+  </span>
+</li>`;
+        }).join("");
+
+        return `<ol style="margin:0; padding-left:0; list-style:none;">${items}</ol>`;
+    };
+
+    // ===== main =====
+    const nodes = normalize(value);
+    if (nodes.length === 0) return "";
+    if (nodes.length === 1 && isLeaf(nodes[0])) return escapeHtml(getText(nodes[0]));
+    return renderList(nodes);
+}
+
+
 /** ====== BARU: render detail_uraian_tugas (tahapan + detail_tahapan) ====== */
 function renderDetailUraian(detailArr?: Array<{
     nomor_tahapan?: number | null;
@@ -551,7 +655,7 @@ export function buildAnjabHtml(data: any): string {
           <tr>
             <td style="text-align:center">${index + 1}.</td>
             <td style="text-align: justify">${renderUraianTugasDanTahapan(item)}</td>
-            <td>${renderTableList(item.hasil_kerja)}</td>
+            <td>${renderHasilKerjaList(item.hasil_kerja)}</td>
             <td class="center">${item.jumlah_hasil}</td>
             <td class="center">${item.waktu_penyelesaian_jam}</td>
             <td class="center">${item.waktu_efektif}</td>
