@@ -1,7 +1,7 @@
 // src/app/(admin)/(others-pages)/AnjabEdit/_sections/hasil-kerja.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
@@ -10,184 +10,293 @@ import EditSectionWrapper, { FormSection, FormActions } from "@/components/form/
 
 const MySwal = withReactContent(Swal);
 
-/** ===== Tipe data mengikuti backend TANPA alias ===== */
-type HasilKerjaItem = {
-    id: number;               // SERIAL int; 0 = baris baru (belum tersimpan)
-    jabatan_id: string;       // UUID
-    hasil_kerja: string[];    // TEXT[]
-    satuan_hasil: string[];   // TEXT[]
-    _tmpKey?: string;         // key react lokal
+/** ====== Types ====== */
+type HKNode = {
+    text: string;
+    children: HKNode[]; // only one-level used by the editor (no grand-children)
 };
 
-/** ===== Dual list input - Enhanced Visual ===== */
-function DualList({
-                      left,
-                      right,
-                      onChange,
-                  }: {
-    left: string[];
-    right: string[];
-    onChange: (nextLeft: string[], nextRight: string[]) => void;
+type HasilKerjaItem = {
+    id: number;             // SERIAL int; 0 = baris baru
+    jabatan_id: string;     // UUID
+    hasil_kerja: HKNode[];  // NESTED
+    satuan_hasil: string[]; // TEXT[]
+    _tmpKey?: string;
+};
+
+/** ===== Small list input for string[] (used for satuan_hasil) ===== */
+function StringList({
+                        label,
+                        value,
+                        onChange,
+                        placeholder,
+                        inputRef,
+                    }: {
+    label: string;
+    value: string[];
+    onChange: (next: string[]) => void;
+    placeholder?: string;
+    inputRef?: React.RefObject<HTMLInputElement>;
 }) {
-    const [L, setL] = useState<string[]>(left ?? []);
-    const [R, setR] = useState<string[]>(right ?? []);
-    const leftRefs = useRef<Array<HTMLInputElement | null>>([]);
-    const rightRefs = useRef<Array<HTMLInputElement | null>>([]);
+    const [items, setItems] = useState<string[]>(value ?? []);
+    const refs = useRef<Array<HTMLInputElement | null>>([]);
 
-    useEffect(() => { setL(left ?? []); }, [left]);
-    useEffect(() => { setR(right ?? []); }, [right]);
+    useEffect(() => { setItems(value ?? []); }, [value]);
 
-    const sync = (nl: string[], nr: string[]) => { setL(nl); setR(nr); onChange(nl, nr); };
+    const setAndEmit = (next: string[]) => { setItems(next); onChange(next); };
 
-    // LEFT ops
-    const addLeft = (after?: number) => {
-        const nl = [...L];
-        const idx = typeof after === "number" ? after + 1 : L.length;
-        nl.splice(idx, 0, "");
-        sync(nl, R);
-        setTimeout(() => leftRefs.current[idx]?.focus(), 0);
-    };
-    const removeLeft = (i: number) => {
-        if (L.length <= 1) return; // Minimal 1 item
-        sync(L.filter((_, x) => x !== i), R);
-    };
-    const updateLeft = (i: number, v: string) => {
-        const nl = [...L]; nl[i] = v; sync(nl, R);
-    };
-    const handleLeftKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, i: number) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            addLeft(i);
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key === "Backspace" && L[i] === "" && L.length > 1) {
-            e.preventDefault();
-            removeLeft(i);
-        }
+    const add = (after?: number) => {
+        const idx = typeof after === "number" ? after + 1 : items.length;
+        const next = [...items];
+        next.splice(idx, 0, "");
+        setAndEmit(next);
+        setTimeout(() => refs.current[idx]?.focus(), 0);
     };
 
-    // RIGHT ops
-    const addRight = (after?: number) => {
-        const nr = [...R];
-        const idx = typeof after === "number" ? after + 1 : R.length;
-        nr.splice(idx, 0, "");
-        sync(L, nr);
-        setTimeout(() => rightRefs.current[idx]?.focus(), 0);
+    const remove = (i: number) => {
+        if (items.length <= 1) return; // minimal 1 item agar UX tidak “kosong total”
+        setAndEmit(items.filter((_, x) => x !== i));
     };
-    const removeRight = (i: number) => {
-        if (R.length <= 1) return; // Minimal 1 item
-        sync(L, R.filter((_, x) => x !== i));
+
+    const update = (i: number, v: string) => {
+        const next = [...items]; next[i] = v; setAndEmit(next);
     };
-    const updateRight = (i: number, v: string) => {
-        const nr = [...R]; nr[i] = v; sync(L, nr);
-    };
-    const handleRightKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, i: number) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            addRight(i);
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key === "Backspace" && R[i] === "" && R.length > 1) {
-            e.preventDefault();
-            removeRight(i);
+
+    const onKey = (e: React.KeyboardEvent<HTMLInputElement>, i: number) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); add(i); }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Backspace" && items[i] === "" && items.length > 1) {
+            e.preventDefault(); remove(i);
         }
     };
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* LEFT: Hasil Kerja */}
-            <div className="md:col-span-6 space-y-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Hasil Kerja
-                </label>
-                <div className="space-y-2">
-                    {L.map((val, i) => (
-                        <div key={`L-${i}`} className="flex gap-2">
-                            <input
-                                ref={(el) => { leftRefs.current[i] = el; }}
-                                type="text"
-                                value={val ?? ""}
-                                onChange={(e) => updateLeft(i, e.target.value)}
-                                onKeyDown={(e) => handleLeftKeyDown(e, i)}
-                                placeholder="Contoh: Dokumen Rencana Program"
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => removeLeft(i)}
-                                disabled={L.length <= 1}
-                                title="Hapus baris"
-                                className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-                <button
-                    type="button"
-                    onClick={() => addLeft()}
-                    className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Tambah
-                </button>
+        <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            <div className="space-y-2">
+                {items.map((v, i) => (
+                    <div key={i} className="flex gap-2">
+                        <input
+                            ref={(el) => {
+                                refs.current[i] = el;
+                                if (i === 0 && inputRef && !inputRef.current) {
+                                    // optional: hook first input to external ref for auto-focus
+                                    (inputRef as any).current = el;
+                                }
+                            }}
+                            type="text"
+                            value={v ?? ""}
+                            onChange={(e) => update(i, e.target.value)}
+                            onKeyDown={(e) => onKey(e, i)}
+                            placeholder={placeholder}
+                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => remove(i)}
+                            disabled={items.length <= 1}
+                            title="Hapus baris"
+                            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                ))}
             </div>
-
-            {/* RIGHT: Satuan Hasil */}
-            <div className="md:col-span-6 space-y-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Satuan Hasil
-                </label>
-                <div className="space-y-2">
-                    {R.map((val, i) => (
-                        <div key={`R-${i}`} className="flex gap-2">
-                            <input
-                                ref={(el) => { rightRefs.current[i] = el; }}
-                                type="text"
-                                value={val ?? ""}
-                                onChange={(e) => updateRight(i, e.target.value)}
-                                onKeyDown={(e) => handleRightKeyDown(e, i)}
-                                placeholder="Contoh: Dokumen, Laporan"
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => removeRight(i)}
-                                disabled={R.length <= 1}
-                                title="Hapus baris"
-                                className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-                <button
-                    type="button"
-                    onClick={() => addRight()}
-                    className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Tambah
-                </button>
-            </div>
+            <button
+                type="button"
+                onClick={() => add()}
+                className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2"
+            >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
+                </svg>
+                Tambah
+            </button>
         </div>
     );
 }
 
-/** ===== Section: Hasil Kerja (pakai UUID dari localStorage) ===== */
-export default function HasilKerjaForm({
-                                           viewerPath, // contoh: "Ortala/PKSTI"
-                                       }: {
-    viewerPath: string;
+/** ===== Nested editor for hasil_kerja: HKNode[] ===== */
+function NestedHasilKerjaEditor({
+                                    value,
+                                    onChange,
+                                    firstInputRef,
+                                }: {
+    value: HKNode[];
+    onChange: (v: HKNode[]) => void;
+    firstInputRef?: React.RefObject<HTMLInputElement>;
 }) {
+    const [items, setItems] = useState<HKNode[]>(value ?? []);
+    const parentRefs = useRef<Array<HTMLInputElement | null>>([]);
+    const childRefs = useRef<Record<string, Array<HTMLInputElement | null>>>({});
+
+    useEffect(() => { setItems(value ?? []); }, [value]);
+
+    const setAndEmit = (next: HKNode[]) => { setItems(next); onChange(next); };
+
+    const newParent = (): HKNode => ({ text: "", children: [] });
+    const newChild = (): HKNode => ({ text: "", children: [] });
+
+    const addParent = (after?: number) => {
+        const idx = typeof after === "number" ? after + 1 : items.length;
+        const next = [...items];
+        next.splice(idx, 0, newParent());
+        setAndEmit(next);
+        setTimeout(() => parentRefs.current[idx]?.focus(), 0);
+    };
+    const removeParent = (i: number) => {
+        const next = items.filter((_, x) => x !== i);
+        setAndEmit(next.length ? next : [newParent()]); // jangan kosong total
+    };
+    const updateParentText = (i: number, text: string) => {
+        const next = [...items];
+        next[i] = { ...next[i], text };
+        setAndEmit(next);
+    };
+
+    const addChild = (pi: number, after?: number) => {
+        const next = [...items];
+        const kids = [...(next[pi]?.children ?? [])];
+        const idx = typeof after === "number" ? after + 1 : kids.length;
+        kids.splice(idx, 0, newChild());
+        next[pi] = { ...next[pi], children: kids };
+        setAndEmit(next);
+        const key = `p${pi}`;
+        if (!childRefs.current[key]) childRefs.current[key] = [];
+        setTimeout(() => childRefs.current[key][idx]?.focus(), 0);
+    };
+    const removeChild = (pi: number, ci: number) => {
+        const next = [...items];
+        const kids = [...(next[pi]?.children ?? [])].filter((_, x) => x !== ci);
+        next[pi] = { ...next[pi], children: kids };
+        setAndEmit(next);
+    };
+    const updateChildText = (pi: number, ci: number, text: string) => {
+        const next = [...items];
+        const kids = [...(next[pi]?.children ?? [])];
+        kids[ci] = { ...kids[ci], text };
+        next[pi] = { ...next[pi], children: kids };
+        setAndEmit(next);
+    };
+
+    const onParentKey = (e: React.KeyboardEvent<HTMLInputElement>, i: number) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addParent(i); }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Backspace" && items[i].text === "") {
+            e.preventDefault(); removeParent(i);
+        }
+    };
+    const onChildKey = (e: React.KeyboardEvent<HTMLInputElement>, pi: number, ci: number) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addChild(pi, ci); }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Backspace" && (items[pi].children[ci].text ?? "") === "") {
+            e.preventDefault(); removeChild(pi, ci);
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Hasil Kerja (Nested)
+                </label>
+                <button
+                    type="button"
+                    onClick={() => addParent()}
+                    className="rounded px-3 py-1 bg-brand-500 text-white hover:bg-brand-600 active:scale-95 transition-transform flex items-center gap-1"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Tambah Item
+                </button>
+            </div>
+
+            {items.length === 0 && (
+                <div className="text-center py-6 px-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Belum ada item hasil kerja.</p>
+                </div>
+            )}
+
+            {items.map((p, pi) => (
+                <div key={`p-${pi}`} className="rounded border p-3 space-y-3 bg-gray-50 dark:bg-gray-800">
+                    {/* Parent text */}
+                    <div className="flex gap-2">
+                        <input
+                            ref={(el) => {
+                                parentRefs.current[pi] = el;
+                                if (pi === 0 && firstInputRef && !firstInputRef.current) {
+                                    (firstInputRef as any).current = el;
+                                }
+                            }}
+                            type="text"
+                            value={p.text ?? ""}
+                            onChange={(e) => updateParentText(pi, e.target.value)}
+                            onKeyDown={(e) => onParentKey(e, pi)}
+                            placeholder="Contoh: Dokumen Rencana Strategis ..."
+                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => removeParent(pi)}
+                            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
+                            title="Hapus parent"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Children list (satu level) */}
+                    <div className="space-y-2">
+                        <label className="block text-xs text-gray-600 dark:text-gray-300">Rincian (children)</label>
+                        {(p.children ?? []).map((c, ci) => (
+                            <div key={`p-${pi}-c-${ci}`} className="flex gap-2 pl-0 md:pl-4">
+                                <input
+                                    ref={(el) => {
+                                        const key = `p${pi}`;
+                                        if (!childRefs.current[key]) childRefs.current[key] = [];
+                                        childRefs.current[key][ci] = el;
+                                    }}
+                                    type="text"
+                                    value={c.text ?? ""}
+                                    onChange={(e) => updateChildText(pi, ci, e.target.value)}
+                                    onKeyDown={(e) => onChildKey(e, pi, ci)}
+                                    placeholder="Contoh: 9 (sembilan) draft ..."
+                                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removeChild(pi, ci)}
+                                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
+                                    title="Hapus child"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => addChild(pi)}
+                            className="w-full md:w-auto px-3 py-1 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Tambah Rincian
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+/** ===== Section: Hasil Kerja ===== */
+export default function HasilKerjaForm({ viewerPath }: { viewerPath: string }) {
     const [resolvedId, setResolvedId] = useState<string>("");
     const [storageInfo, setStorageInfo] = useState<{ storageKey: string; exists: boolean; value: string }>({
         storageKey: "",
@@ -200,9 +309,10 @@ export default function HasilKerjaForm({
     const [saving, setSaving] = useState<number | "new" | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
 
-    const firstRef = useRef<HTMLInputElement>(null);
+    const firstRefParent = useRef<HTMLInputElement>(null); // auto-focus parent text pertama
+    const firstRefSatuan = useRef<HTMLInputElement>(null);
 
-    // Resolve ID dari localStorage: 2 segmen terakhir viewerPath
+    // Resolve key localStorage
     function resolveFromStorage(vpath: string) {
         const storageKey = vpath.split("/").filter(Boolean).slice(-2).join("/");
         try {
@@ -213,7 +323,6 @@ export default function HasilKerjaForm({
         }
     }
 
-    // 1) Resolve saat mount / viewerPath berubah
     useEffect(() => {
         const info = resolveFromStorage(viewerPath);
         setStorageInfo(info);
@@ -221,97 +330,82 @@ export default function HasilKerjaForm({
         setLastError(null);
     }, [viewerPath]);
 
-    // 2) Fetch list
     const fetchAll = async (jabatanId: string) => {
-        if (!jabatanId) {
-            console.warn("[hasil-kerja] fetchAll called with empty jabatanId");
-            setLoading(false);
-            return;
-        }
-        
-        console.log("[hasil-kerja] fetchAll start:", jabatanId);
+        if (!jabatanId) { setLoading(false); return; }
         setLastError(null);
         setLoading(true);
         try {
-            const url = `/api/anjab/${encodeURIComponent(jabatanId)}/hasil-kerja`;
-            console.log("[hasil-kerja] fetching:", url);
-            const res = await apiFetch(url, { cache: "no-store" });
-            console.log("[hasil-kerja] response:", res.status, res.ok);
-            
+            const res = await apiFetch(`/api/anjab/${encodeURIComponent(jabatanId)}/hasil-kerja`, { cache: "no-store" });
             if (!res.ok) {
-                setRows([]);
-                setLastError(`Gagal memuat Hasil Kerja (HTTP ${res.status}).`);
-                return;
+                setRows([]); setLastError(`Gagal memuat Hasil Kerja (HTTP ${res.status}).`); return;
             }
             const raw = await res.json();
-            console.log("[hasil-kerja] raw data:", raw);
-            
             const normalized: HasilKerjaItem[] = Array.isArray(raw)
                 ? raw.map((r: any, i: number) => ({
                     id: Number.isFinite(Number(r?.id)) ? Number(r.id) : 0,
                     jabatan_id: typeof r?.jabatan_id === "string" ? r.jabatan_id : jabatanId,
-                    hasil_kerja: Array.isArray(r?.hasil_kerja) ? r.hasil_kerja : [],
+                    hasil_kerja: Array.isArray(r?.hasil_kerja)
+                        ? r.hasil_kerja.map((n: any) => ({
+                            text: typeof n?.text === "string" ? n.text : "",
+                            children: Array.isArray(n?.children)
+                                ? n.children.map((c: any) => ({
+                                    text: typeof c?.text === "string" ? c.text : "",
+                                    children: [], // editor satu level saja
+                                }))
+                                : [],
+                        }))
+                        : [],
                     satuan_hasil: Array.isArray(r?.satuan_hasil) ? r.satuan_hasil : [],
                     _tmpKey: `srv-${i}-${r?.id ?? Math.random().toString(36).slice(2)}`,
                 }))
                 : [];
-            console.log("[hasil-kerja] normalized:", normalized);
             setRows(normalized);
-            setTimeout(() => firstRef.current?.focus(), 0);
-        } catch (err) {
-            console.error("[hasil-kerja] fetch error:", err);
-            setRows([]);
-            setLastError("Terjadi kesalahan saat memuat data.");
+            setTimeout(() => (firstRefParent.current?.focus() || firstRefSatuan.current?.focus()), 0);
+        } catch {
+            setRows([]); setLastError("Terjadi kesalahan saat memuat data.");
         } finally {
-            console.log("[hasil-kerja] fetchAll done");
             setLoading(false);
         }
     };
 
-    // 3) Trigger fetch berdasarkan hasil resolve
     useEffect(() => {
-        console.log("[hasil-kerja] useEffect: resolvedId=", resolvedId, "exists=", storageInfo.exists);
         let alive = true;
         (async () => {
             if (!storageInfo.exists) {
-                console.log("[hasil-kerja] storage key not found");
-                setLoading(false);
-                setRows([]);
-                setLastError("__NOT_FOUND_KEY__");
-                return;
+                setLoading(false); setRows([]); setLastError("__NOT_FOUND_KEY__"); return;
             }
-            if (!resolvedId) {
-                console.log("[hasil-kerja] no resolvedId yet");
-                setLoading(false);
-                return;
-            }
+            if (!resolvedId) { setLoading(false); return; }
             if (!alive) return;
-            console.log("[hasil-kerja] calling fetchAll...");
             await fetchAll(resolvedId);
         })();
-        return () => { 
-            alive = false;
-            console.log("[hasil-kerja] useEffect cleanup");
-        };
+        return () => { alive = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [resolvedId, storageInfo.exists]);
 
-    // Helpers UI
-    function addRow() {
+    // Helpers
+    const addRow = () => {
         const tmpKey = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         setRows(prev => [
             ...prev,
-            { id: 0, jabatan_id: resolvedId, hasil_kerja: [""], satuan_hasil: [], _tmpKey: tmpKey },
+            {
+                id: 0,
+                jabatan_id: resolvedId,
+                hasil_kerja: [{ text: "", children: [] }],
+                satuan_hasil: [""],
+                _tmpKey: tmpKey,
+            },
         ]);
-        setTimeout(() => firstRef.current?.focus(), 0);
-    }
-    function updateLocal(idx: number, patch: Partial<HasilKerjaItem>) {
+        setTimeout(() => (firstRefParent.current?.focus() || firstRefSatuan.current?.focus()), 0);
+    };
+
+    const updateLocal = (idx: number, patch: Partial<HasilKerjaItem>) => {
         setRows(prev => {
             const next = [...prev];
             next[idx] = { ...next[idx], ...patch };
             return next;
         });
-    }
+    };
+
     const retry = () => {
         const info = resolveFromStorage(viewerPath);
         setStorageInfo(info);
@@ -319,17 +413,24 @@ export default function HasilKerjaForm({
         setLastError(null);
     };
 
+    // Save/Delete
     async function saveRow(idx: number) {
         const it = rows[idx];
+
+        // bersihkan node: drop parent tanpa text & child tanpa text
+        const cleanedHK: HKNode[] = (it.hasil_kerja ?? []).map(p => ({
+            text: (p.text ?? "").trim(),
+            children: (p.children ?? []).map(c => ({ text: (c.text ?? "").trim(), children: [] })).filter(c => c.text),
+        })).filter(p => p.text);
+
         const payload = {
-            hasil_kerja: it.hasil_kerja ?? [],
-            satuan_hasil: it.satuan_hasil ?? [],
+            hasil_kerja: cleanedHK,                 // kirim nested ke API
+            satuan_hasil: (it.satuan_hasil ?? []).map(s => String(s).trim()).filter(Boolean),
         };
 
         setSaving(it.id > 0 ? it.id : "new");
         try {
             if (it.id > 0) {
-                // PATCH
                 const res = await apiFetch(
                     `/api/anjab/${encodeURIComponent(resolvedId)}/hasil-kerja/${it.id}`,
                     { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
@@ -343,7 +444,6 @@ export default function HasilKerjaForm({
                     satuan_hasil: Array.isArray(json.data?.satuan_hasil) ? json.data.satuan_hasil : [],
                 });
             } else {
-                // POST
                 const res = await apiFetch(
                     `/api/anjab/${encodeURIComponent(resolvedId)}/hasil-kerja`,
                     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
@@ -401,7 +501,7 @@ export default function HasilKerjaForm({
                 description="ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal"
                 icon={
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                     </svg>
                 }
             >
@@ -420,8 +520,8 @@ export default function HasilKerjaForm({
                         >
                             Coba lagi
                         </button>
-                        <Link 
-                            href={`/anjab/${viewerPath}`} 
+                        <Link
+                            href={`/anjab/${viewerPath}`}
                             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         >
                             Kembali
@@ -439,7 +539,7 @@ export default function HasilKerjaForm({
                 description="Memuat data hasil kerja..."
                 icon={
                     <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                 }
             >
@@ -456,10 +556,10 @@ export default function HasilKerjaForm({
     return (
         <EditSectionWrapper
             title="Hasil Kerja"
-            description="Edit hasil kerja dan satuan hasil untuk jabatan ini"
+            description="Edit hasil kerja (nested) dan satuan hasil untuk jabatan ini"
             icon={
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                 </svg>
             }
         >
@@ -467,7 +567,7 @@ export default function HasilKerjaForm({
                 {rows.length === 0 ? (
                     <div className="text-center py-12 px-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                         <svg className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
                         </svg>
                         <p className="text-gray-600 dark:text-gray-400 mb-4">Belum ada hasil kerja yang ditambahkan</p>
                         <button
@@ -476,7 +576,7 @@ export default function HasilKerjaForm({
                             className="px-6 py-2.5 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors inline-flex items-center gap-2"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
                             </svg>
                             Tambah
                         </button>
@@ -487,11 +587,27 @@ export default function HasilKerjaForm({
                             const key = (row.id > 0 ? `row-${row.id}` : row._tmpKey) || `row-${idx}`;
                             return (
                                 <FormSection key={key} title={`Hasil Kerja ${idx + 1}`}>
-                                    <DualList
-                                        left={row.hasil_kerja ?? []}
-                                        right={row.satuan_hasil ?? []}
-                                        onChange={(L, R) => updateLocal(idx, { hasil_kerja: L, satuan_hasil: R })}
-                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                                        {/* LEFT: nested hasil_kerja */}
+                                        <div className="md:col-span-7">
+                                            <NestedHasilKerjaEditor
+                                                value={row.hasil_kerja ?? []}
+                                                onChange={(v) => updateLocal(idx, { hasil_kerja: v })}
+                                                firstInputRef={firstRefParent}
+                                            />
+                                        </div>
+
+                                        {/* RIGHT: satuan_hasil */}
+                                        <div className="md:col-span-5">
+                                            <StringList
+                                                label="Satuan Hasil"
+                                                value={row.satuan_hasil ?? []}
+                                                onChange={(v) => updateLocal(idx, { satuan_hasil: v })}
+                                                placeholder="Contoh: Dokumen, Laporan"
+                                                inputRef={firstRefSatuan}
+                                            />
+                                        </div>
+                                    </div>
 
                                     <div className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-4">
                                         <button
@@ -503,8 +619,8 @@ export default function HasilKerjaForm({
                                             {saving === row.id || saving === "new" ? (
                                                 <>
                                                     <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                                                     </svg>
                                                     Menyimpan...
                                                 </>
@@ -523,14 +639,13 @@ export default function HasilKerjaForm({
                                 </FormSection>
                             );
                         })}
-                        
                         <button
                             type="button"
                             onClick={addRow}
                             className="w-full px-4 py-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2 font-medium"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
                             </svg>
                             Tambah
                         </button>
@@ -538,8 +653,8 @@ export default function HasilKerjaForm({
                 )}
 
                 <FormActions>
-                    <Link 
-                        href={`/anjab/${viewerPath}`} 
+                    <Link
+                        href={`/anjab/${viewerPath}`}
                         className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                         Kembali

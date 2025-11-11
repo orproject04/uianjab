@@ -191,20 +191,34 @@ function renderBulletList(value: string | string[]) {
 }
 
 function renderTableList(value: string | string[]) {
+    // helper: 0 -> "a", 25 -> "z", 26 -> "aa", 27 -> "ab", dst.
+    const alphaIndex = (n: number) => {
+        let s = "";
+        do {
+            s = String.fromCharCode(97 + (n % 26)) + s;
+            n = Math.floor(n / 26) - 1;
+        } while (n >= 0);
+        return s;
+    };
+
     if (Array.isArray(value) && value.length > 0) {
         if (value.length === 1) return value[0];
+
         const skipNumbering = value[0].trim().endsWith(":");
+
         return `
       <ol style="margin:0; padding-left:0; list-style:none;">
         ${value
             .map((sub, i) => {
                 if (i === 0 && skipNumbering) {
+                    // item pertama tetap tanpa penomoran
                     return `<li style="margin:0; padding:0;">${sub}</li>`;
                 } else {
-                    const numIndex = skipNumbering ? i - 1 : i;
+                    const numIndex = skipNumbering ? i - 1 : i; // mulai dari 0
+                    const label = alphaIndex(numIndex) + ".";
                     return `
                 <li style="margin:0; padding:0; display:flex;">
-                  <span style="flex-shrink:0; width:1.5em;">${String.fromCharCode(97 + numIndex)}.</span>
+                  <span style="flex-shrink:0; width:1.8em;">${label}</span>
                   <span style="flex:1;">${sub}</span>
                 </li>
               `;
@@ -689,7 +703,7 @@ export function buildAnjabHtml(data: any): string {
         ${(data.hasil_kerja || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
-            <td>${renderTableList(item.hasil_kerja)}</td>
+            <td>${renderHasilKerjaList(item.hasil_kerja)}</td>
             ${showSatuanHasil ? `<td>${renderTableList(item.satuan_hasil)}</td>` : ""}
           </tr>
         `).join("")}
