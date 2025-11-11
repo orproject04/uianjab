@@ -114,6 +114,20 @@ export default function UserDropdown() {
 
                 <button
                     type="button"
+                    onClick={() => {
+                        closeDropdown();
+                        router.push("/help");
+                    }}
+                    className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+                >
+                    <svg className="w-6 h-6 fill-gray-500 group-hover:fill-gray-700 dark:group-hover:fill-gray-300" viewBox="0 0 24 24" aria-hidden>
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.88 16h-1.75v-1.75h1.75V18zM15.07 9.75c-.28.56-.83 1.03-1.49 1.42-.53.33-.84.56-.97.86-.08.17-.11.38-.11.62H11.6c0-.52.12-.9.35-1.2.3-.39.77-.66 1.48-1.06.56-.33.86-.6 1.02-.86.18-.29.17-.66-.04-1.02-.18-.32-.52-.49-.96-.49-.5 0-.86.23-1.08.69l-1.5-.69c.36-.8 1.05-1.48 2.58-1.48 1.44 0 2.41.7 2.82 1.6.23.55.18 1.18-.21 1.86z" />
+                    </svg>
+                    Help
+                </button>
+
+                <button
+                    type="button"
                     onClick={handleSignOut}
                     disabled={signingOut}
                     className="flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"

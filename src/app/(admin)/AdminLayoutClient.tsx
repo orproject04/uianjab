@@ -11,7 +11,7 @@ import {useOptionalSidebar} from "@/context/SidebarContext";
 import {tokenStore} from "@/lib/tokens";
 import {apiFetch} from "@/lib/apiFetch";
 
-export default function AdminLayoutClient({children}: { children: React.ReactNode }) {
+const AdminLayoutClient: React.FC<{ children: React.ReactNode }> = ({children}) => {
     const sidebar = useOptionalSidebar();
     const isExpanded = !!sidebar?.isExpanded;
     const isHovered = !!sidebar?.isHovered;
@@ -30,13 +30,11 @@ export default function AdminLayoutClient({children}: { children: React.ReactNod
     useEffect(() => {
         let alive = true;
         (async () => {
-            // tidak ada access token → langsung ke signin
             if (!tokenStore.access) {
                 router.replace(`/signin?next=${encodeURIComponent(next)}`);
                 return;
             }
 
-            // ada token → validasi; apiFetch akan auto-refresh jika perlu
             const r = await apiFetch("/api/auth/me", {cache: "no-store"});
             if (!alive) return;
 
@@ -48,10 +46,9 @@ export default function AdminLayoutClient({children}: { children: React.ReactNod
             const j = await r.json();
             const role = j?.data?.role ?? "user";
 
-            // user biasa dilarang akses create/edit
             if (
                 role !== "admin" &&
-                (pathname.startsWith("anjab/edit") || pathname.startsWith("anjab/create"))
+                (pathname?.startsWith("anjab/edit") || pathname?.startsWith("anjab/create"))
             ) {
                 router.replace("/");
                 return;
@@ -65,6 +62,8 @@ export default function AdminLayoutClient({children}: { children: React.ReactNod
         };
     }, [router, next, pathname]);
 
+    // (debug useEffect removed)
+
     if (!canRender) {
         return (
             <div className="w-full h-screen flex items-center justify-center">
@@ -76,8 +75,9 @@ export default function AdminLayoutClient({children}: { children: React.ReactNod
     const mainContentMargin = isMobileOpen
         ? "ml-0"
         : isExpanded || isHovered
-            ? "lg:ml-[350px]"
+            ? "lg:ml-[380px]"
             : "lg:ml-[90px]";
+
 
     return (
         <div className="min-h-screen xl:flex">
@@ -85,8 +85,10 @@ export default function AdminLayoutClient({children}: { children: React.ReactNod
             <Backdrop/>
             <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
                 <AppHeader/>
-                <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+                <div id="admin-content" style={{paddingTop: 'var(--header-height)'}} className="p-4 mx-auto max-w-7xl md:p-6 lg:p-8">{children}</div>
             </div>
         </div>
     );
-}
+};
+
+export default AdminLayoutClient;

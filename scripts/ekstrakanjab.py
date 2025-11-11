@@ -61,6 +61,334 @@ def iter_block_items(doc):
         elif isinstance(child, CT_Tbl):
             yield ("t", Table(child, doc))
 
+# ====== Helper kecil yang sering dipakai ======
+def para_text(p):
+    """Gabungkan text semua runs pada paragraph."""
+    return "".join(r.text or "" for r in p.runs) if p is not None else ""
+
+def is_list_paragraph(p) -> bool:
+    """Kembalikan True bila paragraph punya numPr (list/numbering Word)."""
+    try:
+        pPr = p._p.pPr
+        if pPr is None:
+            return False
+        return pPr.numPr is not None
+    except Exception:
+        return False
+
+# Pola teks (dipakai heuristik)
+ALPHA_PREFIX   = re.compile(r"^\s*[A-Za-z][\.\)]\s")           # a.  a)
+DECIMAL_PREFIX = re.compile(r"^\s*\d+[\.\)]\s")                # 1.  1)
+ROMAN_PREFIX   = re.compile(r"^\s*[IVXLCDM]+[\.\)]\s", re.I)   # I.  iv)
+BULLET_LIKE    = re.compile(r"^\s*[•▪◦·\-–—■□]\s*")            # simbol bullet umum
+
+# ====== FUNGSI UTAMA: parse kolom "Hasil Kerja" menjadi List[{text, children[]}]
+def extract_bulleted_items(cell):
+    """
+    Menghasilkan struktur nested hasil_kerja dari sebuah cell Word:
+    return: List[ { "text": "...", "children": [ { "text": "...", "children": [] }, ... ] }, ... ]
+
+    Strategi 2 mode:
+    - MODE A (abc): bila terdeteksi list level-0 berformat huruf (a., b., ...), itu parent,
+      dan item lain (beda signature/level>0) jadi child.
+    - MODE B (colon-block + title-streak + list-aware): fallback heuristik bila tidak ada abc.
+    """
+    paras = []
+    saw_alpha_parent = False
+
+    for p in cell.paragraphs:
+        t = (para_text(p) or "").strip()
+        if not t:
+            continue
+
+        meta = {"text": t, "is_list": False, "ilvl": 0, "numfmt0": None, "absId": None}
+
+        if is_list_paragraph(p):
+            meta["is_list"] = True
+            try:
+                # level
+                pPr = p._p.pPr
+                numPr = pPr.numPr if pPr is not None else None
+                if numPr is not None and numPr.ilvl is not None and numPr.ilvl.val is not None:
+                    meta["ilvl"] = int(numPr.ilvl.val)
+
+                # signature numbering (absId & numFmt level-0)
+                numId = int(numPr.numId.val) if (numPr is not None and numPr.numId is not None and numPr.numId.val is not None) else None
+                if numId is not None:
+                    numbering = p.part.numbering_part.element
+                    num = numbering.xpath(f".//w:num[@w:numId='{numId}']", namespaces=numbering.nsmap)
+                    if num:
+                        absId_el = num[0].xpath("./w:abstractNumId", namespaces=numbering.nsmap)
+                        if absId_el:
+                            meta["absId"] = absId_el[0].get(qn("w:val"))
+                            absn = numbering.xpath(f".//w:abstractNum[@w:abstractNumId='{meta['absId']}']", namespaces=numbering.nsmap)
+                            if absn:
+                                lvl0 = absn[0].xpath("./w:lvl[@w:ilvl='0']", namespaces=numbering.nsmap)
+                                if lvl0:
+                                    numFmt_el = lvl0[0].xpath("./w:numFmt", namespaces=numbering.nsmap)
+                                    if numFmt_el:
+                                        meta["numfmt0"] = numFmt_el[0].get(qn("w:val"))
+            except Exception:
+                pass
+
+            if meta["ilvl"] == 0 and str(meta["numfmt0"] or "").lower() in ("lowerletter", "upperletter", "loweralpha", "upperalpha", "alphalower", "alphaupper"):
+                saw_alpha_parent = True
+
+        paras.append(meta)
+
+    # Pilih mode
+    if saw_alpha_parent:
+        return _build_mode_abc(paras)
+    else:
+        return _build_mode_colon_block(paras)
+
+
+# ====== MODE A: Parent = list level-0 huruf (a., b., ...) ======
+def _build_mode_abc(paras):
+    root = []
+    current_parent = None
+    base_sig = None  # (absId, numfmt0)
+
+    for r in paras:
+        t = r["text"]
+        if r["is_list"]:
+            sig = (r["absId"], str(r["numfmt0"]).lower() if r["numfmt0"] else None)
+            # inisialisasi base signature di list huruf level-0
+            if base_sig is None and r["ilvl"] == 0 and (sig[1] in ("lowerletter", "upperletter", "loweralpha", "upperalpha", "alphalower", "alphaupper")):
+                base_sig = sig
+                current_parent = {"text": t, "children": []}
+                root.append(current_parent)
+                continue
+
+            if base_sig is not None and r["ilvl"] == 0 and _same_sig(sig, base_sig):
+                # signature sama dengan base -> parent baru
+                current_parent = {"text": t, "children": []}
+                root.append(current_parent)
+                continue
+
+            # signature beda atau ilvl>=1 -> child
+            if current_parent is None:
+                current_parent = {"text": "(parent otomatis)", "children": []}
+                root.append(current_parent)
+            current_parent["children"].append({"text": t, "children": []})
+            continue
+
+        # plain text (bukan list)
+        if current_parent is None:
+            current_parent = {"text": t, "children": []}
+            root.append(current_parent)
+        else:
+            if _looks_childish(t):
+                current_parent["children"].append({"text": t, "children": []})
+            else:
+                current_parent["text"] = (current_parent["text"].rstrip() + " " + t.lstrip()).strip()
+
+    return root
+
+
+def _same_sig(a, b):
+    if not a or not b:
+        return False
+    absA, fmtA = a
+    absB, fmtB = b
+    if absA and absB:
+        return absA == absB
+    if fmtA and fmtB:
+        return fmtA == fmtB
+    return False
+
+
+# ====== MODE B: Colon-block + title-streak + list-aware ======
+def _build_mode_colon_block(paras):
+    root = []
+    current_parent = None
+    last_child_ended_with_dot = False
+    title_streak = False
+    colon_parent_active = False
+    base_list_sig = None  # (absId, numfmt0)
+
+    def _is_title_like(t: str) -> bool:
+        if not t:
+            return False
+        w = t.strip().split()
+        return t[0].isupper() and len(w) >= 3
+
+    def _is_short_connector(t: str) -> bool:
+        w = t.strip().split()
+        if len(w) < 3 and not t.rstrip().endswith((".", ":", ";")):
+            return True  # termasuk 'dan/atau/serta/hingga/maupun'
+        return False
+
+    def start_parent(text, from_colon=False, sig=None):
+        nonlocal current_parent, last_child_ended_with_dot, title_streak, colon_parent_active, base_list_sig
+        node = {"text": text.strip(), "children": []}
+        root.append(node)
+        current_parent = node
+        last_child_ended_with_dot = False
+        colon_parent_active = bool(from_colon)
+        title_streak = False if from_colon else _is_title_like(text)
+        if (sig is not None) and (not from_colon) and (base_list_sig is None):
+            base_list_sig = sig
+        return node
+
+    def add_child(text):
+        nonlocal current_parent, last_child_ended_with_dot
+        if current_parent is None:
+            start_parent("(parent otomatis)")
+        current_parent["children"].append({"text": text.strip(), "children": []})
+        last_child_ended_with_dot = text.rstrip().endswith(".")
+
+    def append_to_last(text):
+        nonlocal current_parent, last_child_ended_with_dot
+        if current_parent["children"]:
+            last = current_parent["children"][-1]
+            last["text"] = (last["text"].rstrip() + " " + text.lstrip()).strip()
+            last_child_ended_with_dot = last["text"].rstrip().endswith(".")
+        else:
+            current_parent["text"] = (current_parent["text"].rstrip() + " " + text.lstrip()).strip()
+            last_child_ended_with_dot = False
+
+    def _sig_tuple(r):
+        return (r.get("absId"), str(r.get("numfmt0")).lower() if r.get("numfmt0") else None)
+
+    for r in paras:
+        t = r["text"]
+
+        # 0) Inline colon: "Parent: Child ..."
+        if ":" in t and not t.strip().endswith(":"):
+            head, tail = t.split(":", 1)
+            head, tail = head.strip(), tail.strip()
+            if head and tail:
+                start_parent(head + ":", from_colon=True, sig=None)
+                for seg in _smart_split(tail):
+                    add_child(seg)
+                continue
+
+        # 1) Baris berakhir ":" jadi parent
+        if t.endswith(":"):
+            start_parent(t, from_colon=True, sig=None)
+            continue
+
+        # 2) Pemutus blok titik → parent baru
+        if last_child_ended_with_dot and not (
+            DECIMAL_PREFIX.match(t) or ALPHA_PREFIX.match(t) or ROMAN_PREFIX.match(t) or BULLET_LIKE.match(t) or t.endswith(":")
+        ):
+            start_parent(t, from_colon=False, sig=None)
+            continue
+
+        # 3) Belum ada parent? jadikan parent awal (non-colon; bila list L0 simpan signature)
+        if current_parent is None:
+            if r.get("is_list") and r.get("ilvl", 0) == 0:
+                start_parent(t, from_colon=False, sig=_sig_tuple(r))
+            else:
+                start_parent(t, from_colon=False, sig=None)
+            continue
+
+        # 3.5) List-aware: kalau list
+        if r.get("is_list"):
+            ilvl = r.get("ilvl", 0)
+            sig = _sig_tuple(r)
+
+            if colon_parent_active:
+                add_child(t)
+                continue
+
+            if ilvl == 0:
+                if _is_title_like(t):
+                    start_parent(t, from_colon=False, sig=sig)
+                    if base_list_sig is None:
+                        base_list_sig = sig
+                    continue
+
+                if base_list_sig is None:
+                    base_list_sig = sig
+                    start_parent(t, from_colon=False, sig=sig)
+                    continue
+
+                if _same_sig(sig, base_list_sig):
+                    start_parent(t, from_colon=False, sig=sig)
+                else:
+                    add_child(t)
+                continue
+            else:
+                add_child(t)
+                continue
+
+        # 4) Title-streak (bukan ':' dan bukan list)
+        if title_streak and _is_title_like(t) and not (
+            DECIMAL_PREFIX.match(t) or ALPHA_PREFIX.match(t) or ROMAN_PREFIX.match(t) or BULLET_LIKE.match(t)
+        ):
+            start_parent(t, from_colon=False, sig=None)
+            continue
+
+        # 5) Numeric/bullet (teks) → child
+        if DECIMAL_PREFIX.match(t) or ALPHA_PREFIX.match(t) or ROMAN_PREFIX.match(t) or BULLET_LIKE.match(t):
+            add_child(t)
+            continue
+
+        # 6) Short connector → ditempel
+        if _is_short_connector(t):
+            append_to_last(t)
+            continue
+
+        # 7) Default: tempel ke item terakhir
+        append_to_last(t)
+
+    return root
+
+
+def _looks_childish(t: str) -> bool:
+    return bool(
+        BULLET_LIKE.match(t) or DECIMAL_PREFIX.match(t) or ALPHA_PREFIX.match(t) or ROMAN_PREFIX.match(t)
+    )
+
+
+def _smart_split(text: str):
+    """
+    Pecah di koma & ' dan ' yang di LUAR kurung.
+    Kalau tetap satu segmen panjang, pecah di transisi Huruf Kapital.
+    """
+    parts = []
+    buf = []
+    depth = 0
+    for ch in text:
+        if ch == '(':
+            depth += 1; buf.append(ch)
+        elif ch == ')':
+            depth = max(0, depth - 1); buf.append(ch)
+        elif ch == ',' and depth == 0:
+            parts.append(''.join(buf).strip()); buf = []
+        else:
+            buf.append(ch)
+    if buf:
+        parts.append(''.join(buf).strip())
+
+    if len(parts) == 1:
+        s = parts[0]
+        res, buf, depth, i = [], [], 0, 0
+        while i < len(s):
+            ch = s[i]
+            if ch == '(':
+                depth += 1; buf.append(ch); i += 1
+            elif ch == ')':
+                depth = max(0, depth - 1); buf.append(ch); i += 1
+            elif depth == 0 and s[i:i+5].lower() == " dan ":
+                res.append(''.join(buf).strip()); buf = []; i += 5
+            else:
+                buf.append(ch); i += 1
+        tail = ''.join(buf).strip()
+        if tail:
+            res.append(tail)
+        parts = [p for p in res if p]
+
+    if len(parts) == 1:
+        s = parts[0]
+        capital_split = [p.strip() for p in re.split(r"(?<=\S)\s+(?=[A-Z])", s) if p.strip()]
+        if len(capital_split) > 1:
+            parts = capital_split
+
+    return [p for p in parts if p]
+
 # -------------------- READER --------------------
 
 def read_docx(file_path):
@@ -459,11 +787,6 @@ def extract_tugas_pokok(doc):
 
         return " ".join(deskripsi_parts).strip(), detail_uraian
 
-    # ---------- hasil kerja (pakai helper Anda yang sudah ada) ----------
-    def extract_bulleted_items(cell):
-        raw = extract_bullet_marked_text_cell(cell)  # helper existing
-        return split_items(raw)  # helper existing
-
     # ---------- deteksi baris total/rekap yang harus di-skip ----------
     TOTAL_KEYS = {
         "jumlah", "jumlah pegawai", "jumlah pegawai yang dibutuhkan",
@@ -567,27 +890,59 @@ def extract_tugas_pokok(doc):
     return tugas_list
 
 def extract_hasil_kerja(doc):
+    """
+    Ekstrak tabel '7. HASIL KERJA' menjadi:
+      [
+        {"no": "1", "hasil_kerja": [{text, children}], "satuan_hasil": ["...", "..."]},
+        ...
+      ]
+    - Kolom "Hasil Kerja" (ke-2) -> extract_bulleted_items(cell)
+    - Kolom "Satuan Hasil" (ke-3) -> split_items(...) dari extract_bullet_marked_text_cell(...)
+    - Baris kosong (keduanya kosong) di-skip.
+    """
     hasil_list = []
+
     for table in doc.tables:
-        headers = table_header_cells(table)
+        headers = table_header_cells(table)  # pastikan helper ini ada di module-level
         if not headers:
             continue
         if ("hasil kerja" in headers) and ("satuan hasil" in headers):
             hasil_idx = headers.index("hasil kerja")
             satuan_idx = headers.index("satuan hasil")
+
             for r in table.rows[1:]:
                 cells = r.cells
                 if len(cells) <= max(hasil_idx, satuan_idx):
                     continue
-                hasil_raw = extract_bullet_marked_text_cell(cells[hasil_idx])
-                satuan_raw = extract_bullet_marked_text_cell(cells[satuan_idx])
-                hasil_items = split_items(hasil_raw) or []
-                satuan_items = split_items(satuan_raw) or []
+
+                # Kolom "Hasil Kerja" — nested
+                try:
+                    hasil_items = extract_bulleted_items(cells[hasil_idx]) or []
+                except Exception:
+                    raw_hasil = (extract_bullet_marked_text_cell(cells[hasil_idx]) or "").strip()
+                    hasil_items = ([{"text": raw_hasil, "children": []}] if raw_hasil else [])
+
+                # Kolom "Satuan Hasil" — array flat
+                try:
+                    satuan_raw = extract_bullet_marked_text_cell(cells[satuan_idx]) or ""
+                    satuan_items = split_items(satuan_raw) or []
+                except Exception:
+                    satuan_items = []
+
+                # skip jika benar-benar kosong
+                is_hasil_empty = not hasil_items or all(
+                    (not it.get("text") and not (it.get("children") or [])) for it in hasil_items
+                )
+                is_satuan_empty = not (satuan_items or [])
+                if is_hasil_empty and is_satuan_empty:
+                    continue
+
                 hasil_list.append({
                     "no": str(len(hasil_list) + 1),
                     "hasil_kerja": hasil_items,
                     "satuan_hasil": satuan_items
                 })
+
     return hasil_list
 
 def extract_bahan_kerja(doc):

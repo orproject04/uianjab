@@ -11,6 +11,174 @@ function renderNumberList(arr?: string[]) {
     return `<ol style="margin:0; padding-left:15px;">${arr.map(item => `<li>${item}</li>`).join("")}</ol>`;
 }
 
+function renderPendidikanFormalList(arr?: string[]) {
+    if (!arr || arr.length === 0) return "-";
+
+    const liContainerStyle = `
+        margin:0;
+        padding-left:15px;
+        list-style-type:none;
+    `;
+    const subLiStyle = `
+        text-indent:-10px;
+        padding-left:0;
+    `;
+
+    // 1) cari semua index yang merupakan "dari kalangan ..."
+    const kalanganIndexes: number[] = [];
+    arr.forEach((val, idx) => {
+        const v = val?.trim().toLowerCase() || "";
+        if (v.startsWith("dari kalangan pns") || v.startsWith("dari kalangan non-pns")) {
+            kalanganIndexes.push(idx);
+        }
+    });
+
+    if (kalanganIndexes.length === 0) {
+        // tidak ada "dari kalangan ..." ya sudah tampilkan semua apa adanya
+        return arr.join("<br>");
+    }
+
+    const lastKalanganIdx = kalanganIndexes[kalanganIndexes.length - 1];
+
+    let html = "<ol style='margin:0; padding-left:15px;'>";
+
+    for (let k = 0; k < kalanganIndexes.length; k++) {
+        const i = kalanganIndexes[k];
+        const item = arr[i].trim();
+
+        html += `<li>${item}`;
+
+        // cek 1 elemen setelahnya: kalau bukan kalangan -> jadikan sublist "-"
+        const next = arr[i + 1];
+        const nextIsKalangan =
+            next &&
+            (next.trim().toLowerCase().startsWith("dari kalangan pns") ||
+                next.trim().toLowerCase().startsWith("dari kalangan non-pns"));
+
+        let skipNext = false;
+        if (next && !nextIsKalangan) {
+            html += `<ul style="${liContainerStyle}">
+                <li style="${subLiStyle}">- ${next.trim()}</li>
+            </ul>`;
+            skipNext = true;
+        }
+
+        html += `</li>`;
+
+        // kalau kita bukan di kalangan terakhir, loop akan lanjut ke kalangan berikutnya
+        // dan kita TIDAK memasukkan teks tambahan ke dalam li ini
+        if (skipNext) {
+            // kita hanya "melewati" di perhitungan luar
+            // tapi karena kita pakai index dari kalanganIndexes, tidak perlu modifikasi di sini
+        }
+    }
+
+    html += "</ol>";
+
+    // 2) ambil semua elemen SETELAH kalangan terakhir (plus 1 kemungkinan sublist-nya)
+    const tail: string[] = [];
+    let startTailAt = lastKalanganIdx + 1;
+
+    // kalau elemen setelah kalangan terakhir tadi sudah dipakai sebagai sublist, lompat 1
+    const afterLast = arr[lastKalanganIdx + 1];
+    if (
+        afterLast &&
+        !afterLast.trim().toLowerCase().startsWith("dari kalangan pns") &&
+        !afterLast.trim().toLowerCase().startsWith("dari kalangan non-pns")
+    ) {
+        // elemen ini dipakai jadi sublist di atas, jadi tail mulai sesudahnya
+        startTailAt = lastKalanganIdx + 2;
+    }
+
+    for (let t = startTailAt; t < arr.length; t++) {
+        tail.push(arr[t].trim());
+    }
+
+    // 3) render tail di luar <ol> supaya sejajar dengan angka 1/2
+    if (tail.length > 0) {
+        html += tail.map(t => `<div style="margin-top:4px;">${t}</div>`).join("");
+    }
+
+    return html;
+}
+
+function renderPengalamanKerjaList(arr?: string[]) {
+    if (!arr || arr.length === 0) return "-";
+
+    // cek dulu: ada nggak yang dimulai "dari kalangan ..."
+    const hasKalangan = arr.some(item => {
+        const t = item?.trim().toLowerCase() || "";
+        return (
+            t.startsWith("dari kalangan pns") ||
+            t.startsWith("dari kalangan non-pns")
+        );
+    });
+
+    // kalau gak ada sama sekali → pakai logic lama
+    if (!hasKalangan) {
+        return renderNumberList(arr);
+    }
+
+    // === logic lama yang pakai grup "dari kalangan ..." ===
+    let html = "<ol style='margin:0; padding-left:15px;'>";
+    let subItems: string[] = [];
+
+    const liStyle = `
+        margin:0;
+        padding-left:15px;
+        list-style-type:none;
+    `;
+
+    const subLiStyle = `
+        text-indent:-10px;
+        padding-left:0;
+    `;
+
+    for (let i = 0; i < arr.length; i++) {
+        const item = arr[i]?.trim();
+        const isKalangan =
+            item.toLowerCase().startsWith("dari kalangan pns") ||
+            item.toLowerCase().startsWith("dari kalangan non-pns");
+
+        if (isKalangan) {
+            // tutup sublist sebelumnya
+            if (subItems.length > 0) {
+                html += `<ul style="${liStyle}">${subItems
+                    .map(sub => `<li style="${subLiStyle}">- ${sub}</li>`)
+                    .join("")}</ul>`;
+                subItems = [];
+            }
+            // buka item baru
+            html += `<li>${item}`;
+        } else {
+            // kumpulkan jadi sublist
+            subItems.push(item);
+        }
+
+        const nextItem = arr[i + 1];
+        const nextIsKalangan =
+            nextItem &&
+            (
+                nextItem.toLowerCase().startsWith("dari kalangan pns") ||
+                nextItem.toLowerCase().startsWith("dari kalangan non-pns")
+            );
+
+        // kalau habis atau ketemu kalangan baru → render sublist + tutup li
+        if (nextIsKalangan || i === arr.length - 1) {
+            if (subItems.length > 0) {
+                html += `<ul style="${liStyle}">${subItems
+                    .map(sub => `<li style="${subLiStyle}">- ${sub}</li>`)
+                    .join("")}</ul>`;
+                subItems = [];
+            }
+            html += `</li>`;
+        }
+    }
+
+    html += "</ol>";
+    return html;
+}
+
 function renderBulletList(value: string | string[]) {
     if (Array.isArray(value)) {
         return `
@@ -23,20 +191,34 @@ function renderBulletList(value: string | string[]) {
 }
 
 function renderTableList(value: string | string[]) {
+    // helper: 0 -> "a", 25 -> "z", 26 -> "aa", 27 -> "ab", dst.
+    const alphaIndex = (n: number) => {
+        let s = "";
+        do {
+            s = String.fromCharCode(97 + (n % 26)) + s;
+            n = Math.floor(n / 26) - 1;
+        } while (n >= 0);
+        return s;
+    };
+
     if (Array.isArray(value) && value.length > 0) {
         if (value.length === 1) return value[0];
+
         const skipNumbering = value[0].trim().endsWith(":");
+
         return `
       <ol style="margin:0; padding-left:0; list-style:none;">
         ${value
             .map((sub, i) => {
                 if (i === 0 && skipNumbering) {
+                    // item pertama tetap tanpa penomoran
                     return `<li style="margin:0; padding:0;">${sub}</li>`;
                 } else {
-                    const numIndex = skipNumbering ? i - 1 : i;
+                    const numIndex = skipNumbering ? i - 1 : i; // mulai dari 0
+                    const label = alphaIndex(numIndex) + ".";
                     return `
                 <li style="margin:0; padding:0; display:flex;">
-                  <span style="flex-shrink:0; width:1.5em;">${String.fromCharCode(97 + numIndex)}.</span>
+                  <span style="flex-shrink:0; width:1.8em;">${label}</span>
                   <span style="flex:1;">${sub}</span>
                 </li>
               `;
@@ -48,6 +230,110 @@ function renderTableList(value: string | string[]) {
     }
     return value;
 }
+
+function renderHasilKerjaList(value: any): string {
+    const escapeHtml = (s: string) =>
+        s.replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+
+    const alphaLabel = (i: number): string => {
+        const base = 26;
+        let n = i, out = "";
+        do {
+            out = String.fromCharCode(97 + (n % base)) + out; // a..z, aa..az...
+            n = Math.floor(n / base) - 1;
+        } while (n >= 0);
+        return out;
+    };
+
+    const getText = (n: any): string => (typeof n === "string" ? n : n?.text ?? "");
+    const isLeaf = (n: any): boolean => typeof n === "string" || !n?.children || n.children.length === 0;
+
+    const tryParseJson = (s: string) => {
+        const t = s.trim();
+        if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+            try { return JSON.parse(t); } catch { }
+        }
+        return s;
+    };
+
+    const normalize = (v: any): any[] => {
+        if (v == null) return [];
+
+        if (typeof v === "string") {
+            const parsed = tryParseJson(v);
+            if (parsed !== v) return normalize(parsed);
+            return [v];
+        }
+
+        if (Array.isArray(v)) {
+            return v.map((item) => {
+                if (typeof item === "string") {
+                    const parsed = tryParseJson(item);
+                    return typeof parsed === "string" ? parsed : normalize(parsed)[0];
+                }
+                if (item && typeof item === "object") {
+                    return { text: item.text ?? "", children: Array.isArray(item.children) ? item.children : [] };
+                }
+                return String(item);
+            });
+        }
+
+        if (typeof v === "object") {
+            return [{ text: v.text ?? "", children: Array.isArray(v.children) ? v.children : [] }];
+        }
+
+        return [String(v)];
+    };
+
+    const renderList = (nodes: any[]): string => {
+        if (!nodes.length) return "";
+
+        // ✅ jika lebih dari 1 item, item pertama tetap bernomor
+        const multipleItems = nodes.length > 1;
+        const firstLooksLikeHeader = getText(nodes[0]).trim().endsWith(":");
+        const firstIsHeader = firstLooksLikeHeader && !multipleItems; // kalau >1 item, header juga dikasih label
+
+        const items = nodes.map((node, i) => {
+            const isHeader = i === 0 && firstIsHeader;
+            const labelIndex = isHeader ? -1 : i - (firstIsHeader ? 1 : 0);
+            const text = escapeHtml(getText(node));
+            const hasChild = !isLeaf(node);
+            const label = labelIndex >= 0 ? alphaLabel(labelIndex) + "." : "";
+
+            if (isHeader) {
+                const childHtml = hasChild ? renderList(node.children) : "";
+                return `
+<li style="margin:0; padding:0;">
+  <span style="display:block;">${text}</span>
+  ${childHtml}
+</li>`;
+            }
+
+            const childHtml = hasChild ? renderList(node.children) : "";
+            return `
+<li style="margin:0; padding:0; display:flex;">
+  <span style="flex-shrink:0; width:1.5em;">${label}</span>
+  <span style="flex:1;">
+    ${text}
+    ${childHtml ? `<div>${childHtml}</div>` : ""}
+  </span>
+</li>`;
+        }).join("");
+
+        return `<ol style="margin:0; padding-left:0; list-style:none;">${items}</ol>`;
+    };
+
+    // ===== main =====
+    const nodes = normalize(value);
+    if (nodes.length === 0) return "";
+    if (nodes.length === 1 && isLeaf(nodes[0])) return escapeHtml(getText(nodes[0]));
+    return renderList(nodes);
+}
+
 
 /** ====== BARU: render detail_uraian_tugas (tahapan + detail_tahapan) ====== */
 function renderDetailUraian(detailArr?: Array<{
@@ -315,7 +601,7 @@ export function buildAnjabHtml(data: any): string {
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">a. Pendidikan Formal</td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.pendidikan_formal)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderPendidikanFormalList(data.pendidikan_formal)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px;">b. Pendidikan dan Pelatihan</td>
@@ -325,40 +611,40 @@ export function buildAnjabHtml(data: any): string {
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
           ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
             ? "Diklat Penjenjangan"
             : "Manajerial"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_penjenjangan)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.diklat_penjenjangan)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
           ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
             ? "Diklat Teknis"
             : "Teknis"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_teknis)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.diklat_teknis)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
           ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "PELAKSANA"
+        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
             ? "Diklat Fungsional"
             : "Fungsional"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderList(data.diklat_fungsional)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.diklat_fungsional)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">c. Pengalaman Kerja</td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderNumberList(data.pengalaman_kerja)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderPengalamanKerjaList(data.pengalaman_kerja)}</td>
       </tr>
     </table>
   </div>
@@ -383,7 +669,7 @@ export function buildAnjabHtml(data: any): string {
           <tr>
             <td style="text-align:center">${index + 1}.</td>
             <td style="text-align: justify">${renderUraianTugasDanTahapan(item)}</td>
-            <td>${renderTableList(item.hasil_kerja)}</td>
+            <td>${renderHasilKerjaList(item.hasil_kerja)}</td>
             <td class="center">${item.jumlah_hasil}</td>
             <td class="center">${item.waktu_penyelesaian_jam}</td>
             <td class="center">${item.waktu_efektif}</td>
@@ -417,7 +703,7 @@ export function buildAnjabHtml(data: any): string {
         ${(data.hasil_kerja || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
-            <td>${renderTableList(item.hasil_kerja)}</td>
+            <td>${renderHasilKerjaList(item.hasil_kerja)}</td>
             ${showSatuanHasil ? `<td>${renderTableList(item.satuan_hasil)}</td>` : ""}
           </tr>
         `).join("")}

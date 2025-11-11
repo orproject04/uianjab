@@ -47,7 +47,9 @@ export default function SignupForm() {
             });
             if (r.ok) {
                 showNotice({type: "success", text: "Pendaftaran berhasil. Cek email untuk verifikasi."});
-                setTimeout(() => router.replace("/signin"), 1500);
+                setTimeout(() => {
+                    router.replace(`/resend-verification?email=${encodeURIComponent(email)}`);
+                }, 1500);
             } else {
                 const j = await r.json().catch(() => ({}));
                 showNotice({type: "error", text: j?.error || "Gagal mendaftar."});
