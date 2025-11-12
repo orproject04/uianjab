@@ -270,11 +270,11 @@ const AppSidebar: React.FC = () => {
 
     const handleDeleteNode = async (node: SubNavItem) => {
         const resSwal = await Swal.fire({
-            title: "Hapus Node?",
-            html: `Hapus <b>${node.name}</b> beserta seluruh jabatan dibawahnya? Tindakan ini tidak bisa dibatalkan.`,
+            title: "Hapus Jabatan?",
+            html: `Hapus <b>${node.name}</b> beserta seluruh jabatan dibawahnya?`,
             icon: "warning",
             showCancelButton: true,
-            confirmButtonText: "Ya, hapus!",
+            confirmButtonText: "Hapus",
             cancelButtonText: "Batal",
             confirmButtonColor: "#dc2626",
         });
@@ -344,7 +344,7 @@ const AppSidebar: React.FC = () => {
         pushTree(null, 0);
 
         const opts: Array<{ id: string | ""; label: string }> = [
-            {id: "", label: "(Tanpa parent / Root)"},
+            {id: "", label: "-"},
             ...options,
         ];
 
@@ -557,9 +557,9 @@ const AppSidebar: React.FC = () => {
 
             setShowAdd(false);
             await loadData();
-            await Swal.fire({icon: "success", title: "Child ditambah", timer: 1000, showConfirmButton: false});
+            await Swal.fire({icon: "success", title: "Jabatan berhasil ditambah", timer: 1000, showConfirmButton: false});
         } catch (e: any) {
-            setAddErr(e?.message || "Gagal menambah child.");
+            setAddErr(e?.message || "Gagal menambah jabatan.");
         } finally {
             setAdding(false);
         }
@@ -1028,19 +1028,19 @@ const AppSidebar: React.FC = () => {
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>
-                                    <input
-                                        type="number"
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                        value={editOrder}
-                                        onChange={(e) => setEditOrder(e.target.value)}
-                                        placeholder="Kosongkan untuk auto"
-                                    />
-                                </div>
+                                {/*<div>*/}
+                                {/*    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>*/}
+                                {/*    <input*/}
+                                {/*        type="number"*/}
+                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"*/}
+                                {/*        value={editOrder}*/}
+                                {/*        onChange={(e) => setEditOrder(e.target.value)}*/}
+                                {/*        placeholder="Kosongkan untuk auto"*/}
+                                {/*    />*/}
+                                {/*</div>*/}
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Parent</label>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Atasan</label>
                                     <select
                                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editParentId}
@@ -1157,16 +1157,16 @@ const AppSidebar: React.FC = () => {
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>
-                                    <input
-                                        type="number"
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                        value={addOrder}
-                                        onChange={(e) => setAddOrder(e.target.value)}
-                                        placeholder="Kosongkan untuk auto"
-                                    />
-                                </div>
+                                {/*<div>*/}
+                                {/*    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>*/}
+                                {/*    <input*/}
+                                {/*        type="number"*/}
+                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"*/}
+                                {/*        value={addOrder}*/}
+                                {/*        onChange={(e) => setAddOrder(e.target.value)}*/}
+                                {/*        placeholder="Kosongkan untuk auto"*/}
+                                {/*    />*/}
+                                {/*</div>*/}
                             </div>
 
                             {addErr && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addErr}</div>}

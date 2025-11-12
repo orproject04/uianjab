@@ -161,11 +161,11 @@ export default function DashboardPage() {
         }),
         option: (base: any, state: any) => ({
             ...base,
-            backgroundColor: state.isSelected 
-                ? '#8b5cf6' 
-                : state.isFocused 
-                ? 'var(--select-hover)' 
-                : 'transparent',
+            backgroundColor: state.isSelected
+                ? '#8b5cf6'
+                : state.isFocused
+                    ? 'var(--select-hover)'
+                    : 'transparent',
             color: state.isSelected ? 'white' : 'var(--select-text)',
             cursor: 'pointer',
             '&:active': {
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                 </button>
             </div>
 
-             {/* Filters */}
+            {/* Filters */}
             <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center gap-3 mb-5">
                     <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
@@ -368,7 +368,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {byJenis.map((item, index) => (
-                        <div 
+                        <div
                             key={index}
                             className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
                         >
@@ -384,7 +384,7 @@ export default function DashboardPage() {
                                         <span className="text-xs text-gray-500 dark:text-gray-400">jabatan</span>
                                     </div>
                                 </div>
-                                <div 
+                                <div
                                     className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shadow-sm"
                                     style={{ backgroundColor: `${COLORS[index % COLORS.length]}20`, color: COLORS[index % COLORS.length] }}
                                 >
@@ -407,8 +407,8 @@ export default function DashboardPage() {
                                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-200 dark:border-gray-600">
                                     <span className="text-gray-600 dark:text-gray-400">Selisih</span>
                                     <span className={`font-semibold ${
-                                        item.selisih >= 0 
-                                            ? "text-orange-600 dark:text-orange-400" 
+                                        item.selisih >= 0
+                                            ? "text-orange-600 dark:text-orange-400"
                                             : "text-red-600 dark:text-red-400"
                                     }`}>
                                         {item.selisih >= 0 ? "+" : ""}{item.selisih.toLocaleString("id-ID")}
@@ -439,13 +439,13 @@ export default function DashboardPage() {
                     <BarChart data={byBiro} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis type="number" tick={{ fontSize: 12 }} />
-                        <YAxis 
-                            dataKey="unit_kerja" 
-                            type="category" 
+                        <YAxis
+                            dataKey="unit_kerja"
+                            type="category"
                             width={150}
                             tick={{ fontSize: 11 }}
                         />
-                        <Tooltip 
+                        <Tooltip
                             contentStyle={{
                                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
                                 border: '1px solid #e5e7eb',
@@ -461,7 +461,7 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
             </div>
 
-           
+
             {/* Total Per Nama Jabatan */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-800">
@@ -482,109 +482,96 @@ export default function DashboardPage() {
                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                     <table className="w-full">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
-                            <tr>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
-                                    No
-                                </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                        </svg>
-                                        Nama Jabatan
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                        </svg>
-                                        Jenis
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                                        </svg>
-                                        Jumlah
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                        </svg>
-                                        Bezetting
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                        </svg>
-                                        Kebutuhan
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                        </svg>
-                                        Selisih
-                                    </div>
-                                </th>
-                            </tr>
+                        <tr>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
+                                No
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    Nama Jabatan
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                    </svg>
+                                    Jenis
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center justify-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    Bezetting
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center justify-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    Kebutuhan
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center justify-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                    </svg>
+                                    Selisih
+                                </div>
+                            </th>
+                        </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {byNamaJabatan.map((item, index) => (
-                                <tr 
-                                    key={index} 
-                                    className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${
-                                        index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
-                                    }`}
-                                >
-                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {byNamaJabatan.map((item, index) => (
+                            <tr
+                                key={index}
+                                className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                    index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                }`}
+                            >
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                                             {index + 1}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                            {item.nama_jabatan}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {item.nama_jabatan}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300">
                                             {item.jenis_jabatan}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
-                                            {item.jumlah_jabatan}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
                                             {item.besetting.toLocaleString("id-ID")}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
                                             {item.kebutuhan.toLocaleString("id-ID")}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                            item.selisih >= 0 
-                                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' 
+                                            item.selisih >= 0
+                                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                                 : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                                         }`}>
                                             {item.selisih >= 0 ? '-' : ''}{item.selisih.toLocaleString("id-ID")}
                                         </span>
-                                    </td>
-                                </tr>
-                            ))}
+                                </td>
+                            </tr>
+                        ))}
                         </tbody>
                     </table>
                 </div>
@@ -610,88 +597,75 @@ export default function DashboardPage() {
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0">
-                            <tr>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                        </svg>
-                                        Unit Kerja
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                                        </svg>
-                                        Jumlah
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                        </svg>
-                                        Bezetting
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                        </svg>
-                                        Kebutuhan
-                                    </div>
-                                </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                        </svg>
-                                        Selisih
-                                    </div>
-                                </th>
-                            </tr>
+                        <tr>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                    Unit Kerja
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    Bezetting
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    Kebutuhan
+                                </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                    </svg>
+                                    Selisih
+                                </div>
+                            </th>
+                        </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {byBiro.map((item, index) => (
-                                <tr 
-                                    key={index} 
-                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                                        index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
-                                    }`}
-                                >
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                            {item.unit_kerja}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
-                                            {item.jumlah_jabatan}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                        {byBiro.map((item, index) => (
+                            <tr
+                                key={index}
+                                className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                    index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                }`}
+                            >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {item.unit_kerja}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
                                             {item.besetting}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
                                             {item.kebutuhan}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                            item.selisih >= 0 
-                                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' 
+                                            item.selisih >= 0
+                                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                                 : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                                         }`}>
                                             {item.selisih >= 0 ? '-' : ''}{item.selisih}
                                         </span>
-                                    </td>
-                                </tr>
-                            ))}
+                                </td>
+                            </tr>
+                        ))}
                         </tbody>
                     </table>
                 </div>
@@ -701,12 +675,12 @@ export default function DashboardPage() {
 }
 
 function SummaryCard({
-    title,
-    value,
-    icon,
-    color,
-    subtitle,
-}: {
+                         title,
+                         value,
+                         icon,
+                         color,
+                         subtitle,
+                     }: {
     title: string;
     value: number;
     icon: string;

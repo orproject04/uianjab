@@ -183,6 +183,12 @@ export default function SignInForm() {
                                     Kirim ulang
                                 </Link>
                             </div>
+                            <div>
+                                Butuh bantuan?{" "}
+                                <Link href="/help" className="text-blue-600 hover:underline">
+                                    Help
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </form>

@@ -101,10 +101,18 @@ export default function InformasiJabatanPage() {
     const [status, setStatus] = useState<Status>("idle");
     const [activeTab, setActiveTab] = useState<TabType>("info");
 
-    // Auto switch to PDF tab when PDF is successfully loaded
+    // Check URL param for tab preference on mount and update
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab');
+        if (tabParam === 'pdf') {
+            setActiveTab('pdf');
+        }
+    }, []);
+
+    // Also check when status or pdfSrc changes
     useEffect(() => {
         if (status === "ok" && pdfSrc) {
-            // Check URL hash or query param for tab preference
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab');
             if (tabParam === 'pdf') {
@@ -222,7 +230,7 @@ export default function InformasiJabatanPage() {
         // Ambil UUID dari localStorage
         const slugForUrl = id.replace(/-/g, "/");
         const uuid = localStorage.getItem(slugForUrl);
-        
+
         if (!uuid) {
             await MySwal.fire({
                 title: "Error!",
@@ -234,7 +242,7 @@ export default function InformasiJabatanPage() {
         }
 
         const result = await MySwal.fire({
-            title: "Konfirmasi Hapus Dokumen Anjab",
+            title: "Hapus Dokumen Anjab?",
             html: `
                 <div style="text-align: left;">
                     <p>Anda akan menghapus dokumen analisis jabatan untuk:</p>
@@ -242,10 +250,7 @@ export default function InformasiJabatanPage() {
                         ${slugToTitle(id)}
                     </p>
                     <p style="color: #dc2626; font-size: 14px;">
-                        <strong>Perhatian:</strong> Tindakan ini akan menghapus semua data dokumen anjab (tugas pokok, bahan kerja, perangkat kerja, dll) namun tidak menghapus struktur jabatan dari pohon organisasi.
-                    </p>
-                    <p style="color: #374151; font-size: 12px; margin-top: 8px;">
-                        Setelah dihapus, Anda masih bisa membuat dokumen anjab baru untuk jabatan ini.
+                        <strong>Perhatian:</strong> Tindakan ini akan menghapus semua data dokumen anjab namun tidak menghapus jabatan dari sistem.
                     </p>
                 </div>
             `,
@@ -274,10 +279,10 @@ export default function InformasiJabatanPage() {
             if (res.ok) {
                 // Hapus UUID dari localStorage setelah berhasil dihapus
                 localStorage.removeItem(slugForUrl);
-                
+
                 await MySwal.fire({
                     title: "Berhasil!",
-                    text: "Dokumen anjab berhasil dihapus. Struktur jabatan tetap terjaga.",
+                    text: "Dokumen anjab berhasil dihapus.",
                     icon: "success",
                     confirmButtonColor: "#059669"
                 });
@@ -318,9 +323,9 @@ export default function InformasiJabatanPage() {
                 <div className="px-6 py-3 border-b border-gray-200">
                     <AnjabBreadcrumb currentId={id} currentTitle={slugToTitle(id)} rawSlug={rawSlug} />
                 </div>
-                
+
                 {/* Tab Navigation - Loading State */}
-                <div className="px-6 py-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <div className="px-6 py-0 space-x-8 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <nav className="flex space-x-8">
                         <button
                             onClick={() => setActiveTab("info")}
@@ -356,6 +361,7 @@ export default function InformasiJabatanPage() {
                             </div>
                         </button>
                     </nav>
+
                 </div>
 
                 {/* Loading Content */}
@@ -385,7 +391,7 @@ export default function InformasiJabatanPage() {
                     <div className="px-6 py-3 border-b border-gray-200">
                         <AnjabBreadcrumb currentId={id} currentTitle={slugToTitle(id)} rawSlug={rawSlug} />
                     </div>
-                    
+
                     {/* Tab Navigation - Error State */}
                     <div className="px-6 py-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                         <nav className="flex space-x-8">
@@ -457,7 +463,7 @@ export default function InformasiJabatanPage() {
                 <div className="px-6 py-3 border-b border-gray-200">
                     <AnjabBreadcrumb currentId={id} currentTitle={slugToTitle(id)} rawSlug={rawSlug} />
                 </div>
-                
+
                 {/* Tab Navigation - Admin Error State */}
                 <div className="px-6 py-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <nav className="flex space-x-8">
@@ -497,13 +503,8 @@ export default function InformasiJabatanPage() {
                 </div>
 
                 <div className="p-8 max-w-5xl mx-auto space-y-6">
-                    <JabatanInfoCard 
-                        currentId={id}
-                        isAdmin={isAdmin}
-                        editHref={editHref}
-                        onDelete={handleDelete}
-                    />
-                    
+                    <JabatanInfoCard currentId={id} />
+
                     <div className="text-center space-y-2">
                         <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
                             {isNotFound ? (
@@ -512,37 +513,26 @@ export default function InformasiJabatanPage() {
                                 <>Terjadi kesalahan saat memuat data <b>{slugToTitle(id)}</b>. Coba lagi nanti.</>
                             )}
                         </p>
-                        <p className="text-sm text-gray-600">
-                            Silakan memilih antara <b>mengunggah dokumen Anjab berformat .doc </b>
-                            atau <b>membuat Anjab secara manual</b>.
-                        </p>
                     </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Upload Word (.doc saja) */}
-                    <div className="border rounded-lg p-4">
-                        <h3 className="font-medium mb-2 text-center">Upload Dokumen Anjab (.doc)</h3>
-                        <p className="text-sm text-gray-600 mb-3">
-                            Ekstrak otomatis dari dokumen Word <b>.doc</b> untuk <b>{id}</b>.
-                        </p>
-                        <WordAnjab id={id}/>
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Upload Word (.doc saja) */}
+                        <div className="border rounded-lg p-4">
+                            <h3 className="font-medium mb-2 text-center">Upload Dokumen Anjab (.doc)</h3>
+                            <WordAnjab id={id}/>
+                        </div>
 
-                    {/* Buat Manual */}
-                    <div className="border rounded-lg p-4 flex">
-                        <div className="m-auto text-center space-y-3">
-                            <h3 className="font-medium">Buat Anjab Manual</h3>
-                            <p className="text-sm text-gray-600">
-                                Mulai dari form kosong.
-                            </p>
-                            <Link href={`/anjab/create/${encodeURIComponent(id)}`}>
-                                <Button className="w-full" size="sm">
-                                    Masuk
-                                </Button>
-                            </Link>
+                        {/* Buat Manual */}
+                        <div className="border rounded-lg p-4 flex">
+                            <div className="m-auto text-center space-y-3">
+                                <Link href={`/anjab/create/${encodeURIComponent(id)}`}>
+                                    <Button className="w-full" size="sm">
+                                        Buat Anjab Baru
+                                    </Button>
+                                </Link>
+                            </div>
                         </div>
                     </div>
-                </div>
                 </div>
             </div>
         );
@@ -558,56 +548,79 @@ export default function InformasiJabatanPage() {
 
             {/* Tab Navigation */}
             <div className="px-4 sm:px-6 py-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-                <nav className="flex space-x-4 sm:space-x-8 min-w-max">
-                    <button
-                        onClick={() => setActiveTab("info")}
-                        className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                            activeTab === "info"
-                                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="hidden sm:inline">Informasi Jabatan</span>
-                            <span className="sm:hidden">Info</span>
+                <div className="flex items-center justify-between gap-4">
+                    <nav className="flex space-x-4 sm:space-x-8 min-w-max">
+                        <button
+                            onClick={() => setActiveTab("info")}
+                            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                                activeTab === "info"
+                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="hidden sm:inline">Informasi Jabatan</span>
+                                <span className="sm:hidden">Info</span>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab("pdf")}
+                            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                                activeTab === "pdf"
+                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span className="hidden sm:inline">Dokumen PDF</span>
+                                <span className="sm:hidden">PDF</span>
+                                {pdfSrc && (
+                                    <span className="inline-flex items-center justify-center w-2 h-2 bg-green-500 rounded-full"></span>
+                                )}
+                            </div>
+                        </button>
+                    </nav>
+
+                    {/* Admin Action Buttons */}
+                    {isAdmin && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <Link
+                                href={editHref}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm bg-brand-600 text-white rounded hover:bg-brand-700 transition-colors whitespace-nowrap"
+                            >
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                <span className="hidden sm:inline">Edit Anjab</span>
+                                <span className="sm:hidden">Edit</span>
+                            </Link>
+                            <button
+                                onClick={handleDelete}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm outline-1 outline-red-700 bg-white text-red-700 rounded hover:bg-red-100 transition-colors whitespace-nowrap"
+                            >
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span className="hidden sm:inline">Hapus Anjab</span>
+                                <span className="sm:hidden">Hapus</span>
+                            </button>
                         </div>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab("pdf")}
-                        className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                            activeTab === "pdf"
-                                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="hidden sm:inline">Dokumen PDF</span>
-                            <span className="sm:hidden">PDF</span>
-                            {pdfSrc && (
-                                <span className="inline-flex items-center justify-center w-2 h-2 bg-green-500 rounded-full"></span>
-                            )}
-                        </div>
-                    </button>
-                </nav>
+                    )}
+                </div>
             </div>
 
             {/* Tab Content */}
             {activeTab === "info" && (
                 <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-[calc(100dvh-200px)]">
                     <div className="max-w-4xl mx-auto">
-                        {/* Jabatan Info Card with Admin Actions */}
-                        <JabatanInfoCard 
-                            currentId={id}
-                            isAdmin={isAdmin}
-                            editHref={editHref}
-                            onDelete={handleDelete}
-                        />
+                        {/* Jabatan Info Card */}
+                        <JabatanInfoCard currentId={id} />
                     </div>
                 </div>
             )}
@@ -627,14 +640,14 @@ export default function InformasiJabatanPage() {
                                     </span>
                                 )}
                             </div>
-                            
+
                             {pdfSrc && (
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                     <a
                                         href={pdfSrc}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm outline-1 outline-purple-700 bg-white text-black rounded hover:bg-purple-200 transition-colors"
                                     >
                                         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -644,7 +657,7 @@ export default function InformasiJabatanPage() {
                                     </a>
                                     <button
                                         onClick={handleDownload}
-                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm bg-brand-600 text-white rounded hover:bg-brand-700 transition-colors"
                                     >
                                         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

@@ -544,7 +544,7 @@ export default function TugasPokokForm({ viewerPath }: { viewerPath: string; }) 
         const hasServerId = typeof clean.id === "string" && clean.id.length > 0;
 
         const ok = await MySwal.fire({
-            icon: "warning", title: "Hapus Tugas?", text: "Tindakan ini tidak dapat dibatalkan.",
+            icon: "warning", title: `Hapus Tugas Pokok ${item.nomor_tugas}?`, text: "Tindakan ini tidak dapat dibatalkan.",
             showCancelButton: true, confirmButtonText: "Hapus", cancelButtonText: "Batal",
         });
         if (!ok.isConfirmed) return;
@@ -721,7 +721,7 @@ function NumberInput({
                      }: { label: string; value: number | null; onChange: (v: number | null) => void; }) {
     return (
         <div>
-            <label className="block text-sm font-medium mb-1">{label}</label>
+            <label className="block text-sm font-bold mb-1">{label}</label>
             <input
                 type="number"
                 value={value ?? ""}
@@ -738,11 +738,11 @@ function Summary({totalKebutuhan, pembulatan}: { totalKebutuhan: number; pembula
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label className="block text-sm font-medium mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
+                <label className="block text-sm font-bold mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
                 <input type="number" value={Number.isFinite(totalKebutuhan) ? totalKebutuhan.toFixed(4) : 0} readOnly disabled className="w-full rounded border px-3 py-2 bg-gray-100"/>
             </div>
             <div>
-                <label className="block text-sm font-medium mb-1">Pembulatan</label>
+                <label className="block text-sm font-bold mb-1">Pembulatan</label>
                 <input type="number" value={pembulatan} readOnly disabled className="w-full rounded border px-3 py-2 bg-gray-100"/>
             </div>
         </div>

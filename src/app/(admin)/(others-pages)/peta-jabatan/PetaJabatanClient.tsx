@@ -43,7 +43,7 @@ type D3Node = {
   _syntheticLabel?: string;
 };
 
-function wrapText(s: string, maxChars = 38): string[] {
+function wrapText(s: string, maxChars = 32): string[] {
   const words = (s || "").split(/\s+/);
   const lines: string[] = [];
   let line = "";
@@ -181,8 +181,8 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
 
 /* ===== Segmented (tab kecil) ===== */
 function Segmented<T extends string>({
-  value, onChange, options, size = "md",
-}: {
+                                       value, onChange, options, size = "md",
+                                     }: {
   value: T;
   onChange: (v: T) => void;
   options: { label: string; value: T }[];
@@ -190,22 +190,22 @@ function Segmented<T extends string>({
 }) {
   const pad = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm";
   return (
-    <div className="inline-flex rounded-lg border bg-white p-0.5">
-      {options.map((opt) => {
-        const active = value === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className={`${pad} rounded-md transition ${active ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
-            aria-pressed={active}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
+      <div className="inline-flex rounded-lg border bg-white p-0.5">
+        {options.map((opt) => {
+          const active = value === opt.value;
+          return (
+              <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onChange(opt.value)}
+                  className={`${pad} rounded-md transition ${active ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                  aria-pressed={active}
+              >
+                {opt.label}
+              </button>
+          );
+        })}
+      </div>
   );
 }
 
@@ -225,27 +225,29 @@ export default function PetaJabatanClient() {
   const [scope, setScope] = useState<ScopeOpt>("PUSAT");
   const [fungsionalMode, setFungsionalMode] = useState<FungsionalOpt>("STRUKTURAL");
   const [filterText, setFilterText] = useState("");
+  const [searchMatches, setSearchMatches] = useState<string[]>([]); // IDs of matching nodes
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // collapse map
   const [collapseMap, setCollapseMap] = useState<Record<string, boolean>>({});
   const [lastClickedPath, setLastClickedPath] = useState<string | null>(null);
-  
+
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
     if (Object.keys(collapseMap).length > 0) {
       sessionStorage.setItem('petaJabatan_collapseMap', JSON.stringify(collapseMap));
     }
   }, [collapseMap]);
-  
+
   useEffect(() => {
     sessionStorage.setItem('petaJabatan_scope', scope);
   }, [scope]);
-  
+
   useEffect(() => {
     sessionStorage.setItem('petaJabatan_fungsionalMode', fungsionalMode);
   }, [fungsionalMode]);
-  
+
   useEffect(() => {
     if (filterText) {
       sessionStorage.setItem('petaJabatan_filterText', filterText);
@@ -257,46 +259,46 @@ export default function PetaJabatanClient() {
     const byId = new Map(allData.map(r => [r.id, r]));
     const path: string[] = [];
     let current: APIRow | undefined = row;
-    
+
     while (current) {
       path.unshift(current.slug);
       current = current.parent_id ? byId.get(current.parent_id) : undefined;
     }
-    
+
     return path.join('/');
   }, []);
-  
+
   // Helper function to expand all nodes along a path
   const expandNodesAlongPath = useCallback((targetPath: string, allRows: APIRow[]): Record<string, boolean> => {
     const map: Record<string, boolean> = {};
-    
+
     // Initialize all nodes as collapsed (true)
     for (const r of allRows) {
       map[r.id] = true;
     }
-    
+
     // Build a map of path -> id
     const byId = new Map(allRows.map(r => [r.id, r]));
     const pathToId = new Map<string, string>();
-    
+
     // Build path for each row
     for (const row of allRows) {
       const path = buildPathForRow(row, allRows);
       pathToId.set(path, row.id);
     }
-    
+
     // Split the target path and expand all segments
     const segments = targetPath.split('/').filter(Boolean);
     let currentPath = '';
-    
+
     for (const segment of segments) {
       currentPath = currentPath ? `${currentPath}/${segment}` : segment;
       const nodeId = pathToId.get(currentPath);
-      
+
       if (nodeId) {
         // Expand this node (set to false = not collapsed)
         map[nodeId] = false;
-        
+
         // Also expand all its ancestors
         let current = byId.get(nodeId);
         while (current && current.parent_id) {
@@ -305,7 +307,7 @@ export default function PetaJabatanClient() {
         }
       }
     }
-    
+
     return map;
   }, [buildPathForRow]);
 
@@ -317,26 +319,26 @@ export default function PetaJabatanClient() {
       if (!res.ok) throw new Error(`Gagal mengambil data (${res.status})`);
       const data: APIRow[] = await res.json();
       setAllRows(data);
-      
+
       // Restore state from sessionStorage after data loaded
       const savedCollapseMap = sessionStorage.getItem('petaJabatan_collapseMap');
       const savedScope = sessionStorage.getItem('petaJabatan_scope');
       const savedFungsionalMode = sessionStorage.getItem('petaJabatan_fungsionalMode');
       const savedFilterText = sessionStorage.getItem('petaJabatan_filterText');
       const savedLastPath = sessionStorage.getItem('petaJabatan_lastClickedPath');
-      
+
       if (savedScope && (savedScope === 'PUSAT' || savedScope === 'DAERAH')) {
         setScope(savedScope as ScopeOpt);
       }
-      
+
       if (savedFungsionalMode && (savedFungsionalMode === 'STRUKTURAL' || savedFungsionalMode === 'FUNGSIONAL')) {
         setFungsionalMode(savedFungsionalMode as FungsionalOpt);
       }
-      
+
       if (savedFilterText) {
         setFilterText(savedFilterText);
       }
-      
+
       if (savedLastPath) {
         setLastClickedPath(savedLastPath);
       }
@@ -387,7 +389,7 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     const map: Record<string, boolean> = {};
     for (const r of rows) map[r.id] = true;
-    
+
     // If we have a last clicked path, ensure all nodes in that path are expanded
     if (lastClickedPath && rows.length > 0) {
       const expandedMap = expandNodesAlongPath(lastClickedPath, rows);
@@ -396,6 +398,53 @@ export default function PetaJabatanClient() {
       setCollapseMap(map);
     }
   }, [rows, lastClickedPath, expandNodesAlongPath]);
+
+  // Auto-expand and highlight matching nodes when searching (with debounce)
+  useEffect(() => {
+    if (!filterText.trim() || rows.length === 0) {
+      setSearchMatches([]);
+      setCurrentMatchIndex(0);
+      return;
+    }
+
+    // Debounce search for better performance
+    const timeoutId = setTimeout(() => {
+      const lcFilter = filterText.trim().toLowerCase();
+      const matches: string[] = [];
+      const expandMap: Record<string, boolean> = {};
+
+      // Initialize all as collapsed
+      for (const r of rows) expandMap[r.id] = true;
+
+      // Find all matching nodes
+      for (const row of rows) {
+        const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
+        const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
+        const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
+
+        if (nameMatch || slugMatch || unitMatch) {
+          matches.push(row.id);
+
+          // Expand this node and all its ancestors
+          let current: APIRow | undefined = row;
+          while (current) {
+            expandMap[current.id] = false; // false = expanded
+            current = current.parent_id ? rows.find(r => r.id === current!.parent_id) : undefined;
+          }
+        }
+      }
+
+      setSearchMatches(matches);
+      setCurrentMatchIndex(0);
+
+      // Apply the expand map
+      if (matches.length > 0) {
+        setCollapseMap(expandMap);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [filterText, rows]);
 
   // ---------- Breakpoints (berbasis lebar kontainer) ----------
   const bp = useMemo(() => {
@@ -415,8 +464,8 @@ export default function PetaJabatanClient() {
     }
     for (const [k, arr] of byParent.entries()) {
       arr.sort((a, b) =>
-        (a.order_index ?? 0) - (b.order_index ?? 0) ||
-        a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
+          (a.order_index ?? 0) - (b.order_index ?? 0) ||
+          a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
       );
       byParent.set(k, arr);
     }
@@ -462,8 +511,8 @@ export default function PetaJabatanClient() {
       // ESELON II → KJF (E3; Inspektur/Inspektorat → E4)
       if (syntheticFlags.addKJFforEselonII && (n.jenis_jabatan || "").toUpperCase() === "ESELON II") {
         const isInspektorat =
-          /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
-          /(inspektur|inspektorat)/i.test(n.slug || "");
+            /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
+            /(inspektur|inspektorat)/i.test(n.slug || "");
         const kjfLevel = (syntheticFlags.kjfForInspekturAsE4 && isInspektorat) ? "ESELON IV" : "ESELON III";
         synthetic.push({
           _id: `synthetic-kjf:${n.id}`,
@@ -541,8 +590,8 @@ export default function PetaJabatanClient() {
   const filteredRoots: D3Node[] = useMemo(() => {
     if (!lcFilter) return roots;
     const match = (n: D3Node) =>
-      (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
-      (n._slug || "").toLowerCase().includes(lcFilter);
+        (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
+        (n._slug || "").toLowerCase().includes(lcFilter);
     const walk = (n: D3Node): D3Node | null => {
       const kids = n.children.map(walk).filter(Boolean) as D3Node[];
       if (match(n) || kids.length) return {...n, children: kids};
@@ -589,8 +638,8 @@ export default function PetaJabatanClient() {
   };
 
   const rd3Data: RawNodeDatum[] = useMemo(
-    () => filteredRoots.map(toRD3),
-    [filteredRoots, collapseMap]
+      () => filteredRoots.map(toRD3),
+      [filteredRoots, collapseMap]
   );
 
   const toggleByDatum = useCallback((nodeDatum: CustomNodeElementProps["nodeDatum"], e?: React.MouseEvent<SVGGElement>) => {
@@ -611,29 +660,135 @@ export default function PetaJabatanClient() {
   }, []);
 
   // -------- Responsive sizing tokens (card, fonts, node gap) --------
-  const cardW = bp.isMobile ? 300 : bp.isTablet ? 420 : 520;
-  const padX = bp.isMobile ? 12 : 14;
-  const padY = bp.isMobile ? 10 : 12;
+  const cardW = bp.isMobile ? 400 : bp.isTablet ? 520 : 620;
+  const padX = bp.isMobile ? 14 : 16;
+  const padY = bp.isMobile ? 12 : 14;
 
   const titleFontPx = bp.isMobile ? 12 : 13;
-  const approxCharPx = 7.6;
-  const usableTitleW = cardW - 2 * padX;
-  const maxTitleChars = Math.max(20, Math.floor(usableTitleW / approxCharPx));
+  const approxCharPx = 5;
+  const usableTitleW = cardW - 10 * padX;
+  const maxTitleChars = Math.max(30, Math.floor(usableTitleW / approxCharPx));
 
-  const boxW = bp.isMobile ? 28 : 34;
-  const boxH = bp.isMobile ? 22 : 24;
+  const boxW = bp.isMobile ? 30 : 36;
+  const boxH = bp.isMobile ? 24 : 26;
   const boxGap = 10;
-  const textFieldH = bp.isMobile ? 30 : 34;
+  const textFieldH = bp.isMobile ? 26 : 30;
 
   const nodeSize = useMemo(() => {
-    const x = cardW + (bp.isMobile ? 40 : 60);
-    const y = bp.isMobile ? 180 : bp.isTablet ? 210 : 240;
+    const x = cardW + (bp.isMobile ? 80 : bp.isTablet ? 110 : 140);
+    const y = bp.isMobile ? 200 : bp.isTablet ? 240 : 270;
     return { x, y };
   }, [cardW, bp.isMobile, bp.isTablet]);
 
   const initialZoom = bp.isMobile ? 0.55 : bp.isTablet ? 0.7 : 0.85;
-  const separation = { siblings: bp.isMobile ? 1.05 : 1.2, nonSiblings: bp.isMobile ? 1.15 : 1.4 };
-  const translate = useMemo(() => ({x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110}), [containerSize, bp.isMobile]);
+  const separation = { siblings: bp.isMobile ? 1.3 : 1.5, nonSiblings: bp.isMobile ? 1.4 : 1.7 };
+
+  // Function to calculate subtree width (for proper horizontal positioning)
+  const calculateSubtreeWidth = useCallback((node: RawNodeDatum): number => {
+    if (!node.children || node.children.length === 0) {
+      return nodeSize.x; // Leaf node takes up one node width
+    }
+
+    let totalWidth = 0;
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      const childWidth = calculateSubtreeWidth(child);
+      totalWidth += childWidth;
+
+      // Add spacing between siblings (except after the last one)
+      if (i < node.children.length - 1) {
+        totalWidth += nodeSize.x * separation.siblings;
+      }
+    }
+
+    return totalWidth;
+  }, [nodeSize, separation]);
+
+  // Function to find node position in tree structure (using d3-tree layout algorithm)
+  const findNodePosition = useCallback((targetPath: string, data: RawNodeDatum[], depth: number = 0, xOffset: number = 0): { x: number; y: number } | null => {
+    for (const node of data) {
+      const attrs = node.attributes as any;
+      const pathStr = attrs?.pathStr || "";
+
+      if (pathStr === targetPath) {
+        // Found the target node
+        const y = depth * nodeSize.y;
+        return { x: xOffset, y };
+      }
+
+      // Check children
+      if (node.children && node.children.length > 0) {
+        // Calculate the total width of all children subtrees
+        let currentX = xOffset;
+
+        for (let i = 0; i < node.children.length; i++) {
+          const child = node.children[i];
+          const childAttrs = child.attributes as any;
+          const childPathStr = childAttrs?.pathStr || "";
+
+          // Calculate subtree width for this child
+          const subtreeWidth = calculateSubtreeWidth(child);
+          const childCenterX = currentX + (subtreeWidth / 2);
+
+          if (childPathStr === targetPath) {
+            const y = (depth + 1) * nodeSize.y;
+            return { x: childCenterX, y };
+          }
+
+          // Recursively search in children
+          const result = findNodePosition(targetPath, [child], depth + 1, childCenterX);
+          if (result) return result;
+
+          // Move to next sibling position
+          currentX += subtreeWidth;
+          if (i < node.children.length - 1) {
+            currentX += nodeSize.x * separation.siblings;
+          }
+        }
+      }
+    }
+    return null;
+  }, [nodeSize, separation, calculateSubtreeWidth]);
+
+  // Calculate translate to center on last clicked node
+  const translate = useMemo(() => {
+    const defaultTranslate = {x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110};
+
+    if (!lastClickedPath || rd3Data.length === 0 || !containerSize.w) {
+      return defaultTranslate;
+    }
+
+    // Find the node position
+    const nodePos = findNodePosition(lastClickedPath, rd3Data);
+
+    if (!nodePos) {
+      return defaultTranslate;
+    }
+
+    // Calculate translate to center the node
+    // X: center the node horizontally in the viewport
+    // Y: center the node vertically in the viewport
+    const centerX = containerSize.w / 2;
+    const centerY = (isFullscreen ? window.innerHeight : (bp.isMobile ? window.innerHeight * 0.8 : window.innerHeight * 0.7)) / 2;
+
+    // Adjust for zoom level (we'll use a slightly higher zoom)
+    const zoomLevel = Math.min(initialZoom * 1.3, 1.2); // Zoom in a bit more
+    const adjustedX = centerX - (nodePos.x * zoomLevel);
+    const adjustedY = centerY - (nodePos.y * zoomLevel);
+
+    return {
+      x: Math.max(24, adjustedX),
+      y: Math.max(bp.isMobile ? 80 : 110, adjustedY)
+    };
+  }, [containerSize, bp.isMobile, lastClickedPath, rd3Data, findNodePosition, initialZoom, isFullscreen]);
+
+  // Calculate zoom level - slightly higher if we have a target node
+  const zoomLevel = useMemo(() => {
+    if (lastClickedPath && rd3Data.length > 0) {
+      return Math.min(initialZoom * 1.3, 1.2); // Zoom in 30% more, max 1.2
+    }
+    return initialZoom;
+  }, [lastClickedPath, rd3Data.length, initialZoom]);
 
   // ==== Custom Node Renderer ====
   const renderNode = useCallback((props: CustomNodeElementProps) => {
@@ -652,25 +807,25 @@ export default function PetaJabatanClient() {
       const hasChildren = !!attrs.hasChildren;
 
       return (
-        <g>
-          <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
-                fill="#F3E8FF" strokeWidth={1}
-                style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
-          <text x={0} y={0} textAnchor="middle" alignmentBaseline="central"
-                fill="#111827" style={{ fontSize: bp.isMobile ? "12px" : "13px", fontWeight: 200 }}>
-            {String(label).toUpperCase()}
-          </text>
+          <g>
+            <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
+                  fill="#F3E8FF" strokeWidth={1}
+                  style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
+            <text x={0} y={0} textAnchor="middle" alignmentBaseline="central"
+                  fill="#111827" style={{ fontSize: bp.isMobile ? "12px" : "13px", fontWeight: 200 }}>
+              {String(label).toUpperCase()}
+            </text>
 
-          {hasChildren && (
-            <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
-               onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
-              <rect width={bp.isMobile ? 16 : 18} height={bp.isMobile ? 16 : 18} rx={5} ry={5}
-                    fill="#fff" stroke="#c4c4c4" strokeWidth={1} />
-              <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
-                    transform={isCollapsed ? "" : "rotate(90 9 9)"} />
-            </g>
-          )}
-        </g>
+            {hasChildren && (
+                <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
+                   onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
+                  <rect width={bp.isMobile ? 16 : 18} height={bp.isMobile ? 16 : 18} rx={5} ry={5}
+                        fill="#fff" stroke="#c4c4c4" strokeWidth={1} />
+                  <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
+                        transform={isCollapsed ? "" : "rotate(90 9 9)"} />
+                </g>
+            )}
+          </g>
       );
     }
 
@@ -680,7 +835,7 @@ export default function PetaJabatanClient() {
 
     const title = String(nodeDatum.name ?? "").toUpperCase();
     const titleLines = wrapText(title, maxTitleChars);
-    const lineH = 16;
+    const lineH = 28;
 
     const kelas: string = attrs.kelas_jabatan ?? "-";
     const kelasHLocal = bp.isMobile ? 16 : 18;
@@ -691,8 +846,8 @@ export default function PetaJabatanClient() {
     const sel: number = bez - keb;
 
     const namesArr: string[] = Array.isArray(attrs.nama_pejabat)
-      ? (attrs.nama_pejabat as string[])
-      : attrs.nama_pejabat ? [attrs.nama_pejabat as string] : [];
+        ? (attrs.nama_pejabat as string[])
+        : attrs.nama_pejabat ? [attrs.nama_pejabat as string] : [];
     const namaPejabatText = namesArr.join(", ");
 
     const labelGapTop = bp.isMobile ? 8 : 10;
@@ -716,236 +871,354 @@ export default function PetaJabatanClient() {
     const boxesStartX = -metricsTotalW / 2;
 
     const metricBox = (x: number, y: number, value: string, color = "#111827") => (
-      <g>
-        <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#e5e7eb" strokeWidth={1}/>
-        <text x={x + boxW / 2} y={y + boxH / 2} textAnchor="middle" alignmentBaseline="central"
-              fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
-          {value}
-        </text>
-      </g>
+        <g>
+          <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#e5e7eb" strokeWidth={1}/>
+          <text x={x + boxW / 2} y={y + boxH / 2} textAnchor="middle" alignmentBaseline="central"
+                fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
+            {value}
+          </text>
+        </g>
     );
 
     const pathStr: string = attrs.pathStr || "";
     const href = `/anjab/${pathStr}`;
-    
+
     const handleJabatanClick = () => {
       // Save the path before navigation
       sessionStorage.setItem('petaJabatan_lastClickedPath', pathStr);
       setLastClickedPath(pathStr);
     };
-    
+
     // Check if this is the last clicked node
     const isLastClicked = lastClickedPath === pathStr;
 
+    // Check if this node matches current search
+    const isSearchMatch = searchMatches.includes(attrs.id);
+    const isCurrentMatch = isSearchMatch && searchMatches[currentMatchIndex] === attrs.id;
+
+    // Determine border style based on state
+    let borderColor = "#8200DB"; // default purple
+    let borderWidth = 1;
+    let shadowFilter = "drop-shadow(0 2px 3px rgba(0,0,0,0.08))";
+
+    if (isCurrentMatch) {
+      // Current search match - green with pulsing effect
+      borderColor = "#10B981";
+      borderWidth = 4;
+      shadowFilter = "drop-shadow(0 4px 8px rgba(16,185,129,0.4))";
+    } else if (isSearchMatch) {
+      // Other search matches - yellow
+      borderColor = "#F59E0B";
+      borderWidth = 2;
+      shadowFilter = "drop-shadow(0 3px 6px rgba(245,158,11,0.3))";
+    } else if (isLastClicked) {
+      // Last clicked - orange
+      borderColor = "#FF6B00";
+      borderWidth = 3;
+      shadowFilter = "drop-shadow(0 4px 6px rgba(255,107,0,0.3))";
+    }
+
     return (
-      <g>
-        {/* KARTU */}
-        <rect x={xLeft} y={yTop} width={cardW} height={cardH}
-              rx={8} ry={8} fill="#ffffff" 
-              stroke={isLastClicked ? "#FF6B00" : "#8200DB"} 
-              strokeWidth={isLastClicked ? 3 : 1}
-              style={{ filter: isLastClicked ? "drop-shadow(0 4px 6px rgba(255,107,0,0.3))" : "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
-
-        {/* HEADER UNGU */}
-        <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
-              rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1} />
-
-        {/* JUDUL */}
-        <a href={href} target="_self" rel="noopener noreferrer" onClick={handleJabatanClick}>
-          {titleLines.map((line, i) => (
-            <text key={i} x={centerX} y={yTitleStart + i * lineH}
-                  textAnchor="middle" alignmentBaseline="hanging"
-                  fill="#111827" strokeWidth={1}
-                  style={{ fontSize: `${titleFontPx}px`, fontWeight: 200, textDecoration: "underline", opacity: 0.85 }}>
-              {line}
-            </text>
-          ))}
-        </a>
-
-        {/* KELAS JABATAN */}
-        <text x={centerX} y={yKelas} textAnchor="middle" alignmentBaseline="hanging"
-              strokeWidth={1} fill="#6b7280"
-              style={{ fontSize: bp.isMobile ? "10px" : "11px", fontWeight: 50, opacity: 0.5 }}>
-          {`Kelas Jabatan : ${kelas || "-"}`}
-        </text>
-
-        {/* LABEL B K ± */}
-        <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-              fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>B</text>
-        <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-              fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>K</text>
-        <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-              fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>±</text>
-
-        {/* KOTAK ANGKA */}
-        {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
-        {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
-        {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
-
-        {/* TEXT FIELD NAMA */}
         <g>
-          <rect x={xLeft + padX} y={yBoxes + boxH +  (bp.isMobile ? 10 : 12)}
-                width={cardW - padX * 2} height={textFieldH}
-                rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
-          {namaPejabatText && (
-            <text x={xLeft + padX + 10} y={yBoxes + boxH + (bp.isMobile ? 10 : 12) + textFieldH / 2}
-                  textAnchor="start" alignmentBaseline="central"
-                  fill="#111827" strokeWidth={1}
-                  style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
-              {namaPejabatText}
-            </text>
+          {/* KARTU */}
+          <rect x={xLeft} y={yTop} width={cardW} height={cardH}
+                rx={8} ry={8} fill="#ffffff"
+                stroke={borderColor}
+                strokeWidth={borderWidth}
+                style={{ filter: shadowFilter }} />
+
+          {/* HEADER UNGU */}
+          <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
+                rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1} />
+
+          {/* JUDUL */}
+          <a href={href} target="_self" rel="noopener noreferrer" onClick={handleJabatanClick}>
+            {titleLines.map((line, i) => (
+                <text key={i} x={centerX} y={yTitleStart + i * lineH}
+                      textAnchor="middle" alignmentBaseline="hanging"
+                      fill="#111827" strokeWidth={1}
+                      style={{ fontSize: `${titleFontPx}px`, fontWeight: 500, opacity: 0.85, color: "#152E6D"}}>
+                  {line}
+                </text>
+            ))}
+          </a>
+
+          {/* KELAS JABATAN */}
+          <text x={centerX} y={yKelas} textAnchor="middle" alignmentBaseline="hanging"
+                strokeWidth={1} fill="#6b7280"
+                style={{ fontSize: bp.isMobile ? "10px" : "11px", fontWeight: 50, opacity: 0.5 }}>
+            {`Kelas Jabatan : ${kelas || "-"}`}
+          </text>
+
+          {/* LABEL B K ± */}
+          <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>B</text>
+          <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>K</text>
+          <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>±</text>
+
+          {/* KOTAK ANGKA */}
+          {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
+          {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
+          {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
+
+          {/* TEXT FIELD NAMA */}
+          <g>
+            <rect x={xLeft + padX} y={yBoxes + boxH +  (bp.isMobile ? 10 : 12)}
+                  width={cardW - padX * 2} height={textFieldH}
+                  rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
+            {namaPejabatText && (
+                <text x={xLeft + padX + 10} y={yBoxes + boxH + (bp.isMobile ? 10 : 12) + textFieldH / 2}
+                      textAnchor="start" alignmentBaseline="central"
+                      fill="#111827" strokeWidth={1}
+                      style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
+                  {namaPejabatText}
+                </text>
+            )}
+          </g>
+
+          {/* Tombol panah/play */}
+          {hasChildren && (
+              <g className="p-4" transform={`translate(${xLeft + cardW - (bp.isMobile ? 28 : 32)}, ${yTop + 10})`}
+                 onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
+                <rect width={bp.isMobile ? 20 : 22} height={bp.isMobile ? 20 : 22}
+                      rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" />
+                <path d="M8 6 L16 11 L8 16 Z" fill="#6b7280"
+                      transform={isCollapsed ? "" : "rotate(90 11 11)"} />
+              </g>
           )}
         </g>
-
-        {/* Tombol panah/play */}
-        {hasChildren && (
-          <g transform={`translate(${xLeft + cardW - (bp.isMobile ? 28 : 32)}, ${yTop + 10})`}
-             onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
-            <rect width={bp.isMobile ? 20 : 22} height={bp.isMobile ? 20 : 22}
-                  rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" />
-            <path d="M8 6 L16 11 L8 16 Z" fill="#6b7280"
-                  transform={isCollapsed ? "" : "rotate(90 11 11)"} />
-          </g>
-        )}
-      </g>
     );
-  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath]);
+  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex]);
 
   return (
-    <div className="flex flex-col gap-3 p-3 sm:p-4">
-      {/* ===== TOP BAR (mobile seperti screenshot, desktop seperti semula) ===== */}
-      {bp.isMobile ? (
-        <div className="flex flex-col gap-2">
-          {/* Baris 1: Search + Reset */}
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <input
-              placeholder="Cari Jabatan"
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="px-3 py-2 rounded border text-sm"
+      <div className="flex flex-col gap-3 p-3 sm:p-4">
+        {/* ===== TOP BAR (mobile seperti screenshot, desktop seperti semula) ===== */}
+        {bp.isMobile ? (
+            <div className="flex flex-col gap-2">
+              {/* Baris 1: Search + Reset */}
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                    placeholder="Cari Jabatan"
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    className="px-3 py-2 rounded border text-sm"
+                />
+                <button
+                    onClick={() => {
+                      // Clear only peta jabatan specific sessionStorage keys
+                      sessionStorage.removeItem('petaJabatan_filterText');
+                      sessionStorage.removeItem('petaJabatan_lastClickedPath');
+                      sessionStorage.removeItem('petaJabatan_collapseMap');
+                      sessionStorage.removeItem('petaJabatan_scope');
+                      sessionStorage.removeItem('petaJabatan_fungsionalMode');
+
+                      // Reset all state to defaults
+                      setFilterText("");
+                      setLastClickedPath(null);
+                      setSearchMatches([]);
+                      setCurrentMatchIndex(0);
+                      setScope("PUSAT");
+                      setFungsionalMode("STRUKTURAL");
+
+                      // Force reload the data to ensure clean state
+                      load();
+                    }}
+                    className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                >
+                  Reset
+                </button>
+              </div>
+              {/* Search Results Navigation Mobile */}
+              {searchMatches.length > 0 && (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <span className="text-sm text-green-700 font-medium">
+                {searchMatches.length} hasil ({currentMatchIndex + 1}/{searchMatches.length})
+              </span>
+                    {searchMatches.length > 1 && (
+                        <div className="flex gap-1">
+                          <button
+                              onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
+                              className="p-1 hover:bg-green-100 rounded transition-colors"
+                              title="Sebelumnya"
+                          >
+                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                              onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
+                              className="p-1 hover:bg-green-100 rounded transition-colors"
+                              title="Berikutnya"
+                          >
+                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
+                    )}
+                  </div>
+              )}
+              {/* Baris 2: Reload & Fullscreen full-width */}
+              <button
+                  onClick={load}
+                  disabled={loading}
+                  className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                {loading ? "Memuat…" : "Reload"}
+              </button>
+              {!isFullscreen ? (
+                  <button
+                      onClick={enterFullscreen}
+                      className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                  >
+                    Fullscreen
+                  </button>
+              ) : (
+                  <button
+                      onClick={exitFullscreen}
+                      className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                  >
+                    Exit Fullscreen
+                  </button>
+              )}
+            </div>
+        ) : (
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-2xl font-semibold">Peta Jabatan</h1>
+              <div className="flex items-center gap-2">
+                <input
+                    placeholder="Cari Jabatan"
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    className="px-3 py-2 rounded border text-sm w-[320px]"
+                />
+                <button
+                    onClick={() => {
+                      // Clear only peta jabatan specific sessionStorage keys
+                      sessionStorage.removeItem('petaJabatan_filterText');
+                      sessionStorage.removeItem('petaJabatan_lastClickedPath');
+                      sessionStorage.removeItem('petaJabatan_collapseMap');
+                      sessionStorage.removeItem('petaJabatan_scope');
+                      sessionStorage.removeItem('petaJabatan_fungsionalMode');
+
+                      // Reset all state to defaults
+                      setFilterText("");
+                      setLastClickedPath(null);
+                      setSearchMatches([]);
+                      setCurrentMatchIndex(0);
+                      setScope("PUSAT");
+                      setFungsionalMode("STRUKTURAL");
+
+                      // Force reload the data to ensure clean state
+                      load();
+                    }}
+                    className="px-2 py-2 rounded border text-sm hover:bg-gray-50"
+                >
+                  Reset
+                </button>
+                {!isFullscreen ? (
+                    <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
+                      Fullscreen
+                    </button>
+                ) : (
+                    <button onClick={exitFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
+                      Exit Fullscreen
+                    </button>
+                )}
+              </div>
+            </div>
+        )}
+
+        {/* ===== BARIS FILTER (Wilayah/Jenis di bawah) ===== */}
+        <div className="mt-2 flex flex-wrap items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2">
+            <Segmented
+                value={scope}
+                onChange={setScope}
+                options={[{label: "Pusat", value: "PUSAT"}, {label: "Daerah", value: "DAERAH"}]}
+                size={bp.isMobile ? "sm" : "md"}
             />
-            <button
-              onClick={() => {
-                setFilterText("");
-                setLastClickedPath(null);
-                sessionStorage.removeItem('petaJabatan_filterText');
-                sessionStorage.removeItem('petaJabatan_lastClickedPath');
-              }}
-              className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Reset
-            </button>
+            <Segmented
+                value={fungsionalMode}
+                onChange={setFungsionalMode}
+                options={[{label: "Struktural", value: "STRUKTURAL"}, {label: "Fungsional", value: "FUNGSIONAL"}]}
+                size={bp.isMobile ? "sm" : "md"}
+            />
           </div>
-          {/* Baris 2: Reload & Fullscreen full-width */}
-          <button
-            onClick={load}
-            disabled={loading}
-            className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            {loading ? "Memuat…" : "Reload"}
-          </button>
-          {!isFullscreen ? (
-            <button
-              onClick={enterFullscreen}
-              className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Fullscreen
-            </button>
-          ) : (
-            <button
-              onClick={exitFullscreen}
-              className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Exit Fullscreen
-            </button>
+
+          {/* Search Results Navigation */}
+          {searchMatches.length > 0 && (
+              <div className="flex items-center gap-2 ml-auto bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+            <span className="text-sm text-green-700 font-medium">
+              {searchMatches.length} hasil ditemukan
+            </span>
+                {searchMatches.length > 1 && (
+                    <>
+                <span className="text-xs text-green-600">
+                  ({currentMatchIndex + 1}/{searchMatches.length})
+                </span>
+                      <div className="flex gap-1">
+                        <button
+                            onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
+                            className="p-1 hover:bg-green-100 rounded transition-colors"
+                            title="Hasil sebelumnya"
+                        >
+                          <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                            onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
+                            className="p-1 hover:bg-green-100 rounded transition-colors"
+                            title="Hasil berikutnya"
+                        >
+                          <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </>
+                )}
+              </div>
           )}
         </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">Peta Jabatan</h1>
-          <div className="flex items-center gap-2">
-            <input
-              placeholder="Cari Jabatan"
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="px-3 py-2 rounded border text-sm w-[320px]"
-            />
-            <button
-              onClick={() => {
-                setFilterText("");
-                setLastClickedPath(null);
-                sessionStorage.removeItem('petaJabatan_filterText');
-                sessionStorage.removeItem('petaJabatan_lastClickedPath');
-              }}
-              className="px-2 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Reset
-            </button>
-            {!isFullscreen ? (
-              <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
-                Fullscreen
-              </button>
-            ) : (
-              <button onClick={exitFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
-                Exit Fullscreen
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* ===== BARIS FILTER (Wilayah/Jenis di bawah) ===== */}
-      <div className="mt-2 flex flex-wrap items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-2">
-          <Segmented
-            value={scope}
-            onChange={setScope}
-            options={[{label: "Pusat", value: "PUSAT"}, {label: "Daerah", value: "DAERAH"}]}
-            size={bp.isMobile ? "sm" : "md"}
-          />
-          <Segmented
-            value={fungsionalMode}
-            onChange={setFungsionalMode}
-            options={[{label: "Struktural", value: "STRUKTURAL"}, {label: "Fungsional", value: "FUNGSIONAL"}]}
-            size={bp.isMobile ? "sm" : "md"}
-          />
+        {err && <div className="text-sm text-red-600">{err}</div>}
+
+        <div
+            ref={containerRef}
+            style={{width: "100%", height: (isFullscreen ? "100vh" : (bp.isMobile ? "80vh" : "70vh")), border: "1px solid #e5e7eb", background: "#fff"}}
+            className="rounded"
+        >
+          {/* Render Tree hanya jika ada data valid */}
+          {typeof window !== "undefined" && rd3Data.length > 0 ? (
+              <Tree
+                  data={rd3Data}
+                  orientation="vertical"
+                  translate={translate}
+                  zoomable
+                  collapsible={false}
+                  zoom={zoomLevel}
+                  pathFunc="step"
+                  nodeSize={nodeSize}
+                  separation={separation}
+                  transitionDuration={300}
+                  renderCustomNodeElement={renderNode}
+              />
+          ) : (
+              !loading && (
+                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+                    {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter/cari."}
+                  </div>
+              )
+          )}
+        </div>
+
+        <div className="text-[10px] sm:text-xs text-gray-500">
+          • Drag background untuk pan, scroll untuk zoom. Klik panah untuk collapse/expand subtree. Klik judul jabatan untuk buka halaman anjab.
         </div>
       </div>
-
-      {err && <div className="text-sm text-red-600">{err}</div>}
-
-      <div
-        ref={containerRef}
-        style={{width: "100%", height: (isFullscreen ? "100vh" : (bp.isMobile ? "80vh" : "70vh")), border: "1px solid #e5e7eb", background: "#fff"}}
-        className="rounded"
-      >
-        {/* Render Tree hanya jika ada data valid */}
-        {typeof window !== "undefined" && rd3Data.length > 0 ? (
-          <Tree
-            data={rd3Data}
-            orientation="vertical"
-            translate={translate}
-            zoomable
-            collapsible={false}
-            zoom={initialZoom}
-            pathFunc="step"
-            nodeSize={nodeSize}
-            separation={separation}
-            transitionDuration={250}
-            renderCustomNodeElement={renderNode}
-          />
-        ) : (
-          !loading && (
-            <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
-              {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter/cari."}
-            </div>
-          )
-        )}
-      </div>
-
-      <div className="text-[10px] sm:text-xs text-gray-500">
-        • Drag background untuk pan, scroll untuk zoom. Klik panah untuk collapse/expand subtree. Klik judul jabatan untuk buka halaman anjab.
-      </div>
-    </div>
   );
 }

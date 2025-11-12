@@ -440,7 +440,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json(
                     {
                         ok: true,
-                        message: "Upload & insert sukses",
+                        message: "Upload berhasil",
                         jabatan_id: jabatanUUID,
                         slug,
                         peta_id,

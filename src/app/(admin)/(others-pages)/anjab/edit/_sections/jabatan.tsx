@@ -35,7 +35,9 @@ export default function EditJabatanSection({
     const [data, setData] = useState<Jabatan | null>(null);
     const [abkNeeded, setAbkNeeded] = useState(false);
     const [abkExamples, setAbkExamples] = useState<Array<{ id_tugas: number; nomor_tugas: number | null }>>([]);
+    const [uploadingAbk, setUploadingAbk] = useState(false);
     const namaRef = useRef<HTMLInputElement>(null);
+    const fileInputAbkRef = useRef<HTMLInputElement>(null);
 
     // 1) Resolve UUID dari storage (tanpa memanggil API resolver lain)
     const resolveIdFromStorage = () => {
@@ -190,6 +192,76 @@ export default function EditJabatanSection({
         }
     }
 
+    // Handler untuk upload dokumen ABK
+    async function handleAbkUpload(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file || !resolvedId) return;
+
+        // Validasi file type
+        if (!file.name.match(/\.(doc|docx)$/i)) {
+            await MySwal.fire({
+                icon: "error",
+                title: "File tidak valid",
+                text: "Hanya file .doc atau .docx yang diperbolehkan",
+            });
+            return;
+        }
+
+        setUploadingAbk(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("id", resolvedId);
+
+            const res = await apiFetch("/api/abk/docs", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) {
+                const json = await res.json().catch(() => ({}));
+                throw new Error(json?.error || `HTTP ${res.status}`);
+            }
+
+            const result = await res.json();
+            await MySwal.fire({
+                icon: "success",
+                title: "Upload Berhasil",
+                html: `
+                    <div class="text-left">
+                        <p class="mb-2">Dokumen ABK berhasil diproses!</p>
+                        ${result.inserted ? `<p class="text-sm text-green-600">✓ ${result.inserted} data berhasil diimpor</p>` : ''}
+                        ${result.skipped ? `<p class="text-sm text-gray-600">⊘ ${result.skipped} data dilewati (duplikat)</p>` : ''}
+                    </div>
+                `,
+            });
+
+            // Refresh ABK status
+            const abkRes = await apiFetch(`/api/anjab/${encodeURIComponent(resolvedId)}/abk`, {
+                cache: "no-store",
+            });
+            if (abkRes.ok) {
+                const abk = await abkRes.json();
+                setAbkNeeded(Boolean(abk?.needed));
+                setAbkExamples(Array.isArray(abk?.examples) ? abk.examples : []);
+            }
+
+        } catch (e) {
+            console.error(e);
+            await MySwal.fire({
+                icon: "error",
+                title: "Upload Gagal",
+                text: String(e),
+            });
+        } finally {
+            setUploadingAbk(false);
+            // Reset file input
+            if (fileInputAbkRef.current) {
+                fileInputAbkRef.current.value = "";
+            }
+        }
+    }
+
     // UI saat belum berhasil resolve UUID
     if (!resolvedId) {
         return (
@@ -217,8 +289,8 @@ export default function EditJabatanSection({
                         >
                             Coba lagi
                         </button>
-                        <Link 
-                            href={`/anjab/${viewerPath}`} 
+                        <Link
+                            href={`/anjab/${viewerPath}`}
                             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         >
                             Kembali
@@ -263,8 +335,8 @@ export default function EditJabatanSection({
             >
                 <div className="text-center py-12">
                     <p className="text-red-600 mb-4">Data tidak ditemukan.</p>
-                    <Link 
-                        href={`/anjab/${viewerPath}`} 
+                    <Link
+                        href={`/anjab/${viewerPath}`}
                         className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                         Kembali
@@ -275,16 +347,52 @@ export default function EditJabatanSection({
     }
 
     return (
-        <EditSectionWrapper
-            title="Informasi Jabatan"
-            description="Edit informasi dasar jabatan dan data terkait"
-            icon={
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <>
+            {abkNeeded && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div className="flex-1">
+                            <h4 className="font-medium text-yellow-800 dark:text-yellow-200">
+                                Sebagian kolom pada Tugas Pokok belum terisi
+                            </h4>
+                            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
+                                Unggah dokumen ABK untuk melengkapi secara otomatis.
+                            </p>
+                            <div className="mt-3">
+                                <input
+                                    ref={fileInputAbkRef}
+                                    type="file"
+                                    accept=".doc,.docx"
+                                    onChange={handleAbkUpload}
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputAbkRef.current?.click()}
+                                    disabled={uploadingAbk}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    {uploadingAbk ? "Memproses..." : "Upload Dokumen ABK"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <EditSectionWrapper
+
+                title="Informasi Jabatan"
+                description="Edit informasi dasar jabatan dan data terkait"
+                icon={<svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-            }
-            actions={
-                <button
+                </svg>}
+                actions={<button
                     type="button"
                     onClick={onDelete}
                     disabled={deleting}
@@ -292,125 +400,86 @@ export default function EditJabatanSection({
                     title="Hapus anjab ini"
                 >
                     {deleting ? "Menghapus..." : "Hapus Anjab"}
-                </button>
-            }
-        >
-            <form onSubmit={onSubmit} className="space-y-6">
-                <FormSection title="Identitas Jabatan">
-                    <div className="space-y-4">
-                        <Input
-                            label="ID Jabatan (UUID)"
-                            hint="ID unik yang digunakan sistem"
-                            value={resolvedId} 
-                            disabled 
-                        />
+                </button>}
+            >
+                <form onSubmit={onSubmit} className="space-y-6">
+                    <FormSection title="Identitas Jabatan">
+                        <div className="space-y-4">
+                            {/*<Input
+                                label="ID Jabatan (UUID)"
+                                hint="ID unik yang digunakan sistem"
+                                value={resolvedId}
+                                disabled /> */}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input
-                                ref={namaRef}
-                                name="kode_jabatan"
-                                label="Kode Jabatan"
-                                defaultValue={data.kode_jabatan ?? ""}
-                                placeholder="Masukkan kode jabatan"
-                                required
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Input
+                                    ref={namaRef}
+                                    name="kode_jabatan"
+                                    label="Kode Jabatan"
+                                    defaultValue={data.kode_jabatan ?? ""}
+                                    placeholder="Masukkan kode jabatan"
+                                    required />
 
-                            <Input
-                                name="nama_jabatan"
-                                label="Nama Jabatan"
-                                defaultValue={data.nama_jabatan ?? ""}
-                                placeholder="Masukkan nama jabatan"
-                                required
-                            />
-                        </div>
-                    </div>
-                </FormSection>
-
-                <FormSection title="Detail Jabatan">
-                    <div className="space-y-4">
-                        <Textarea
-                            name="ikhtisar_jabatan"
-                            label="Ikhtisar Jabatan"
-                            hint="Ringkasan umum tentang jabatan ini"
-                            defaultValue={data.ikhtisar_jabatan ?? ""}
-                            rows={4}
-                            placeholder="Jelaskan ikhtisar jabatan..."
-                        />
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input
-                                name="kelas_jabatan" 
-                                label="Kelas Jabatan"
-                                hint="Tingkat atau level jabatan"
-                                defaultValue={data.kelas_jabatan ?? ""} 
-                                placeholder="Contoh: Tinggi, Menengah, Rendah"
-                            />
-
-                            <Input
-                                name="prestasi_diharapkan"
-                                label="Prestasi Diharapkan"
-                                hint="Target kinerja yang diharapkan"
-                                defaultValue={data.prestasi_diharapkan ?? ""}
-                                placeholder="Jelaskan prestasi yang diharapkan"
-                            />
-                        </div>
-                    </div>
-                </FormSection>
-
-                <FormActions>
-                    <button 
-                        type="submit" 
-                        disabled={saving} 
-                        className="px-6 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                    >
-                        {saving && (
-                            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        )}
-                        {saving ? "Menyimpan..." : "Simpan Perubahan"}
-                    </button>
-                    <Link 
-                        href={`/anjab/${viewerPath}`} 
-                        className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                        Batal
-                    </Link>
-                </FormActions>
-            </form>
-
-            {/* Section Upload ABK (kondisional) */}
-            {abkNeeded && (
-                <div className="mt-8">
-                    <FormSection title="Upload ABK" collapsible defaultOpen={false}>
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                                </svg>
-                                <div className="flex-1">
-                                    <h4 className="font-medium text-yellow-800 dark:text-yellow-200">
-                                        Sebagian kolom ABK pada Tugas Pokok belum terisi
-                                    </h4>
-                                    {abkExamples.length > 0 && (
-                                        <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                                            Contoh item belum lengkap: {abkExamples.map((x) => `#${x.nomor_tugas ?? x.id_tugas}`).join(", ")}
-                                        </p>
-                                    )}
-                                    <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
-                                        Kamu bisa unggah file ABK (Word) untuk melengkapi otomatis.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-4">
-                                <WordAbk id={resolvedId} />
+                                <Input
+                                    name="nama_jabatan"
+                                    label="Nama Jabatan"
+                                    defaultValue={data.nama_jabatan ?? ""}
+                                    placeholder="Masukkan nama jabatan"
+                                    required />
                             </div>
                         </div>
                     </FormSection>
-                </div>
-            )}
-        </EditSectionWrapper>
+
+                    <FormSection title="Detail Jabatan">
+                        <div className="space-y-4">
+                            <Textarea
+                                name="ikhtisar_jabatan"
+                                label="Ikhtisar Jabatan"
+                                hint="Ringkasan umum tentang jabatan ini"
+                                defaultValue={data.ikhtisar_jabatan ?? ""}
+                                rows={4}
+                                placeholder="Jelaskan ikhtisar jabatan..." />
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Input
+                                    name="kelas_jabatan"
+                                    label="Kelas Jabatan"
+                                    hint="Tingkat atau level jabatan"
+                                    defaultValue={data.kelas_jabatan ?? ""}
+                                    placeholder="Contoh: Tinggi, Menengah, Rendah" />
+
+                                <Input
+                                    name="prestasi_diharapkan"
+                                    label="Prestasi Diharapkan"
+                                    hint="Target kinerja yang diharapkan"
+                                    defaultValue={data.prestasi_diharapkan ?? ""}
+                                    placeholder="Jelaskan prestasi yang diharapkan" />
+                            </div>
+                        </div>
+                    </FormSection>
+
+                    <FormActions>
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="px-6 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        >
+                            {saving && (
+                                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            )}
+                            {saving ? "Menyimpan..." : "Simpan Perubahan"}
+                        </button>
+                        <Link
+                            href={`/anjab/${viewerPath}`}
+                            className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Batal
+                        </Link>
+                    </FormActions>
+                </form>
+            </EditSectionWrapper></>
     );
 }

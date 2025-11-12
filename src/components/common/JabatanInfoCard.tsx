@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { apiFetch } from "@/lib/apiFetch";
 import { slugToTitle } from "@/lib/text-utils";
 
@@ -17,19 +16,13 @@ interface JabatanInfoCardProps {
     currentId: string;
     className?: string;
     compact?: boolean; // New prop for compact mobile view
-    isAdmin?: boolean; // For showing admin actions
-    editHref?: string; // URL for edit action
-    onDelete?: () => void; // Callback for delete action
 }
 
-const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({ 
-    currentId, 
-    className = "", 
-    compact = false, 
-    isAdmin = false, 
-    editHref = "", 
-    onDelete 
-}) => {
+const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
+                                                             currentId,
+                                                             className = "",
+                                                             compact = false
+                                                         }) => {
     const [jabatanInfo, setJabatanInfo] = useState<JabatanInfo | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -96,7 +89,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
     if (error || !jabatanInfo) {
         // Fallback display using currentId
         const fallbackTitle = slugToTitle(currentId.replace(/-/g, " "));
-        
+
         return (
             <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 md:p-6 ${className}`}>
                 <div className="space-y-4">
@@ -133,7 +126,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                         {/* Badges */}
                         <div className="hidden md:flex flex-col gap-1">
@@ -155,10 +148,10 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                                 onClick={() => setIsExpanded(!isExpanded)}
                                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                             >
-                                <svg 
-                                    className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                                    fill="none" 
-                                    stroke="currentColor" 
+                                <svg
+                                    className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    fill="none"
+                                    stroke="currentColor"
                                     viewBox="0 0 24 24"
                                 >
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -188,45 +181,12 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
 
                     {/* Description */}
                     {jabatanInfo.ikhtisar_jabatan && (
-                        <div className="mb-4">
+                        <div>
                             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                 Ikhtisar Jabatan
                             </h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                                 {jabatanInfo.ikhtisar_jabatan}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Admin Actions - Show after description */}
-                    {isAdmin && (editHref || onDelete) && (
-                        <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                            <div className="flex flex-wrap gap-3">
-                                {editHref && (
-                                    <Link
-                                        href={editHref}
-                                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                        Edit Anjab
-                                    </Link>
-                                )}
-                                {onDelete && (
-                                    <button
-                                        onClick={onDelete}
-                                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                        Hapus Anjab
-                                    </button>
-                                )}
-                            </div>
-                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                <strong>Catatan:</strong> Menghapus anjab akan menghapus semua dokumen analisis jabatan ini, namun tidak akan menghapus struktur jabatan dari pohon organisasi.
                             </p>
                         </div>
                     )}

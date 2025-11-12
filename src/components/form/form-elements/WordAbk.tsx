@@ -113,7 +113,7 @@ export default function WordAbk({id}: WordAbkProps) {
 
     return (
         <div className="mx-auto mt-10 p-6 bg-white shadow-lg rounded-2xl border">
-            <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800">
+            <h2 className="text-xl font-semibold mb-4 text-center text-gray-800">
                 Unggah Dokumen Analisis Beban Kerja
             </h2>
 

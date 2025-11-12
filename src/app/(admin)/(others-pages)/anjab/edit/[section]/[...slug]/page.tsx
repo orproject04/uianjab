@@ -29,13 +29,13 @@ export default function EditAnySectionPage() {
     if (!SectionForm) {
         return (
             <div className="p-6">
-                <AnjabBreadcrumb 
-                    currentId={id} 
-                    currentTitle={`Edit ${params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`} 
+                <AnjabBreadcrumb
+                    currentId={id}
+                    currentTitle={`Edit ${params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`}
                     rawSlug={rawSlug}
                 />
                 <p className="text-red-600">Bagian "{params.section}" tidak dikenali.</p>
-                <Link className="underline text-blue-600" href={`/anjab/${viewerPath}`}>
+                <Link className="underline text-blue-600" href={`/anjab/${viewerPath}?tab=pdf`}>
                     Lihat PDF
                 </Link>
             </div>
@@ -44,17 +44,17 @@ export default function EditAnySectionPage() {
 
     return (
         <div className="max-w-4xl mx-auto p-6">
-            <AnjabBreadcrumb 
-                currentId={id} 
-                currentTitle={`Edit ${(SECTION_LABELS as any)[params.section] ?? params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`} 
+            <AnjabBreadcrumb
+                currentId={id}
+                currentTitle={`Edit ${(SECTION_LABELS as any)[params.section] ?? params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`}
                 rawSlug={rawSlug}
             />
-            
+
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-semibold">
                     Edit {(SECTION_LABELS as any)[params.section] ?? params.section}
                 </h1>
-                <Link href={`/anjab/${viewerPath}`} className="rounded border px-3 py-1.5">
+                <Link href={`/anjab/${viewerPath}?tab=pdf`} className="rounded border px-3 py-1.5">
                     Lihat PDF
                 </Link>
             </div>
