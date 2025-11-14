@@ -17,10 +17,8 @@ export async function GET(req: NextRequest) {
             ORDER BY updated_at DESC`
         );
 
-        console.log('Jabatan list loaded:', result.rows.length, 'records');
         return NextResponse.json(result.rows || []);
     } catch (error: any) {
-        console.error("Error fetching jabatan list:", error);
         return NextResponse.json(
             { error: error?.message || "Gagal memuat data" },
             { status: 500 }

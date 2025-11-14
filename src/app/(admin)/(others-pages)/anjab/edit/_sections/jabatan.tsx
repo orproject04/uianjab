@@ -83,7 +83,6 @@ export default function EditJabatanSection({
                 setData(json);
                 setTimeout(() => namaRef.current?.focus(), 0);
             } catch (e) {
-                console.error(e);
                 await MySwal.fire({ icon: "error", title: "Error", text: "Gagal memuat data." });
             } finally {
                 if (alive) setLoading(false);
@@ -135,7 +134,6 @@ export default function EditJabatanSection({
             }
             await MySwal.fire({ icon: "success", title: "Tersimpan", text: "Perubahan berhasil disimpan." });
         } catch (e) {
-            console.error(e);
             await MySwal.fire({ icon: "error", title: "Error", text: "Terjadi kesalahan saat menyimpan." });
         } finally {
             setSaving(false);
@@ -170,7 +168,6 @@ export default function EditJabatanSection({
             const isMaster = viewerPath.startsWith("master/");
             window.location.href = isMaster ? `/anjab/master` : `/anjab/${viewerPath}`;
         } catch (e) {
-            console.error(e);
             await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
         } finally {
             setDeleting(false);

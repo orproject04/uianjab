@@ -229,7 +229,6 @@ export async function GET(req: NextRequest) {
                 { status: 401 }
             );
         }
-        console.error("Error fetching dashboard data:", error);
         return NextResponse.json(
             { error: "Failed to fetch dashboard data", details: error.message },
             { status: 500 }

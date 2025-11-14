@@ -553,7 +553,6 @@ const AppSidebar: React.FC = () => {
             );
             
             if (!res.ok) {
-                console.warn("Gagal check anjab match");
                 setMatchedAnjab(null);
                 setMatchingSuggestions([]);
                 return;
@@ -564,15 +563,11 @@ const AppSidebar: React.FC = () => {
             if (data.match) {
                 setMatchedAnjab(data.match);
                 setMatchingSuggestions(data.alternatives || []);
-                console.log('✓ Match found:', data.match);
-                console.log('  Alternatives:', data.alternatives);
             } else {
                 setMatchedAnjab(null);
                 setMatchingSuggestions(data.suggestions || []);
-                console.log('⚠️ No match, suggestions:', data.suggestions);
             }
         } catch (e) {
-            console.error("Error checking anjab match:", e);
             setMatchedAnjab(null);
             setMatchingSuggestions([]);
         } finally {
@@ -1339,7 +1334,6 @@ const AppSidebar: React.FC = () => {
                                                     key={sug.id}
                                                     type="button"
                                                     onClick={() => {
-                                                        console.log('Selected anjab:', sug.nama_jabatan, sug.id);
                                                         setSelectedAnjabId(sug.id);
                                                     }}
                                                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all ${
@@ -1378,7 +1372,6 @@ const AppSidebar: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            console.log('Cancelled selection');
                                                             setSelectedAnjabId(null);
                                                         }}
                                                         className="text-xs text-purple-700 hover:text-purple-900 underline font-medium"

@@ -36,8 +36,7 @@ export async function POST(req: NextRequest) {
                 await fs.unlink(path.join(cacheDir, file));
                 deletedCount++;
             } catch (err) {
-                console.error(`Failed to delete ${file}:`, err);
-            }
+                }
         }
 
         return NextResponse.json({ 
@@ -46,7 +45,6 @@ export async function POST(req: NextRequest) {
             message: `${deletedCount} file cache berhasil dihapus` 
         });
     } catch (error: any) {
-        console.error("Error clearing cache:", error);
         return NextResponse.json(
             { error: error?.message || "Gagal menghapus cache" },
             { status: 500 }

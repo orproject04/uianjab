@@ -42,7 +42,7 @@ export default function TugasPokokABKSection({
         const resolvePetaId = async () => {
             try {
                 // Coba resolve dari peta_jabatan dulu
-                const response = await fetch(`/api/peta-resolve?slug=${encodeURIComponent(viewerPath)}`);
+                const response = await fetch(`/api/peta-jabatan/resolve?slug=${encodeURIComponent(viewerPath)}`);
                 const res = await response.json();
                 
                 if (res.success && res.data?.peta_jabatan_id) {
@@ -61,8 +61,6 @@ export default function TugasPokokABKSection({
                         // Query peta_jabatan berdasarkan jabatan_id
                         const petaResponse = await fetch(`/api/peta-jabatan?jabatan_id=${resolvedJabatanId}`);
                         const petaRes = await petaResponse.json();
-                        console.log("Peta response:", petaRes);
-                        
                         if (petaRes.success && petaRes.data && Array.isArray(petaRes.data) && petaRes.data.length > 0) {
                             setPetaJabatanId(petaRes.data[0].id);
                         } else if (Array.isArray(petaRes) && petaRes.length > 0) {
@@ -78,7 +76,6 @@ export default function TugasPokokABKSection({
                     }
                 }
             } catch (err: any) {
-                console.error("Error resolving peta_jabatan_id:", err);
                 setError(err.message || "Gagal resolve peta jabatan");
                 setLoading(false);
             }
@@ -96,7 +93,7 @@ export default function TugasPokokABKSection({
             setError(null);
             
             try {
-                const response = await fetch(`/api/tugas-pokok-abk?peta_jabatan_id=${petaJabatanId}`);
+                const response = await fetch(`/api/abk/tugas-pokok?peta_jabatan_id=${petaJabatanId}`);
                 const res = await response.json();
                 
                 if (res.success) {
@@ -122,13 +119,11 @@ export default function TugasPokokABKSection({
                             kebutuhan_pegawai: calculated // Gunakan hasil perhitungan, bukan dari DB
                         };
                     });
-                    console.log('Loaded ABK data:', dataWithCalculation);
                     setTugasList(dataWithCalculation);
                 } else {
                     setError(res.error || "Gagal load data");
                 }
             } catch (err: any) {
-                console.error("Error loading tugas_pokok_abk:", err);
                 setError(err.message || "Gagal load data");
             } finally {
                 setLoading(false);
@@ -196,7 +191,7 @@ export default function TugasPokokABKSection({
             const method = tugas.id ? "PUT" : "POST";
             const body = tugas.id ? { ...payload, id: tugas.id } : payload;
             
-            const response = await fetch("/api/tugas-pokok-abk", {
+            const response = await fetch("/api/abk/tugas-pokok", {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body)
@@ -205,7 +200,7 @@ export default function TugasPokokABKSection({
 
             if (res.success) {
                 // Reload data
-                const reloadResponse = await fetch(`/api/tugas-pokok-abk?peta_jabatan_id=${petaJabatanId}`);
+                const reloadResponse = await fetch(`/api/abk/tugas-pokok?peta_jabatan_id=${petaJabatanId}`);
                 const reloadRes = await reloadResponse.json();
                 
                 if (reloadRes.success) {
@@ -227,7 +222,7 @@ export default function TugasPokokABKSection({
                     setTugasList(dataWithCalculation);
                     
                     // Hitung total dan update peta_jabatan
-                    const newTotal = dataWithCalculation.reduce((sum, r) => sum + (Number.isFinite(r.kebutuhan_pegawai) ? r.kebutuhan_pegawai : 0), 0);
+                    const newTotal = dataWithCalculation.reduce((sum: number, r: any) => sum + (Number.isFinite(r.kebutuhan_pegawai) ? r.kebutuhan_pegawai : 0), 0);
                     const newPembulatan = Math.ceil(newTotal);
                     
                     // Update peta_jabatan.kebutuhan_pegawai
@@ -254,7 +249,6 @@ export default function TugasPokokABKSection({
                 });
             }
         } catch (err: any) {
-            console.error("Error saving ABK:", err);
             await MySwal.fire({
                 icon: "error",
                 title: "Error",

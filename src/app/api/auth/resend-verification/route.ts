@@ -88,7 +88,6 @@ export async function POST(req: NextRequest) {
     try {
       await sendMail(email, "Verifikasi Email Akun Anda", emailHtml);
     } catch (emailError) {
-      console.error("[RESEND-VERIFICATION] Email error:", emailError);
       return NextResponse.json(
         { error: "Gagal mengirim email. Silakan coba lagi nanti." },
         { status: 500 }
@@ -101,7 +100,6 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[RESEND-VERIFICATION]", error);
     return NextResponse.json(
       { error: "Terjadi kesalahan server" },
       { status: 500 }

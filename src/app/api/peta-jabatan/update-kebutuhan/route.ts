@@ -36,7 +36,6 @@ export async function POST(req: NextRequest) {
             data: result.rows[0]
         });
     } catch (error: any) {
-        console.error("Update kebutuhan_pegawai error:", error);
         return NextResponse.json({
             success: false,
             error: error.message

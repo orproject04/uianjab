@@ -303,7 +303,6 @@ export default function InformasiJabatanPage() {
                 });
             }
         } catch (error) {
-            console.error("Error deleting anjab:", error);
             await MySwal.fire({
                 title: "Error!",
                 text: "Terjadi kesalahan saat menghapus dokumen anjab",

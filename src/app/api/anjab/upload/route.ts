@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
                 await client.query('BEGIN');
 
                 for (const item of items) {
-                    console.log(item);
                     const {
                         nama_jabatan,
                         kode_jabatan,
@@ -385,7 +384,6 @@ export async function POST(req: NextRequest) {
 
             } catch (err) {
                 await client.query('ROLLBACK');
-                console.error('❌ Rollback karena error:', err);
                 return NextResponse.json({message: 'Gagal menyimpan data', error: String(err)}, {status: 500});
             } finally {
                 client.release();
@@ -395,7 +393,6 @@ export async function POST(req: NextRequest) {
         }
 
     } catch (err) {
-        console.error('❌ Gagal parsing request:', err);
         return NextResponse.json({message: 'Internal server error', error: String(err)}, {status: 500});
     }
 }

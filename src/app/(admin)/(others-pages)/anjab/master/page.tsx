@@ -42,26 +42,20 @@ export default function AnjabListPage() {
 
     const loadJabatan = async () => {
         try {
-            console.log('Loading jabatan list...');
             const res = await apiFetch("/api/anjab/list", {
                 method: "GET",
                 cache: "no-store",
             });
-
-            console.log('API response status:', res.status);
             
             if (res.ok) {
                 const data = await res.json();
-                console.log('Jabatan data received:', data);
                 setJabatanList(data || []);
                 setError(null);
             } else {
                 const errorData = await res.json().catch(() => ({}));
-                console.error('API error:', errorData);
                 setError(errorData.error || 'Gagal memuat data');
             }
         } catch (error: any) {
-            console.error("Error loading jabatan:", error);
             setError(error?.message || 'Terjadi kesalahan');
         } finally {
             setLoading(false);
@@ -219,7 +213,6 @@ export default function AnjabListPage() {
                 };
             }
         } catch (error) {
-            console.error('Error previewing PDF:', error);
             alert('Gagal memuat PDF');
         }
     };
@@ -270,14 +263,14 @@ export default function AnjabListPage() {
 
     return (
         <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">
-            <div className="p-6 max-w-7xl mx-auto">
+            <div className="p-4 sm:p-6 max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="mb-6 flex items-start justify-between gap-4">
-                    <div>
+                <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex-1">
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                             Analisis Jabatan
                         </h1>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-base text-gray-600 dark:text-gray-400">
                             Kelola dokumen analisis jabatan Anda
                         </p>
                     </div>
@@ -319,7 +312,6 @@ export default function AnjabListPage() {
                                     });
                                 }
                             } catch (error) {
-                                console.error('Error clearing cache:', error);
                                 await Swal.fire({
                                     icon: 'error',
                                     title: 'Error',
@@ -327,23 +319,23 @@ export default function AnjabListPage() {
                                 });
                             }
                         }}
-                        className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                        className="flex-shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors w-full sm:w-auto whitespace-nowrap"
                         title="Clear PDF Cache"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        <span className="hidden sm:inline">Clear Cache</span>
+                        <span>Clear Cache</span>
                     </button>
                 </div>
 
                 {/* Toolbar */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mb-4 sm:mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         {/* Search */}
-                        <div className="flex-1 max-w-md">
+                        <div className="flex-1">
                             <div className="relative">
-                                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                                 <input
@@ -351,13 +343,13 @@ export default function AnjabListPage() {
                                     placeholder="Cari anjab..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                    className="w-full pl-9 sm:pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                             {/* View Toggle */}
                             <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
                                 <button
@@ -383,23 +375,23 @@ export default function AnjabListPage() {
                             {/* Upload Button */}
                             <button
                                 onClick={handleUpload}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
-                                <span className="hidden sm:inline">Upload</span>
+                                <span>Upload</span>
                             </button>
 
                             {/* Create New Button */}
                             <button
                                 onClick={handleCreateNew}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
-                                <span className="hidden sm:inline">Buat Baru</span>
+                                <span>Buat Baru</span>
                             </button>
                         </div>
                     </div>
@@ -508,12 +500,12 @@ export default function AnjabListPage() {
                     /* List View */
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="w-full">
+                            <table className="w-full min-w-[640px]">
                                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                                     <tr>
                                         <th 
                                             onClick={() => handleSort("nama_jabatan")}
-                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                            className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                         >
                                             <div className="flex items-center gap-2">
                                                 <span>Nama Jabatan</span>

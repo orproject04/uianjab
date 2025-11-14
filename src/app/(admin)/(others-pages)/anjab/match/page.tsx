@@ -69,8 +69,7 @@ export default function AnjabMatchPage() {
                 await generateSuggestions(petaData, anjabData);
             }
         } catch (error) {
-            console.error("Error loading data:", error);
-        } finally {
+            } finally {
             setLoading(false);
         }
     };
@@ -91,8 +90,7 @@ export default function AnjabMatchPage() {
                 setSuggestions(data.suggestions || []);
             }
         } catch (error) {
-            console.error("Error generating suggestions:", error);
-        }
+            }
     };
 
     const handleAutoMatch = async () => {
@@ -145,7 +143,6 @@ export default function AnjabMatchPage() {
                 });
             }
         } catch (error) {
-            console.error("Error auto matching:", error);
             await Swal.fire({
                 icon: "error",
                 title: "Gagal",
@@ -176,8 +173,7 @@ export default function AnjabMatchPage() {
                 loadData();
             }
         } catch (error) {
-            console.error("Error manual matching:", error);
-        } finally {
+            } finally {
             setProcessing(false);
         }
     };
@@ -197,68 +193,69 @@ export default function AnjabMatchPage() {
 
     return (
         <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">
-            <div className="p-6 max-w-7xl mx-auto">
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+                <div className="mb-4 sm:mb-6">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
                         Match Peta Jabatan dengan Master Anjab
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                         Pasangkan peta jabatan yang belum memiliki anjab dengan master anjab yang sesuai
                     </p>
                 </div>
 
                 {/* Stats & Actions */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="grid grid-cols-3 gap-3 sm:gap-6">
                             <div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">Peta Jabatan Belum Match</div>
-                                <div className="text-2xl font-bold text-gray-900 dark:text-white">{petaJabatanList.length}</div>
+                                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Belum Match</div>
+                                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{petaJabatanList.length}</div>
                             </div>
                             <div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">Master Anjab Tersedia</div>
-                                <div className="text-2xl font-bold text-gray-900 dark:text-white">{masterAnjabList.length}</div>
+                                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Tersedia</div>
+                                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{masterAnjabList.length}</div>
                             </div>
                             <div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">Saran Auto Match</div>
-                                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{suggestions.length}</div>
+                                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Saran</div>
+                                <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">{suggestions.length}</div>
                             </div>
                         </div>
                         <button
                             onClick={handleAutoMatch}
                             disabled={processing || suggestions.length === 0}
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-600 text-white text-sm sm:text-base rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
-                            Auto Match Semua
+                            <span className="hidden sm:inline">Auto Match Semua</span>
+                            <span className="sm:hidden">Auto Match</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Suggestions List */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                             Saran Matching ({suggestions.length})
                         </h2>
                     </div>
                     
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[640px]">
                             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                                         Peta Jabatan
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                                         Master Anjab
                                     </th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                                        Similarity
+                                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                                        Match
                                     </th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                                         Aksi
                                     </th>
                                 </tr>
@@ -266,21 +263,21 @@ export default function AnjabMatchPage() {
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {suggestions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                        <td colSpan={4} className="px-4 sm:px-6 py-8 sm:py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                                             Tidak ada saran matching. Semua peta jabatan sudah memiliki anjab.
                                         </td>
                                     </tr>
                                 ) : (
                                     suggestions.map((sug, idx) => (
                                         <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 dark:text-white">
                                                 {sug.peta_nama}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 dark:text-white">
                                                 {sug.anjab_nama}
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                                                <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                                     sug.similarity > 0.8 
                                                         ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                                         : sug.similarity > 0.5
@@ -290,16 +287,16 @@ export default function AnjabMatchPage() {
                                                     {Math.round(sug.similarity * 100)}%
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-center">
+                                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
                                                 <button
                                                     onClick={() => handleManualMatch(sug.peta_id, sug.anjab_id)}
                                                     disabled={processing}
-                                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                                    className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
                                                 >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    Pasangkan
+                                                    <span className="hidden sm:inline">Pasangkan</span>
                                                 </button>
                                             </td>
                                         </tr>

@@ -69,7 +69,6 @@ export async function GET(req: NextRequest) {
             suggestions: rows
         });
     } catch (e: any) {
-        console.error("Error matching anjab:", e);
         return NextResponse.json(
             { error: "Internal error", detail: e.message },
             { status: 500 }

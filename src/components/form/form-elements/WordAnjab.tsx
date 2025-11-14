@@ -230,7 +230,6 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
                 await showResultModal(false, result.error || `Gagal mengunggah (${res.status})`);
             }
         } catch (err) {
-            console.error(err);
             await showResultModal(false, 'Gagal mengirim ke server.');
         } finally {
             setIsLoading(false);

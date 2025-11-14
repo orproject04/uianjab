@@ -66,7 +66,6 @@ export async function GET(req: NextRequest) {
             }
         });
     } catch (error: any) {
-        console.error("GET peta-resolve error:", error);
         return NextResponse.json({
             success: false,
             error: error.message

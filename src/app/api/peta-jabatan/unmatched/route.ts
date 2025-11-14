@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(result.rows || []);
     } catch (error: any) {
-        console.error("Error fetching unmatched peta jabatan:", error);
         return NextResponse.json(
             { error: error?.message || "Gagal memuat data" },
             { status: 500 }

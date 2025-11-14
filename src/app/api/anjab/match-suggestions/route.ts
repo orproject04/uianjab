@@ -70,7 +70,6 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ suggestions });
     } catch (error: any) {
-        console.error("Error generating suggestions:", error);
         return NextResponse.json(
             { error: error?.message || "Gagal generate suggestions" },
             { status: 500 }

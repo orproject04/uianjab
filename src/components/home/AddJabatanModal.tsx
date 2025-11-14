@@ -127,7 +127,6 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
         const opts = buildOptions(data);
         setParentOptions(opts);
       } catch (err: any) {
-        console.error("Error loading parents:", err);
         setError(err.message || "Gagal memuat data jabatan");
       } finally {
         setLoadingParents(false);
@@ -161,8 +160,7 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
 
         setJenisJabatan(suggestedJenis);
       } catch (err) {
-        console.error("Error suggesting jenis:", err);
-      }
+        }
     };
 
     suggestJenisJabatan();
@@ -199,7 +197,6 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
         setMatchingSuggestions(data.suggestions || []);
       }
     } catch (e) {
-      console.error("Error checking anjab match:", e);
       setMatchedAnjab(null);
       setMatchingSuggestions([]);
     } finally {

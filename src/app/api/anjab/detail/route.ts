@@ -13,8 +13,6 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        console.log("Fetching jabatan detail for ID:", id);
-
         const result = await pool.query(
             "SELECT * FROM jabatan WHERE id = $1",
             [id]
@@ -27,15 +25,12 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        console.log("Jabatan found:", result.rows[0].nama_jabatan);
-
         return NextResponse.json({
             success: true,
             data: result.rows[0]
         });
 
     } catch (error: any) {
-        console.error("Error fetching jabatan detail:", error);
         return NextResponse.json(
             { success: false, error: error.message || "Terjadi kesalahan server" },
             { status: 500 }

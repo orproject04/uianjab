@@ -97,7 +97,6 @@ export async function POST(req: NextRequest) {
         if (e?.message === "UNAUTHORIZED") {
             return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
         }
-        console.error("[api/anjab][POST] error:", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     }
 }

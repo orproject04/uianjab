@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
             client.release();
         }
     } catch (error: any) {
-        console.error("Error auto matching:", error);
         return NextResponse.json(
             { error: error?.message || "Gagal auto matching" },
             { status: 500 }

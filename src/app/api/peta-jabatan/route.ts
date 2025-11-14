@@ -215,7 +215,6 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(rows);
     } catch (e) {
-        console.error(e);
         return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 }
@@ -308,10 +307,8 @@ export async function POST(req: NextRequest) {
                 
                 if (matchResult.rows.length > 0) {
                     matched_jabatan_id = matchResult.rows[0].id;
-                    console.log(`Auto-matched jabatan_id: ${matched_jabatan_id} (similarity: ${matchResult.rows[0].similarity})`);
-                }
+                    }
             } catch (matchError) {
-                console.warn("Gagal auto-match jabatan_id:", matchError);
                 // Lanjutkan tanpa jabatan_id jika matching gagal
             }
         }
@@ -369,8 +366,7 @@ export async function POST(req: NextRequest) {
                     };
                 }
             } catch (e) {
-                console.warn("Gagal fetch info anjab:", e);
-            }
+                }
         }
 
         return NextResponse.json({
@@ -389,7 +385,6 @@ export async function POST(req: NextRequest) {
         if (e?.code === "22P02") {
             return NextResponse.json({error: "parent_id harus UUID"}, {status: 400});
         }
-        console.error(e);
         return NextResponse.json({error: "Internal error"}, {status: 500});
     }
 }

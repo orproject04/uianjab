@@ -173,7 +173,6 @@ export default function WordAbk({id, petaJabatanId, viewerPath, acceptExt = DEFA
                 });
             }
         } catch (err) {
-            console.error(err);
             await MySwal.fire({
                 title: "Gagal",
                 text: 'Gagal mengirim ke server.',

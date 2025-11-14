@@ -20,8 +20,6 @@ export async function PUT(request: NextRequest) {
             );
         }
 
-        console.log("Updating jabatan:", id);
-
         const result = await pool.query(
             `UPDATE jabatan 
              SET nama_jabatan = $1, 
@@ -42,15 +40,12 @@ export async function PUT(request: NextRequest) {
             );
         }
 
-        console.log("Jabatan updated successfully:", result.rows[0].nama_jabatan);
-
         return NextResponse.json({
             success: true,
             data: result.rows[0]
         });
 
     } catch (error: any) {
-        console.error("Error updating jabatan:", error);
         return NextResponse.json(
             { success: false, error: error.message || "Terjadi kesalahan server" },
             { status: 500 }

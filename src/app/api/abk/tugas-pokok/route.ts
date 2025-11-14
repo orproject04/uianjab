@@ -40,7 +40,6 @@ export async function GET(req: NextRequest) {
             data: result.rows
         });
     } catch (error: any) {
-        console.error("GET tugas_pokok_abk error:", error);
         return NextResponse.json({
             success: false,
             error: error.message
@@ -89,7 +88,6 @@ export async function POST(req: NextRequest) {
             data: result.rows[0]
         });
     } catch (error: any) {
-        console.error("POST tugas_pokok_abk error:", error);
         return NextResponse.json({
             success: false,
             error: error.message
@@ -140,7 +138,6 @@ export async function PUT(req: NextRequest) {
             data: result.rows[0]
         });
     } catch (error: any) {
-        console.error("PUT tugas_pokok_abk error:", error);
         return NextResponse.json({
             success: false,
             error: error.message
@@ -178,7 +175,6 @@ export async function DELETE(req: NextRequest) {
             data: result.rows[0]
         });
     } catch (error: any) {
-        console.error("DELETE tugas_pokok_abk error:", error);
         return NextResponse.json({
             success: false,
             error: error.message

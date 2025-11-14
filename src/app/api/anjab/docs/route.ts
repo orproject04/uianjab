@@ -112,7 +112,6 @@ export async function POST(req: NextRequest) {
             await safeUnlink(tempDocPath);
 
             if (exitCode !== 0 || !stdoutData) {
-                console.error("❌ Ekstraksi gagal:", stderrData);
                 return NextResponse.json(
                     {error: "Gagal mengekstrak dokumen", detail: stderrData || "no output"},
                     {status: 422}
@@ -123,9 +122,7 @@ export async function POST(req: NextRequest) {
             let item: any;
             try {
                 item = JSON.parse(stdoutData);
-                // console.log("✅ Parsed JSON:", JSON.stringify(item, null, 2));
             } catch (e) {
-                console.error("❌ JSON extractor tidak valid:", e, "\nRAW:\n", stdoutData);
                 return NextResponse.json(
                     {error: "Output extractor bukan JSON yang valid"},
                     {status: 422}
@@ -464,7 +461,6 @@ export async function POST(req: NextRequest) {
                         {status: 409}
                     );
                 }
-                console.error("❌ DB error:", err);
                 return NextResponse.json(
                     {error: "Gagal menyimpan ke database", detail: String(err)},
                     {status: 500}
@@ -476,7 +472,6 @@ export async function POST(req: NextRequest) {
             await fs.rm(sessionTmpDir, {recursive: true, force: true});
         }
     } catch (err) {
-        console.error("❌ Upload error:", err);
         return NextResponse.json({error: "Server error", detail: String(err)}, {status: 500});
     }
 }

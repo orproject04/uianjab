@@ -39,7 +39,7 @@ export default function EditMasterSectionPage() {
                     }
                 }
             } catch (error) {
-                console.error("Error loading jabatan:", error);
+                // Error handled silently
             }
         };
         
