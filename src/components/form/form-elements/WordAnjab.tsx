@@ -24,6 +24,7 @@ interface WordAnjabProps {
 
 export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pathname = usePathname();
 
@@ -69,16 +70,16 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         });
     };
 
-    // --- Helpers slug & peta_id (tetap) ---
-    const getSlugFromPath = (): string | null => {
+    // --- Helpers to get jabatan_id from localStorage based on peta slug path ---
+    const getSlugPathFromUrl = (): string | null => {
         try {
             const path = String(pathname || "");
             const parts = path.split('/').filter(Boolean);
             const idx = parts.findIndex(p => p.toLowerCase() === 'anjab');
             const tail = idx >= 0 ? parts.slice(idx + 1) : [];
-            const lastTwo = tail.slice(-2);
-            if (lastTwo.length === 0) return null;
-            const slugDash = lastTwo
+            if (tail.length === 0) return null;
+            // Join all segments after 'anjab' dengan dash (misal: "setjen-depmin" atau "setjen")
+            const slugDash = tail
                 .map(s => s.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]+/g, ''))
                 .filter(Boolean)
                 .join('-')
@@ -89,16 +90,13 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         }
     };
 
-    const getPetaIdFromLocalStorage = (): string | null => {
+    const getJabatanIdFromLocalStorage = (): string | null => {
         try {
-            const path = String(pathname || "");
-            const parts = path.split('/').filter(Boolean);
-            const idx = parts.findIndex(p => p.toLowerCase() === 'anjab');
-            const tail = idx >= 0 ? parts.slice(idx + 1) : [];
-            const lastTwo = tail.slice(-2);
-            if (lastTwo.length === 0) return null;
-            const slugDash = lastTwo.join('-');
-            const key = `so:${slugDash}`;
+            const slugPath = getSlugPathFromUrl();
+            if (!slugPath) return null;
+            // Konversi dash ke slash untuk key localStorage
+            const slugForUrl = slugPath.replace(/-/g, '/');
+            const key = `anjab:${slugForUrl}`;
             const v = localStorage.getItem(key);
             return (typeof v === 'string' && v.trim()) ? v.trim() : null;
         } catch {
@@ -145,6 +143,36 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
+        await processFiles(files);
+    };
+
+    // --- Handler drag & drop ---
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        await processFiles(files);
+    };
+
+    // --- Process files (shared by input & drop) ---
+    const processFiles = async (files: FileList) => {
+
         // Maks 1 file
         if (files.length > 1) {
             await MySwal.fire({
@@ -178,35 +206,18 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
             return;
         }
 
-        // Wajib: peta_id harus ada
-        const peta_id = getPetaIdFromLocalStorage();
-        if (!peta_id) {
-            await MySwal.fire({
-                icon: "error",
-                title: "Gagal",
-                text: "Jabatan dan Dokumen Anjab Gagal Terhubung, Silakan Hapus Jabatan dan Buat Ulang",
-            });
-            clearFileInput();
-            return;
+        // jabatan_id: ambil dari localStorage atau generate UUID baru
+        let jabatan_id = getJabatanIdFromLocalStorage();
+        
+        if (!jabatan_id) {
+            // Generate UUID baru untuk jabatan baru
+            jabatan_id = crypto.randomUUID();
         }
 
-        // Wajib: slug untuk backend (deteksi duplikat)
-        const slug = getSlugFromPath();
-        if (!slug) {
-            await MySwal.fire({
-                icon: "error",
-                title: "Gagal",
-                text: "Slug tidak bisa ditentukan dari URL.",
-            });
-            clearFileInput();
-            return;
-        }
-
-        // Kirim FormData
+        // Kirim FormData dengan jabatan_id (wajib)
         const formData = new FormData();
         formData.append('file', f);
-        formData.append('slug', slug);
-        formData.append('peta_id', peta_id);
+        formData.append('jabatan_id', jabatan_id); // API expects 'jabatan_id' parameter
 
         setIsLoading(true);
         try {
@@ -214,14 +225,7 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
             const result = await res.json().catch(() => ({} as any));
 
             if (res.ok) {
-                const details = `
-          <ul class="list-disc pl-5">
-            ${result.jabatan_id ? `<li><b>jabatan_id:</b> <code>${result.jabatan_id}</code></li>` : ''}
-            ${result.slug ? `<li><b>slug:</b> <code>${result.slug}</code></li>` : ''}
-            ${result.peta_id ? `<li><b>peta_id:</b> <code>${result.peta_id}</code></li>` : ''}
-          </ul>
-        `;
-                await showResultModal(true, result.message || 'Upload berhasil', details);
+                await showResultModal(true, result.message || 'Upload berhasil', '');
             } else {
                 await showResultModal(false, result.error || `Gagal mengunggah (${res.status})`);
             }
@@ -235,25 +239,38 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
     };
 
     return (
-        <div className="mx-auto p-4 bg-white rounded-xl border">
-            <label
-                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 transition">
+        <div className="mx-auto p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+                    isDragging
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 scale-105'
+                        : 'border-gray-300 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500'
+                }`}
+            >
                 {isLoading ? (
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-2"/>
+                    <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-3"/>
                 ) : (
-                    <FileJson className="w-10 h-10 text-purple-500 mb-2"/>
+                    <FileJson className="w-12 h-12 text-purple-500 mb-3"/>
                 )}
-                <p className="text-gray-600 font-medium">Pilih file Word</p>
-                <p className="text-xs text-gray-500 mt-1">Hanya .doc / .docx yang diperbolehkan</p>
+                <p className="text-gray-700 dark:text-gray-200 font-medium text-center">
+                    {isDragging ? 'Lepaskan file di sini' : 'Klik atau seret file ke sini'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                    Hanya .doc / .docx yang diperbolehkan
+                </p>
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept={acceptExt}          // ← ekstensinya + MIME
+                    accept={acceptExt}
                     multiple={false}
                     onChange={handleFileUploadWord}
                     className="hidden"
                 />
-            </label>
+            </div>
         </div>
     );
 }

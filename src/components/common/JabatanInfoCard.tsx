@@ -10,6 +10,7 @@ interface JabatanInfo {
     kelas_jabatan: string | null;
     jenis_jabatan: string | null;
     slug: string | null;
+    kebutuhan_pegawai?: number | null;
 }
 
 interface JabatanInfoCardProps {
@@ -181,13 +182,39 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
 
                     {/* Description */}
                     {jabatanInfo.ikhtisar_jabatan && (
-                        <div>
+                        <div className="mb-4">
                             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                 Ikhtisar Jabatan
                             </h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                                 {jabatanInfo.ikhtisar_jabatan}
                             </p>
+                        </div>
+                    )}
+
+                    {/* Kebutuhan Pegawai (ABK) */}
+                    {jabatanInfo.kebutuhan_pegawai != null && (
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                        Kebutuhan Pegawai (ABK)
+                                    </h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Hasil perhitungan Analisis Beban Kerja
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900">
+                                        <span className="text-2xl font-bold text-blue-600 dark:text-blue-300">
+                                            {jabatanInfo.kebutuhan_pegawai}
+                                        </span>
+                                        <span className="text-sm text-blue-600 dark:text-blue-300 ml-1">
+                                            orang
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

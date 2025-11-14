@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import Link from "next/link";
-import WordAbk from "@/components/form/form-elements/WordAbk";
 import EditSectionWrapper, { FormSection, FormField, FormActions } from "@/components/form/EditSectionWrapper";
 import { Input, Textarea } from "@/components/ui/form/FormControls";
 import Button from "@/components/ui/button/Button";
@@ -33,11 +32,7 @@ export default function EditJabatanSection({
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [data, setData] = useState<Jabatan | null>(null);
-    const [abkNeeded, setAbkNeeded] = useState(false);
-    const [abkExamples, setAbkExamples] = useState<Array<{ id_tugas: number; nomor_tugas: number | null }>>([]);
-    const [uploadingAbk, setUploadingAbk] = useState(false);
     const namaRef = useRef<HTMLInputElement>(null);
-    const fileInputAbkRef = useRef<HTMLInputElement>(null);
 
     // 1) Resolve UUID dari storage (tanpa memanggil API resolver lain)
     const resolveIdFromStorage = () => {
@@ -87,19 +82,6 @@ export default function EditJabatanSection({
                 const json = await res.json();
                 setData(json);
                 setTimeout(() => namaRef.current?.focus(), 0);
-
-                // Cek kebutuhan ABK (opsional)
-                const abkRes = await apiFetch(`/api/anjab/${encodeURIComponent(resolvedId)}/abk`, {
-                    cache: "no-store",
-                });
-                if (abkRes.ok) {
-                    const abk = await abkRes.json();
-                    setAbkNeeded(Boolean(abk?.needed));
-                    setAbkExamples(Array.isArray(abk?.examples) ? abk.examples : []);
-                } else {
-                    setAbkNeeded(false);
-                    setAbkExamples([]);
-                }
             } catch (e) {
                 console.error(e);
                 await MySwal.fire({ icon: "error", title: "Error", text: "Gagal memuat data." });
@@ -119,18 +101,18 @@ export default function EditJabatanSection({
 
         const form = e.currentTarget as any;
         const payload = {
-            kode_jabatan: String(form.kode_jabatan.value || "").trim() || null,
             nama_jabatan: String(form.nama_jabatan.value || "").trim() || null,
+            kode_jabatan: String(form.kode_jabatan.value || "").trim() || null,
             ikhtisar_jabatan: String(form.ikhtisar_jabatan.value || "").trim() || null,
             kelas_jabatan: String(form.kelas_jabatan.value || "").trim() || null,
             prestasi_diharapkan: String(form.prestasi_diharapkan.value || "").trim() || null,
         };
 
-        if (!payload.nama_jabatan || !payload.kode_jabatan) {
+        if (!payload.nama_jabatan) {
             await MySwal.fire({
                 icon: "warning",
                 title: "Validasi",
-                text: "Nama & Kode Jabatan wajib diisi.",
+                text: "Nama Jabatan wajib diisi.",
             });
             return;
         }
@@ -181,84 +163,17 @@ export default function EditJabatanSection({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
-            await MySwal.fire({ icon: "success", title: "Terhapus", text: `Anjab ${resolvedId} telah dihapus.` });
-            // Arahkan kembali ke viewer root / daftar
-            window.location.href = `/anjab/${viewerPath}`;
+            await MySwal.fire({ icon: "success", title: "Terhapus", text: `Anjab telah dihapus.` });
+            
+            // Redirect: jika viewerPath dimulai dengan "master/" (master edit), redirect ke /anjab/master
+            // Jika tidak (slug edit), redirect ke /anjab/${viewerPath}
+            const isMaster = viewerPath.startsWith("master/");
+            window.location.href = isMaster ? `/anjab/master` : `/anjab/${viewerPath}`;
         } catch (e) {
             console.error(e);
             await MySwal.fire({ icon: "error", title: "Gagal menghapus", text: String(e) });
         } finally {
             setDeleting(false);
-        }
-    }
-
-    // Handler untuk upload dokumen ABK
-    async function handleAbkUpload(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file || !resolvedId) return;
-
-        // Validasi file type
-        if (!file.name.match(/\.(doc|docx)$/i)) {
-            await MySwal.fire({
-                icon: "error",
-                title: "File tidak valid",
-                text: "Hanya file .doc atau .docx yang diperbolehkan",
-            });
-            return;
-        }
-
-        setUploadingAbk(true);
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("id", resolvedId);
-
-            const res = await apiFetch("/api/abk/docs", {
-                method: "POST",
-                body: formData,
-            });
-
-            if (!res.ok) {
-                const json = await res.json().catch(() => ({}));
-                throw new Error(json?.error || `HTTP ${res.status}`);
-            }
-
-            const result = await res.json();
-            await MySwal.fire({
-                icon: "success",
-                title: "Upload Berhasil",
-                html: `
-                    <div class="text-left">
-                        <p class="mb-2">Dokumen ABK berhasil diproses!</p>
-                        ${result.inserted ? `<p class="text-sm text-green-600">✓ ${result.inserted} data berhasil diimpor</p>` : ''}
-                        ${result.skipped ? `<p class="text-sm text-gray-600">⊘ ${result.skipped} data dilewati (duplikat)</p>` : ''}
-                    </div>
-                `,
-            });
-
-            // Refresh ABK status
-            const abkRes = await apiFetch(`/api/anjab/${encodeURIComponent(resolvedId)}/abk`, {
-                cache: "no-store",
-            });
-            if (abkRes.ok) {
-                const abk = await abkRes.json();
-                setAbkNeeded(Boolean(abk?.needed));
-                setAbkExamples(Array.isArray(abk?.examples) ? abk.examples : []);
-            }
-
-        } catch (e) {
-            console.error(e);
-            await MySwal.fire({
-                icon: "error",
-                title: "Upload Gagal",
-                text: String(e),
-            });
-        } finally {
-            setUploadingAbk(false);
-            // Reset file input
-            if (fileInputAbkRef.current) {
-                fileInputAbkRef.current.value = "";
-            }
         }
     }
 
@@ -348,43 +263,6 @@ export default function EditJabatanSection({
 
     return (
         <>
-            {abkNeeded && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
-                    <div className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                        <div className="flex-1">
-                            <h4 className="font-medium text-yellow-800 dark:text-yellow-200">
-                                Sebagian kolom pada Tugas Pokok belum terisi
-                            </h4>
-                            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
-                                Unggah dokumen ABK untuk melengkapi secara otomatis.
-                            </p>
-                            <div className="mt-3">
-                                <input
-                                    ref={fileInputAbkRef}
-                                    type="file"
-                                    accept=".doc,.docx"
-                                    onChange={handleAbkUpload}
-                                    className="hidden"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputAbkRef.current?.click()}
-                                    disabled={uploadingAbk}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                    </svg>
-                                    {uploadingAbk ? "Memproses..." : "Upload Dokumen ABK"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
             <EditSectionWrapper
 
                 title="Informasi Jabatan"
@@ -417,8 +295,7 @@ export default function EditJabatanSection({
                                     name="kode_jabatan"
                                     label="Kode Jabatan"
                                     defaultValue={data.kode_jabatan ?? ""}
-                                    placeholder="Masukkan kode jabatan"
-                                    required />
+                                    placeholder="Masukkan kode jabatan (opsional)" />
 
                                 <Input
                                     name="nama_jabatan"

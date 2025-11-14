@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SECTION_ORDER, SECTION_LABELS } from "../../_sections/registry";
+import { SECTION_ORDER_SLUG as SECTION_ORDER, SECTION_LABELS_SLUG as SECTION_LABELS } from "../../_sections/registry";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
     const params = useParams() as { section: string; slug?: string[] };
@@ -62,119 +62,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     return (
         <div className="space-y-4">
-            {/* Tabs Navigation (non-sticky) */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg mt-6 shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
-                {/* Tabs */}
-                <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent" ref={tabsContainerRef} aria-label="Navigasi bagian Anjab" role="tablist">
-                    <div className="flex min-w-max border-b border-gray-200 dark:border-gray-700">
-                        {SECTION_ORDER.map((section, index) => {
-                            const isActive = params.section === section;
-                            const href = `/anjab/edit/${section}/${viewerPath}`;
-                            
-                            return (
-                                <Link
-                                    key={section}
-                                    href={href}
-                                    ref={isActive ? activeTabRef : undefined}
-                                    className={`
-                                        relative flex items-center justify-center px-6 py-3.5 text-sm font-medium
-                                        transition-all duration-150 whitespace-nowrap border-b-2
-                                        ${isActive 
-                                            ? 'text-purple-600 dark:text-purple-400 border-purple-600 dark:border-purple-400' 
-                                            : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
-                                        }
-                                    `}
-                                    role="tab"
-                                    aria-selected={isActive}
-                                    aria-current={isActive ? 'page' : undefined}
-                                >
-                                    {SECTION_LABELS[section]}
-                                </Link>
-                            );
-                        })}
-                    </div>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative h-1 bg-gray-100 dark:bg-gray-700">
-                    <div 
-                        className="absolute top-0 left-0 h-full bg-purple-600 dark:bg-purple-500 transition-all duration-500 ease-out"
-                        style={{ width: `${((currentIndex + 1) / SECTION_ORDER.length) * 100}%` }}
-                    />
-                </div>
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex items-center justify-between gap-4">
-                    {/* Left area: Prev + counter when first */}
-                    <div className="flex items-center gap-3 min-w-0">
-                        {prevSection ? (
-                            <Link
-                                href={`/anjab/edit/${prevSection}/${viewerPath}`}
-                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                </svg>
-                                <span>Sebelumnya</span>
-                            </Link>
-                        ) : null}
-                        {isFirst && (
-                            <JumpPicker
-                                currentIndex={currentIndex}
-                                currentLabel={SECTION_LABELS[params.section]}
-                                viewerPath={viewerPath}
-                            />
-                        )}
-                    </div>
-
-                    {/* Center area: counter for middle pages only */}
-                    {!isFirst && !isLast && (
-                        <div className="flex-1 flex justify-center">
-                            <JumpPicker
-                                currentIndex={currentIndex}
-                                currentLabel={SECTION_LABELS[params.section]}
-                                viewerPath={viewerPath}
-                            />
-                        </div>
-                    )}
-
-                    {/* Right area: counter when last + next/finish */}
-                    <div className="flex items-center gap-3 min-w-0 justify-end">
-                        {isLast && (
-                            <JumpPicker
-                                currentIndex={currentIndex}
-                                currentLabel={SECTION_LABELS[params.section]}
-                                viewerPath={viewerPath}
-                            />
-                        )}
-                        {nextSection ? (
-                            <Link
-                                href={`/anjab/edit/${nextSection}/${viewerPath}`}
-                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-purple-600 dark:bg-purple-600 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
-                            >
-                                <span>Selanjutnya</span>
-                                <span className="hidden md:inline">: {SECTION_LABELS[nextSection]}</span>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                            </Link>
-                        ) : (
-                            <Link
-                                href={`/anjab/${viewerPath}`}
-                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span>Selesai</span>
-                            </Link>
-                        )}
-                    </div>
-                </div>
-            </div>
-
             {/* Konten section */}
             {children}
         </div>

@@ -40,22 +40,21 @@ export async function POST(req: NextRequest) {
         }
 
         const formData = await req.formData();
-        const slug = (formData.get("slug") as string | null)?.trim() || null;
-        const peta_id = ((formData.get("peta_id") as string | null) || null);
+        const jabatan_id = ((formData.get("jabatan_id") as string | null) || null);
 
-        if (!slug) {
-            return NextResponse.json({error: "slug wajib dikirim"}, {status: 400});
+        if (!jabatan_id) {
+            return NextResponse.json({error: "jabatan_id wajib dikirim"}, {status: 400});
         }
 
-        // Cegah duplikat slug
+        // Cegah duplikat - cek apakah jabatan_id sudah punya data
         {
             const dup = await pool.query<{ exists: boolean }>(
-                `SELECT EXISTS(SELECT 1 FROM jabatan WHERE slug = $1) AS exists`,
-                [slug]
+                `SELECT EXISTS(SELECT 1 FROM jabatan WHERE id = $1::uuid) AS exists`,
+                [jabatan_id]
             );
             if (dup.rows[0]?.exists) {
                 return NextResponse.json(
-                    {error: "Upload gagal, Slug sudah mempunyai Anjab"},
+                    {error: "Upload gagal, Jabatan sudah mempunyai Anjab"},
                     {status: 409}
                 );
             }
@@ -160,29 +159,41 @@ export async function POST(req: NextRequest) {
                 );
             }
 
+            // Check for duplicate nama_jabatan
+            const duplicateCheck = await pool.query(
+                'SELECT id FROM jabatan WHERE LOWER(TRIM(nama_jabatan)) = LOWER(TRIM($1)) LIMIT 1',
+                [nama_jabatan]
+            );
+
+            if (duplicateCheck.rows.length > 0) {
+                return NextResponse.json(
+                    {error: `Upload gagal, Anjab dengan nama "${nama_jabatan}" sudah ada`},
+                    {status: 409}
+                );
+            }
+
             const client = await pool.connect();
             try {
                 await client.query("BEGIN");
 
-                // jabatan
-                const insJabatan = await client.query<{ id: string }>(
+                // jabatan - use provided jabatan_id (UUID) instead of generating new one
+                await client.query(
                     `
                         INSERT INTO jabatan
-                        (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan,
-                         prestasi_diharapkan, slug, peta_id, created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id
+                        (id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan,
+                         prestasi_diharapkan, created_at, updated_at)
+                        VALUES ($1::uuid, $2, $3, $4, $5, $6, NOW(), NOW())
                     `,
                     [
+                        jabatan_id,
                         String(kode_jabatan),
                         String(nama_jabatan),
                         ikhtisar_jabatan || "",
                         kelas_jabatan || "",
                         prestasi_yang_diharapkan || "",
-                        slug,
-                        peta_id,
                     ]
                 );
-                const jabatanUUID = insJabatan.rows[0].id;
+                const jabatanUUID = jabatan_id;
 
                 // unit_kerja
                 await client.query(
@@ -442,8 +453,6 @@ export async function POST(req: NextRequest) {
                         ok: true,
                         message: "Upload berhasil",
                         jabatan_id: jabatanUUID,
-                        slug,
-                        peta_id,
                     },
                     {status: 201}
                 );
@@ -451,7 +460,7 @@ export async function POST(req: NextRequest) {
                 await client.query("ROLLBACK");
                 if (err?.code === "23505") {
                     return NextResponse.json(
-                        {error: "Upload gagal, Slug sudah mempunyai Anjab"},
+                        {error: "Upload gagal, Jabatan sudah mempunyai Anjab"},
                         {status: 409}
                     );
                 }

@@ -524,9 +524,11 @@ export function buildAnjabHtml(data: any): string {
     .doc-title { text-align: center; margin-bottom: 19px; }
     .table-section p { page-break-after: avoid; margin: 0; padding: 0; }
     .table-section table { margin: 0; padding: 0; }
-    .word-table { page-break-inside: auto; }
+    .word-table { page-break-inside: auto; border-collapse: collapse; }
     .word-table thead { display: table-header-group; }
-    .word-table tr { page-break-inside: avoid; }
+    .word-table tbody { display: table-row-group; }
+    .word-table tr { page-break-inside: avoid; page-break-after: auto; }
+    .word-table td, .word-table th { page-break-inside: avoid; }
     .section { margin-top: 5px; margin-bottom: 20px; }
     .section .title { font-weight: bold; display: block; margin-bottom: 4px; }
     p { margin: 4px 0; text-align: justify; }

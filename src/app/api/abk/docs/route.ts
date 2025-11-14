@@ -44,13 +44,24 @@ export async function POST(req: NextRequest) {
 
         const formData = await req.formData();
 
-        // Param wajib: id = jabatan_id (UUID)
-        const id = (formData.get("id") as string | null)?.trim() || null;
+        // Param wajib: jabatan_id (UUID) dan peta_jabatan_id
+        let id = (formData.get("jabatan_id") as string | null)?.trim() || null;
         if (!id) {
-            return NextResponse.json({message: "id wajib dikirim"}, {status: 400});
+            id = (formData.get("id") as string | null)?.trim() || null;
+        }
+        if (!id) {
+            return NextResponse.json({message: "jabatan_id wajib dikirim"}, {status: 400});
         }
         if (!isValidUuid(id)) {
-            return NextResponse.json({message: "Invalid, id harus UUID"}, {status: 400});
+            return NextResponse.json({message: "Invalid, jabatan_id harus UUID"}, {status: 400});
+        }
+
+        let peta_jabatan_id = (formData.get("peta_jabatan_id") as string | null)?.trim() || null;
+        if (!peta_jabatan_id) {
+            return NextResponse.json({message: "peta_jabatan_id wajib dikirim"}, {status: 400});
+        }
+        if (!isValidUuid(peta_jabatan_id)) {
+            return NextResponse.json({message: "Invalid, peta_jabatan_id harus UUID"}, {status: 400});
         }
 
         // Ambil tepat 1 file
@@ -135,85 +146,116 @@ export async function POST(req: NextRequest) {
             try {
                 await client.query("BEGIN");
 
-                // Ambil tugas existing untuk jabatan ini (urut nomor_tugas)
-                const {rows: existing} = await client.query(
-                    "SELECT nomor_tugas FROM tugas_pokok WHERE jabatan_id = $1 ORDER BY nomor_tugas ASC",
-                    [id]
+                // Verifikasi peta_jabatan exists
+                const {rows: petaRows} = await client.query(
+                    "SELECT id FROM peta_jabatan WHERE id = $1::uuid AND jabatan_id = $2::uuid LIMIT 1",
+                    [peta_jabatan_id, id]
                 );
 
-                if (existing.length !== tugas_pokok.length) {
+                if (petaRows.length === 0) {
                     await client.query("ROLLBACK");
                     return NextResponse.json(
                         {
-                            message: `Jumlah tugas_pokok di Anjab (${existing.length}) tidak sama dengan tugas_pokok di ABK yang diunggah (${tugas_pokok.length})`,
-                            error: "Bad Request",
+                            message: "Peta jabatan tidak ditemukan atau tidak sesuai dengan jabatan_id",
+                            error: "Not Found",
+                        },
+                        {status: 404}
+                    );
+                }
+
+                // Get existing tugas_pokok for this jabatan (only need id and basic info)
+                const {rows: tugasPokok} = await client.query(
+                    `SELECT id as tugas_pokok_id, nomor_tugas, uraian_tugas, hasil_kerja
+                     FROM tugas_pokok 
+                     WHERE jabatan_id = $1 
+                     ORDER BY nomor_tugas ASC`,
+                    [id]
+                );
+
+                if (tugasPokok.length !== tugas_pokok.length) {
+                    await client.query("ROLLBACK");
+                    return NextResponse.json(
+                        {
+                            message: "Panjang data tidak sesuai",
+                            error: `Jumlah Tugas Pokok di Anjab: ${tugasPokok.length}, Jumlah Tugas Pokok di ABK: ${tugas_pokok.length}. Silakan cek kembali dokumen ABK Anda.`,
                         },
                         {status: 400}
                     );
                 }
 
+                // Delete existing tugas_pokok_abk for this peta_jabatan
+                await client.query(
+                    "DELETE FROM tugas_pokok_abk WHERE peta_jabatan_id = $1",
+                    [peta_jabatan_id]
+                );
+
                 // Akumulator total kebutuhan_pegawai
                 let totalKebutuhanPegawai = 0;
+                let inserted = 0;
 
-                // Update berdasarkan urutan existing (nomor_tugas)
-                let updated = 0;
+                // Insert into tugas_pokok_abk based on uploaded ABK data
                 for (let i = 0; i < tugas_pokok.length; i++) {
                     const t = tugas_pokok[i];
+                    const tp = tugasPokok[i];
 
                     const jumlah_hasil = toIntOrNull(t?.beban_kerja);
                     const waktu_penyelesaian_jam = toIntOrNull(t?.waktu_penyelesaian);
                     const waktu_efektif = toIntOrNull(t?.waktu_kerja_efektif);
 
-                    // pegawai_dibutuhkan bisa desimal dengan koma
-                    const kebutuhan_pegawai =
-                        typeof t?.pegawai_dibutuhkan === "string"
-                            ? toFloatOrNull(t.pegawai_dibutuhkan.replace(",", "."))
-                            : t?.pegawai_dibutuhkan ?? null;
+                    // Hitung kebutuhan_pegawai dengan formula: (jumlah_hasil * waktu_penyelesaian) / waktu_efektif
+                    let kebutuhan_pegawai = 0;
+                    if (jumlah_hasil && waktu_penyelesaian_jam && waktu_efektif && waktu_efektif > 0) {
+                        kebutuhan_pegawai = (jumlah_hasil * waktu_penyelesaian_jam) / waktu_efektif;
+                    }
 
                     if (typeof kebutuhan_pegawai === "number" && Number.isFinite(kebutuhan_pegawai)) {
                         totalKebutuhanPegawai += kebutuhan_pegawai;
                     }
 
+                    // Insert into tugas_pokok_abk (kebutuhan_pegawai dihitung, bukan dari file)
                     await client.query(
                         `
-                            UPDATE tugas_pokok
-                            SET jumlah_hasil           = $1,
-                                waktu_penyelesaian_jam = $2,
-                                waktu_efektif          = $3,
-                                kebutuhan_pegawai      = $4,
-                                updated_at             = NOW()
-                            WHERE jabatan_id = $5
-                              AND nomor_tugas = $6
+                            INSERT INTO tugas_pokok_abk (
+                                peta_jabatan_id,
+                                tugas_pokok_id,
+                                jumlah_hasil,
+                                waktu_penyelesaian_jam,
+                                waktu_efektif,
+                                kebutuhan_pegawai,
+                                created_at,
+                                updated_at
+                            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
                         `,
                         [
+                            peta_jabatan_id,
+                            tp.tugas_pokok_id,
                             jumlah_hasil,
                             waktu_penyelesaian_jam,
                             waktu_efektif,
                             kebutuhan_pegawai,
-                            id,
-                            existing[i].nomor_tugas,
                         ]
                     );
-                    updated++;
+                    inserted++;
                 }
 
-                // Tulis total (dibulatkan) ke peta_jabatan.kebutuhan_pegawai
-                const totalRounded = Math.round(totalKebutuhanPegawai);
+                // Update total (dibulatkan ke atas) ke peta_jabatan.kebutuhan_pegawai
+                const totalRounded = Math.ceil(totalKebutuhanPegawai);
                 await client.query(
                     `
                         UPDATE peta_jabatan
                         SET kebutuhan_pegawai = $1,
-                            updated_at        = NOW()
-                        WHERE id = (SELECT peta_id FROM jabatan WHERE id = $2::uuid)
+                            updated_at        = CURRENT_TIMESTAMP
+                        WHERE id = $2
                     `,
-                    [totalRounded, id]
+                    [totalRounded, peta_jabatan_id]
                 );
 
                 await client.query("COMMIT");
                 return NextResponse.json({
                     ok: true,
-                    message: `Update ABK sukses untuk ${updated} tugas pokok`,
+                    message: `Upload ABK sukses untuk ${inserted} tugas pokok`,
                     jabatan_id: id,
+                    inserted: inserted,
                 });
             } catch (err) {
                 await client.query("ROLLBACK");

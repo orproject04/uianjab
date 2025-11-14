@@ -42,6 +42,22 @@ export async function POST(req: NextRequest) {
                         continue;
                     }
 
+                    // Check for duplicate nama_jabatan
+                    const duplicateCheck = await client.query(
+                        'SELECT id FROM jabatan WHERE LOWER(TRIM(nama_jabatan)) = LOWER(TRIM($1)) LIMIT 1',
+                        [nama_jabatan]
+                    );
+
+                    if (duplicateCheck.rows.length > 0) {
+                        results.push({
+                            status: 'skipped',
+                            reason: 'Nama jabatan sudah ada',
+                            nama_jabatan,
+                            kode_jabatan,
+                        });
+                        continue;
+                    }
+
                     const truncatedNama = nama_jabatan.substring(0, 10).replace(/\s+/g, '_').toLowerCase();
                     const id_jabatan = `${truncatedNama}_${Date.now()}`;
 

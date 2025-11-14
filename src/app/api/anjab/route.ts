@@ -19,16 +19,15 @@ function toSlug(s: string): string {
 
 /**
  * Schema create Jabatan
- * - peta_id: WAJIB (UUID node peta_jabatan)
+ * No longer requires peta_id or slug - these are removed from jabatan table
+ * kode_jabatan is now optional
  */
 const CreateJabatanSchema = z.object({
-    kode_jabatan: z.string().trim().min(1).max(50),
+    kode_jabatan: z.string().trim().max(50).optional().nullable(),
     nama_jabatan: z.string().trim().min(1).max(200),
-    slug: z.string().trim().min(1).max(200),
     ikhtisar_jabatan: z.string().trim().optional().nullable(),
     kelas_jabatan: z.string().trim().optional().nullable(),
     prestasi_diharapkan: z.string().trim().optional().nullable(),
-    peta_id: z.string().uuid(), // ⬅️ WAJIB
 });
 
 export async function POST(req: NextRequest) {
@@ -49,39 +48,23 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        let {
+        const {
             kode_jabatan,
             nama_jabatan,
-            slug,
             ikhtisar_jabatan = null,
             kelas_jabatan = null,
             prestasi_diharapkan = null,
-            peta_id,
         } = parsed.data;
 
-        // siapkan slug (FE sudah kirim format 2 segmen dash)
-        slug = toSlug(slug);
-
-        // cek slug duplicate (opsional)
-        const dup = await pool.query<{ exists: boolean }>(
-            `SELECT EXISTS(SELECT 1 FROM jabatan WHERE slug = $1) AS exists`,
-            [slug]
+        // Check for duplicate nama_jabatan
+        const duplicateCheck = await pool.query(
+            'SELECT id FROM jabatan WHERE LOWER(TRIM(nama_jabatan)) = LOWER(TRIM($1)) LIMIT 1',
+            [nama_jabatan]
         );
-        if (dup.rows[0]?.exists) {
-            return NextResponse.json(
-                {error: "Slug sudah digunakan. Gunakan slug lain."},
-                {status: 409}
-            );
-        }
 
-        // ===== Validasi peta_id: wajib ada di peta_jabatan =====
-        const chk = await pool.query(`SELECT 1
-                                      FROM peta_jabatan
-                                      WHERE id = $1 LIMIT 1`, [peta_id]);
-        if (chk.rowCount === 0) {
-            // 400 supaya FE bisa menampilkan SweetAlert khusus
+        if (duplicateCheck.rows.length > 0) {
             return NextResponse.json(
-                {error: "peta_id tidak valid atau tidak ditemukan"},
+                {error: "Nama jabatan sudah ada, silakan gunakan nama yang berbeda"},
                 {status: 400}
             );
         }
@@ -90,37 +73,27 @@ export async function POST(req: NextRequest) {
         const {rows} = await pool.query(
             `
                 INSERT INTO jabatan
-                (kode_jabatan, nama_jabatan, slug, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, peta_id,
+                (kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan,
                  created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now()) RETURNING
+                VALUES ($1, $2, $3, $4, $5, now(), now()) RETURNING
           id,
           kode_jabatan,
           nama_jabatan,
-          slug,
           ikhtisar_jabatan,
           kelas_jabatan,
-          prestasi_diharapkan,
-          peta_id
+          prestasi_diharapkan
             `,
             [
                 kode_jabatan,
                 nama_jabatan,
-                slug,
                 ikhtisar_jabatan,
                 kelas_jabatan,
                 prestasi_diharapkan,
-                peta_id,
             ]
         );
 
         return NextResponse.json({ok: true, data: rows[0]}, {status: 201});
     } catch (e: any) {
-        if (e?.code === "23505") {
-            return NextResponse.json(
-                {error: "Slug sudah digunakan. Gunakan slug lain."},
-                {status: 409}
-            );
-        }
         if (e?.message === "UNAUTHORIZED") {
             return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
         }

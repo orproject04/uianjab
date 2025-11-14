@@ -208,7 +208,7 @@ export async function PATCH(
            (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
               FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
              updated_at = NOW()
-       WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
+       WHERE so.jabatan_id = $1::uuid`,
             [id]
         );
 
@@ -305,7 +305,7 @@ export async function DELETE(
            (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
               FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
              updated_at = NOW()
-       WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
+       WHERE so.jabatan_id = $1::uuid`,
             [id]
         );
 

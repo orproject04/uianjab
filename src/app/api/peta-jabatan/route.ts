@@ -19,6 +19,7 @@ type Row = {
     jenis_jabatan: string | null;
     kelas_jabatan: string | null;
     nama_pejabat: string[];
+    jabatan_id: string | null;
 };
 
 const UUID_RE =
@@ -33,6 +34,7 @@ const CreateSchema = z.object({
     order_index: z.number().int().min(0).optional().nullable(),
     is_pusat: z.boolean().optional(),
     jenis_jabatan: z.string().trim().optional().nullable(),
+    jabatan_id: z.string().uuid().optional().nullable(), // Manual override
 });
 
 export async function GET(req: NextRequest) {
@@ -47,6 +49,38 @@ export async function GET(req: NextRequest) {
 
         const { searchParams } = new URL(req.url);
         const root_id = searchParams.get("root_id");
+        const jabatan_id = searchParams.get("jabatan_id");
+
+        // Query by jabatan_id (simple query, tidak recursive)
+        if (jabatan_id) {
+            if (!isUuid(jabatan_id)) {
+                return NextResponse.json({ error: "jabatan_id harus UUID" }, { status: 400 });
+            }
+
+            const { rows } = await pool.query<Row>(
+                `SELECT
+                    pj.id,
+                    pj.parent_id,
+                    pj.nama_jabatan,
+                    pj.slug,
+                    pj.unit_kerja,
+                    pj.level,
+                    pj.order_index,
+                    pj.bezetting,
+                    pj.kebutuhan_pegawai,
+                    pj.is_pusat,
+                    pj.jenis_jabatan,
+                    pj.jabatan_id,
+                    j.kelas_jabatan,
+                    COALESCE(pj.nama_pejabat, ARRAY[]::text[]) AS nama_pejabat
+                 FROM peta_jabatan pj
+                 LEFT JOIN jabatan j ON pj.jabatan_id = j.id
+                 WHERE pj.jabatan_id = $1::uuid
+                 ORDER BY pj.order_index`,
+                [jabatan_id]
+            );
+            return NextResponse.json({ success: true, data: rows });
+        }
 
         // SELECT final agar tidak duplikatif (dipakai di cabang subtree & full tree)
         const FINAL_SELECT = `
@@ -62,11 +96,12 @@ export async function GET(req: NextRequest) {
         t.kebutuhan_pegawai,
         t.is_pusat,
         t.jenis_jabatan,
+        t.jabatan_id,
         j.kelas_jabatan,
-        COALESCE(t.nama_pejabat, ARRAY[]::text[]) AS nama_pejabat
+        t.nama_pejabat
       FROM tree t
       LEFT JOIN jabatan j
-        ON j.peta_id = t.id
+        ON t.jabatan_id = j.id
       ORDER BY t.sort_path
     `;
 
@@ -91,6 +126,7 @@ export async function GET(req: NextRequest) {
             kebutuhan_pegawai,
             is_pusat,
             jenis_jabatan,
+            jabatan_id,
             COALESCE(nama_pejabat, ARRAY[]::text[]) AS nama_pejabat,
             ARRAY[
               lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
@@ -112,6 +148,7 @@ export async function GET(req: NextRequest) {
             c.kebutuhan_pegawai,
             c.is_pusat,
             c.jenis_jabatan,
+            c.jabatan_id,
             COALESCE(c.nama_pejabat, ARRAY[]::text[]),
             t.sort_path || (
               lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
@@ -142,6 +179,7 @@ export async function GET(req: NextRequest) {
           kebutuhan_pegawai,
           is_pusat,
           jenis_jabatan,
+          jabatan_id,
           COALESCE(nama_pejabat, ARRAY[]::text[]) AS nama_pejabat,
           ARRAY[
             lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
@@ -163,6 +201,7 @@ export async function GET(req: NextRequest) {
           c.kebutuhan_pegawai,
           c.is_pusat,
           c.jenis_jabatan,
+          c.jabatan_id,
           COALESCE(c.nama_pejabat, ARRAY[]::text[]),
           t.sort_path || (
             lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
@@ -208,14 +247,13 @@ export async function POST(req: NextRequest) {
             order_index = null,
             is_pusat,
             jenis_jabatan,
+            jabatan_id: manual_jabatan_id = null,
         } = parsed.data;
 
         // Jika parent_id ada, pastikan parent eksis
         if (parent_id) {
-            const p = await pool.query(
-                `SELECT 1
-                 FROM peta_jabatan
-                 WHERE id = $1::uuid LIMIT 1`,
+            const p = await pool.query<{slug: string}>(
+                `SELECT slug FROM peta_jabatan WHERE id = $1::uuid LIMIT 1`,
                 [parent_id]
             );
             if (p.rowCount === 0) {
@@ -226,6 +264,9 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        // Gunakan slug langsung tanpa parent prefix
+        const finalSlug = slug.trim();
+
         // Cek slug unik pada sibling (parent sama)
         const dup = await pool.query<{ exists: boolean }>(
             `
@@ -234,13 +275,45 @@ export async function POST(req: NextRequest) {
                               WHERE parent_id IS NOT DISTINCT FROM $1::uuid
                     AND slug = $2) AS exists
             `,
-            [parent_id, slug.trim()]
+            [parent_id, finalSlug]
         );
         if (dup.rows[0]?.exists) {
             return NextResponse.json(
                 {error: "Slug sudah dipakai di parent yang sama"},
                 {status: 409}
             );
+        }
+
+        // Prioritas: manual_jabatan_id > auto-match
+        let matched_jabatan_id: string | null = manual_jabatan_id;
+        
+        // Auto-match jabatan_id hanya jika tidak ada manual selection
+        if (!matched_jabatan_id) {
+            try {
+                const matchResult = await pool.query<{
+                    id: string;
+                    similarity: number;
+                }>(
+                    `
+                    SELECT 
+                        id,
+                    SIMILARITY(nama_jabatan, $1) as similarity
+                FROM jabatan
+                WHERE SIMILARITY(nama_jabatan, $1) > 0.5
+                ORDER BY similarity DESC
+                LIMIT 1
+                `,
+                    [nama_jabatan.trim()]
+                );
+                
+                if (matchResult.rows.length > 0) {
+                    matched_jabatan_id = matchResult.rows[0].id;
+                    console.log(`Auto-matched jabatan_id: ${matched_jabatan_id} (similarity: ${matchResult.rows[0].similarity})`);
+                }
+            } catch (matchError) {
+                console.warn("Gagal auto-match jabatan_id:", matchError);
+                // Lanjutkan tanpa jabatan_id jika matching gagal
+            }
         }
 
         // Insert: tentukan level & order_index (default MAX+1) via CTE
@@ -264,38 +337,48 @@ export async function POST(req: NextRequest) {
                     ), ins AS (
                 INSERT
                 INTO peta_jabatan
-                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan)
+                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id)
                 VALUES
-                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'))
-                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, bezetting, kebutuhan_pegawai, is_pusat, jenis_jabatan
+                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid)
+                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, bezetting, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id
                     )
                 SELECT *
                 FROM ins
             `,
-            //         $1         $2                 $3           $4          $5           $6        $7
-            [parent_id, nama_jabatan.trim(), slug.trim(), unit_kerja, order_index, is_pusat, jenis_jabatan]
+            //         $1         $2                 $3           $4          $5           $6        $7              $8
+            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id]
         );
 
         const newNode = rows[0];
 
-        // Build full path by traversing parents
-        const pathParts: string[] = [];
-        let currentId: string | null = newNode.id;
-        
-        while (currentId) {
-            const nodeRes = await pool.query<{id: string; parent_id: string | null; slug: string}>(
-                `SELECT id, parent_id, slug FROM peta_jabatan WHERE id = $1`,
-                [currentId]
-            );
-            if (nodeRes.rows.length === 0) break;
-            const node = nodeRes.rows[0];
-            pathParts.unshift(node.slug);
-            currentId = node.parent_id;
+        // Convert slug dash to slash for path (e.g., "setjen-depmin" -> "setjen/depmin")
+        const fullPath = newNode.slug.replace(/-/g, '/');
+
+        // Jika berhasil match, kembalikan info anjab juga
+        let matchInfo = null;
+        if (matched_jabatan_id) {
+            try {
+                const anjabInfo = await pool.query<{ nama_jabatan: string }>(
+                    `SELECT nama_jabatan FROM jabatan WHERE id = $1::uuid LIMIT 1`,
+                    [matched_jabatan_id]
+                );
+                if (anjabInfo.rows.length > 0) {
+                    matchInfo = {
+                        jabatan_id: matched_jabatan_id,
+                        nama_anjab: anjabInfo.rows[0].nama_jabatan
+                    };
+                }
+            } catch (e) {
+                console.warn("Gagal fetch info anjab:", e);
+            }
         }
 
-        const fullPath = pathParts.join('/');
-
-        return NextResponse.json({ok: true, node: newNode, path: fullPath});
+        return NextResponse.json({
+            ok: true, 
+            node: newNode, 
+            path: fullPath,
+            matched_anjab: matchInfo
+        });
     } catch (e: any) {
         if (e?.code === "23505") {
             return NextResponse.json(

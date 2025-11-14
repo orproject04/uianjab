@@ -6,12 +6,13 @@ import Image from "next/image";
 import {usePathname} from "next/navigation";
 
 import {useSidebar} from "../context/SidebarContext";
-import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon, PieChartIcon} from "../icons/index";
+import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon, PieChartIcon, DocsIcon, TaskIcon} from "../icons/index";
 
 import {useMe} from "@/context/MeContext";
 import {createPortal} from "react-dom";
 import Swal from "sweetalert2";
 import {apiFetch} from "@/lib/apiFetch";
+import {CustomSelect} from "@/components/form/CustomSelect";
 
 // Tipe API dan Internal tetap sama
 type APIRow = {
@@ -24,6 +25,7 @@ type APIRow = {
     order_index: number;
     is_pusat?: boolean;
     jenis_jabatan?: string | null;
+    jabatan_id?: string | null;
 };
 
 type SubNavItem = {
@@ -33,6 +35,7 @@ type SubNavItem = {
     unit_kerja?: string | null;
     path: string;
     subItems?: SubNavItem[];
+    jabatan_id?: string | null;
 };
 
 type NavItem = {
@@ -80,6 +83,21 @@ const AppSidebar: React.FC = () => {
     const [addErr, setAddErr] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
     const [slugTouched, setSlugTouched] = useState(false);
+    
+    // State untuk anjab matching
+    const [matchedAnjab, setMatchedAnjab] = useState<{
+        jabatan_id: string;
+        nama_jabatan: string;
+        similarity: number;
+        confidence: string;
+    } | null>(null);
+    const [matchingSuggestions, setMatchingSuggestions] = useState<Array<{
+        id: string;
+        nama_jabatan: string;
+        similarity: number;
+    }>>([]);
+    const [checkingMatch, setCheckingMatch] = useState(false);
+    const [selectedAnjabId, setSelectedAnjabId] = useState<string | null>(null);
 
     // Utility functions tetap sama
     const toSlug = (s: string) => {
@@ -115,6 +133,7 @@ const AppSidebar: React.FC = () => {
                 slug: node.slug,
                 unit_kerja: node.unit_kerja ?? null,
                 path,
+                jabatan_id: node.jabatan_id ?? null,
             };
             if (subItems.length) base.subItems = subItems;
             return base;
@@ -126,10 +145,9 @@ const AppSidebar: React.FC = () => {
     const pathSegments = (fullPath: string) =>
         fullPath.replace(/^anjab\/?/, "").replace(/^\/+/, "").split("/").filter(Boolean);
 
-    const lastTwoDashFromPath = (fullPath: string) => {
+    const pathToSlug = (fullPath: string) => {
         const segs = pathSegments(fullPath);
-        const lastTwo = segs.slice(-2);
-        return lastTwo.join("-");
+        return segs.join("/");
     };
 
     function findNodeById(id: string, items: SubNavItem[]): SubNavItem | null {
@@ -196,6 +214,18 @@ const AppSidebar: React.FC = () => {
 
     const navItems: NavItem[] = [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
+        ...(isAdmin ? [{
+            name: "Master Anjab", 
+            icon: <DocsIcon/>, 
+            path: "/anjab/master", 
+            subItems: []
+        }] : []),
+        ...(isAdmin ? [{
+            name: "Match Anjab", 
+            icon: <TaskIcon/>, 
+            path: "/anjab/match", 
+            subItems: []
+        }] : []),
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
         {name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: []}
@@ -438,16 +468,16 @@ const AppSidebar: React.FC = () => {
             try {
                 const curNode = editFor && findNodeById(editFor.id, anjabSubs);
                 if (curNode) {
-                    const oldPath = curNode.path;
-                    const oldKeySelf = `so:${lastTwoDashFromPath(oldPath)}`;
+                    const oldPath = pathToSlug(curNode.path);
+                    const oldKeySelf = `${oldPath}`;
 
-                    let parentPathNew = "anjab";
+                    let parentPathNew = "";
                     if (editParentId) {
                         const parentNode = findNodeById(String(editParentId), anjabSubs);
-                        if (parentNode) parentPathNew = parentNode.path;
+                        if (parentNode) parentPathNew = pathToSlug(parentNode.path);
                     }
-                    const newPath = `${parentPathNew}/${slug}`;
-                    const newKeySelf = `so:${lastTwoDashFromPath(newPath)}`;
+                    const newPath = parentPathNew ? `${parentPathNew}/${slug}` : slug;
+                    const newKeySelf = `${newPath}`;
 
                     if (oldKeySelf !== newKeySelf) {
                         const val = localStorage.getItem(oldKeySelf) || editFor.id;
@@ -462,12 +492,12 @@ const AppSidebar: React.FC = () => {
 
                     const descendants = collectDescendantNodes(curNode);
                     for (const d of descendants) {
-                        const oldDescPath = d.path;
-                        const rel = oldDescPath.slice(oldPath.length);
-                        const newDescPath = `${newPath}${rel}`;
+                        const oldDescPath = pathToSlug(d.path);
+                        const rel = pathToSlug(d.path).slice(pathToSlug(curNode.path).length).replace(/^\//, "");
+                        const newDescPath = newPath ? `${newPath}/${rel}` : rel;
 
-                        const oldDescKey = `so:${lastTwoDashFromPath(oldDescPath)}`;
-                        const newDescKey = `so:${lastTwoDashFromPath(newDescPath)}`;
+                        const oldDescKey = `${oldDescPath}`;
+                        const newDescKey = `${newDescPath}`;
                         if (oldDescKey === newDescKey) continue;
 
                         const v = localStorage.getItem(oldDescKey) || d.id;
@@ -494,15 +524,72 @@ const AppSidebar: React.FC = () => {
     const openAddModal = (parent: SubNavItem) => {
         setAddParentFor(parent);
         setAddErr(null);
-        setAddName("Penata Kelola Sistem dan Teknologi Informasi");
-        setAddSlug("pksti");
+        setAddName("");
+        setAddSlug("");
         setAddOrder("");
         setAddUnitKerja("");
         setAddIsPusat("true");
         setAddJenisJabatan("");
         setSlugTouched(false);
+        setMatchedAnjab(null);
+        setMatchingSuggestions([]);
+        setSelectedAnjabId(null);
         setShowAdd(true);
     };
+
+    // Function untuk check matching anjab
+    const checkAnjabMatch = useCallback(async (namaJabatan: string) => {
+        if (!namaJabatan.trim() || namaJabatan.length < 3) {
+            setMatchedAnjab(null);
+            setMatchingSuggestions([]);
+            return;
+        }
+
+        setCheckingMatch(true);
+        try {
+            const res = await apiFetch(
+                `/api/anjab/match?nama_jabatan=${encodeURIComponent(namaJabatan.trim())}`,
+                { cache: "no-store" }
+            );
+            
+            if (!res.ok) {
+                console.warn("Gagal check anjab match");
+                setMatchedAnjab(null);
+                setMatchingSuggestions([]);
+                return;
+            }
+
+            const data = await res.json();
+            
+            if (data.match) {
+                setMatchedAnjab(data.match);
+                setMatchingSuggestions(data.alternatives || []);
+                console.log('✓ Match found:', data.match);
+                console.log('  Alternatives:', data.alternatives);
+            } else {
+                setMatchedAnjab(null);
+                setMatchingSuggestions(data.suggestions || []);
+                console.log('⚠️ No match, suggestions:', data.suggestions);
+            }
+        } catch (e) {
+            console.error("Error checking anjab match:", e);
+            setMatchedAnjab(null);
+            setMatchingSuggestions([]);
+        } finally {
+            setCheckingMatch(false);
+        }
+    }, []);
+
+    // Debounce untuk check matching
+    useEffect(() => {
+        if (!showAdd || !addName) return;
+        
+        const timer = setTimeout(() => {
+            checkAnjabMatch(addName);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [addName, showAdd, checkAnjabMatch]);
 
     const submitAdd = useCallback(async () => {
         if (!addParentFor) return;
@@ -524,6 +611,14 @@ const AppSidebar: React.FC = () => {
         const jenis_jabatan = addJenisJabatan || null;
 
         const body: any = {parent_id, nama_jabatan, slug, unit_kerja, is_pusat, jenis_jabatan};
+        
+        // Prioritas: selectedAnjabId (manual) > matchedAnjab (auto)
+        if (selectedAnjabId) {
+            body.jabatan_id = selectedAnjabId;
+        } else if (matchedAnjab) {
+            body.jabatan_id = matchedAnjab.jabatan_id;
+        }
+        
         if (addOrder.trim() !== "") {
             const parsed = Number(addOrder);
             if (!Number.isFinite(parsed)) {
@@ -547,9 +642,9 @@ const AppSidebar: React.FC = () => {
             try {
                 const newId: string | undefined = json?.node?.id;
                 if (newId && addParentFor) {
-                    const parentPath = addParentFor.path;
+                    const parentPath = pathToSlug(addParentFor.path);
                     const newPath = `${parentPath}/${slug}`;
-                    const key = `so:${lastTwoDashFromPath(newPath)}`;
+                    const key = `${newPath}`;
                     localStorage.setItem(key, newId);
                 }
             } catch {
@@ -557,13 +652,79 @@ const AppSidebar: React.FC = () => {
 
             setShowAdd(false);
             await loadData();
-            await Swal.fire({icon: "success", title: "Jabatan berhasil ditambah", timer: 1000, showConfirmButton: false});
+            
+            // Tentukan nama anjab yang digunakan
+            let usedAnjabName = null;
+            if (selectedAnjabId) {
+                // User memilih manual dari suggestions
+                const selected = matchingSuggestions.find(s => s.id === selectedAnjabId);
+                usedAnjabName = selected?.nama_jabatan;
+            } else if (json?.matched_anjab) {
+                // Auto-match dari backend
+                usedAnjabName = json.matched_anjab.nama_anjab;
+            }
+            
+            // Tampilkan success message dengan info anjab jika ada
+            if (usedAnjabName) {
+                await Swal.fire({
+                    icon: "success", 
+                    title: "Jabatan berhasil ditambah", 
+                    html: `<div class="text-sm">
+                        <p class="mb-2">Jabatan <b>${nama_jabatan}</b> berhasil ditambahkan.</p>
+                        <div class="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 mt-2">
+                            <div class="font-medium">✓ Anjab ${selectedAnjabId ? 'yang dipilih' : 'terdeteksi'}:</div>
+                            <div class="mt-1">${usedAnjabName}</div>
+                        </div>
+                    </div>`,
+                    timer: 3000, 
+                    showConfirmButton: false
+                });
+            } else {
+                await Swal.fire({
+                    icon: "success", 
+                    title: "Jabatan berhasil ditambah", 
+                    html: `<div class="text-sm">
+                        <p class="mb-2">Jabatan <b>${nama_jabatan}</b> berhasil ditambahkan.</p>
+                        <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg px-3 py-2 mt-2 text-xs">
+                            ⚠️ Tidak ada anjab yang cocok. Silakan tambahkan anjab master secara manual.
+                        </div>
+                    </div>`,
+                    timer: 3000, 
+                    showConfirmButton: false
+                });
+            }
         } catch (e: any) {
             setAddErr(e?.message || "Gagal menambah jabatan.");
         } finally {
             setAdding(false);
         }
-    }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, addIsPusat, addJenisJabatan, loadData]);
+    }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, addIsPusat, addJenisJabatan, selectedAnjabId, matchedAnjab, matchingSuggestions, loadData]);
+
+    // Auto-scroll to active item in sidebar
+    useEffect(() => {
+        if (!pathname || pathname === '/') return;
+        
+        // Wait for DOM to update and submenu animations to complete
+        const timer = setTimeout(() => {
+            const activeLink = document.querySelector('aside a.bg-purple-50.text-purple-700') as HTMLElement;
+            if (activeLink) {
+                const nav = activeLink.closest('nav') as HTMLElement;
+                if (nav) {
+                    const navRect = nav.getBoundingClientRect();
+                    const linkRect = activeLink.getBoundingClientRect();
+                    const scrollTop = nav.scrollTop;
+                    const targetScroll = scrollTop + (linkRect.top - navRect.top) - (navRect.height / 2) + (linkRect.height / 2);
+                    
+                    nav.scrollTo({ 
+                        top: targetScroll, 
+                        behavior: 'smooth' 
+                    });
+                }
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [pathname]);
 
     const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({node}) => {
         if (!isAdmin) return null;
@@ -885,8 +1046,11 @@ const AppSidebar: React.FC = () => {
         try {
             const seed = (nodes: SubNavItem[]) => {
                 for (const n of nodes) {
-                    const key = `so:${lastTwoDashFromPath(n.path)}`;
-                    localStorage.setItem(key, n.id);
+                    const key = pathToSlug(n.path);
+                    // Save jabatan_id if available, otherwise skip
+                    if (n.jabatan_id) {
+                        localStorage.setItem(key, n.jabatan_id);
+                    }
                     if (n.subItems?.length) seed(n.subItems);
                 }
             };
@@ -973,8 +1137,8 @@ const AppSidebar: React.FC = () => {
                                         onChange={(e) => {
                                             const v = e.target.value;
                                             setEditName(v);
-                                            if (!editSlug) setEditSlug(toSlug(v));
                                         }}
+                                        placeholder="Masukkan nama jabatan"
                                     />
                                 </div>
 
@@ -984,7 +1148,11 @@ const AppSidebar: React.FC = () => {
                                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         value={editSlug}
                                         onChange={(e) => setEditSlug(toSlug(e.target.value))}
+                                        placeholder="Contoh: pksti"
                                     />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Kode unik untuk URL jabatan
+                                    </p>
                                 </div>
 
                                 <div>
@@ -999,33 +1167,35 @@ const AppSidebar: React.FC = () => {
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Pusat / Daerah</label>
-                                    <select
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    <CustomSelect
                                         value={editIsPusat}
-                                        onChange={(e) => setEditIsPusat(e.target.value)}
-                                    >
-                                        <option value="true">Pusat</option>
-                                        <option value="false">Daerah</option>
-                                    </select>
+                                        onChange={(val) => setEditIsPusat(val)}
+                                        options={[
+                                            { value: "true", label: "Pusat" },
+                                            { value: "false", label: "Daerah" }
+                                        ]}
+                                    />
                                 </div>
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Jenis Jabatan</label>
-                                    <select
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    <CustomSelect
                                         value={editJenisJabatan}
-                                        onChange={(e) => setEditJenisJabatan(e.target.value)}
-                                    >
-                                        <option value="">(Pilih Jenis Jabatan)</option>
-                                        <option value="ESELON I">ESELON I</option>
-                                        <option value="ESELON II">ESELON II</option>
-                                        <option value="ESELON III">ESELON III</option>
-                                        <option value="ESELON IV">ESELON IV</option>
-                                        <option value="JABATAN FUNGSIONAL">JABATAN FUNGSIONAL</option>
-                                        <option value="JABATAN PELAKSANA">JABATAN PELAKSANA</option>
-                                        <option value="PEGAWAI DPK">PEGAWAI DPK</option>
-                                        <option value="PEGAWAI CLTN">PEGAWAI CLTN</option>
-                                    </select>
+                                        onChange={(val) => setEditJenisJabatan(val)}
+                                        options={[
+                                            { value: "", label: "(Pilih Jenis Jabatan)" },
+                                            { value: "ESELON I", label: "ESELON I" },
+                                            { value: "ESELON II", label: "ESELON II" },
+                                            { value: "ESELON III", label: "ESELON III" },
+                                            { value: "ESELON IV", label: "ESELON IV" },
+                                            { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
+                                            { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
+                                            { value: "PEGAWAI DPK", label: "PEGAWAI DPK" },
+                                            { value: "PEGAWAI CLTN", label: "PEGAWAI CLTN" }
+                                        ]}
+                                        placeholder="Pilih Jenis Jabatan"
+                                        searchable={true}
+                                    />
                                 </div>
 
                                 {/*<div>*/}
@@ -1041,17 +1211,16 @@ const AppSidebar: React.FC = () => {
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Atasan</label>
-                                    <select
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    <CustomSelect
                                         value={editParentId}
-                                        onChange={(e) => setEditParentId(e.target.value as any)}
-                                    >
-                                        {parentOptions.map((o) => (
-                                            <option key={String(o.id)} value={o.id as any}>
-                                                {o.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={(val) => setEditParentId(val as any)}
+                                        options={parentOptions.map((o) => ({
+                                            value: String(o.id),
+                                            label: o.label
+                                        }))}
+                                        placeholder="Pilih Atasan"
+                                        searchable={true}
+                                    />
                                     <p className="mt-1.5 text-xs text-gray-500">
                                         Memindahkan jabatan juga memindahkan seluruh jabatan dibawahnya.
                                     </p>
@@ -1097,11 +1266,130 @@ const AppSidebar: React.FC = () => {
                                         onChange={(e) => {
                                             const v = e.target.value;
                                             setAddName(v);
-                                            if (!slugTouched) setAddSlug(toSlug(v));
+                                            if (!slugTouched && v.trim()) {
+                                                setAddSlug(toSlug(v));
+                                            }
                                         }}
                                         autoFocus
+                                        placeholder="Masukkan nama jabatan"
                                     />
                                 </div>
+
+                                {/* Anjab Match Indicator */}
+                                {checkingMatch && (
+                                    <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                                        <svg className="animate-spin h-4 w-4 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Mencari anjab yang cocok...
+                                    </div>
+                                )}
+
+                                {!checkingMatch && matchedAnjab && (
+                                    <div className={`text-xs border rounded-lg px-3 py-2 ${
+                                        matchedAnjab.confidence === 'high' 
+                                            ? 'bg-green-50 border-green-200 text-green-700' 
+                                            : 'bg-blue-50 border-blue-200 text-blue-700'
+                                    }`}>
+                                        <div className="flex items-start gap-2">
+                                            <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                                            </svg>
+                                            <div className="flex-1">
+                                                <div className="font-medium">
+                                                    {matchedAnjab.confidence === 'high' ? '✓ Anjab cocok ditemukan!' : 'Anjab mirip ditemukan'}
+                                                </div>
+                                                <div className="mt-1">{matchedAnjab.nama_jabatan}</div>
+                                                <div className="mt-0.5 text-xs opacity-75">
+                                                    Kemiripan: {(matchedAnjab.similarity * 100).toFixed(0)}%
+                                                </div>
+                                                {matchingSuggestions.length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            // Override dengan suggestions
+                                                            setMatchedAnjab(null);
+                                                        }}
+                                                        className="mt-2 text-xs underline hover:no-underline"
+                                                    >
+                                                        Pilih anjab lain dari saran
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!checkingMatch && !matchedAnjab && matchingSuggestions.length > 0 && (
+                                    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-3">
+                                        <div className="flex items-start gap-2 mb-3">
+                                            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                                            </svg>
+                                            <div className="flex-1">
+                                                <div className="font-semibold text-yellow-800 text-sm mb-1">⚠️ Tidak ada anjab yang cocok</div>
+                                                <div className="text-xs text-yellow-700">Pilih salah satu anjab yang mirip di bawah ini:</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-2">
+                                            {matchingSuggestions.slice(0, 5).map((sug) => (
+                                                <button
+                                                    key={sug.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        console.log('Selected anjab:', sug.nama_jabatan, sug.id);
+                                                        setSelectedAnjabId(sug.id);
+                                                    }}
+                                                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                                        selectedAnjabId === sug.id
+                                                            ? 'bg-purple-600 border-2 border-purple-700 text-white font-semibold shadow-md'
+                                                            : 'bg-white border-2 border-gray-300 text-gray-800 hover:border-purple-400 hover:bg-purple-50 hover:shadow'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex-1">
+                                                            <div className={`font-medium ${selectedAnjabId === sug.id ? 'text-white' : 'text-gray-900'}`}>
+                                                                {sug.nama_jabatan}
+                                                            </div>
+                                                            <div className={`text-xs mt-1 ${selectedAnjabId === sug.id ? 'text-purple-100' : 'text-gray-600'}`}>
+                                                                Kemiripan: {(sug.similarity * 100).toFixed(0)}%
+                                                            </div>
+                                                        </div>
+                                                        {selectedAnjabId === sug.id && (
+                                                            <div className="flex-shrink-0">
+                                                                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        
+                                        {selectedAnjabId && (
+                                            <div className="mt-3 pt-3 border-t border-yellow-300">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="text-xs text-yellow-800 font-medium">
+                                                        ✓ Anjab dipilih: {matchingSuggestions.find(s => s.id === selectedAnjabId)?.nama_jabatan}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            console.log('Cancelled selection');
+                                                            setSelectedAnjabId(null);
+                                                        }}
+                                                        className="text-xs text-purple-700 hover:text-purple-900 underline font-medium"
+                                                    >
+                                                        Batal
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Kode Penamaan Jabatan</label>
@@ -1112,8 +1400,11 @@ const AppSidebar: React.FC = () => {
                                             setAddSlug(toSlug(e.target.value));
                                             setSlugTouched(true);
                                         }}
-                                        placeholder="mis. depmin-okk"
+                                        placeholder="Otomatis dari nama atau ketik manual"
                                     />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Kode unik untuk URL jabatan
+                                    </p>
                                 </div>
 
                                 <div>
@@ -1128,33 +1419,35 @@ const AppSidebar: React.FC = () => {
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Pusat / Daerah</label>
-                                    <select
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    <CustomSelect
                                         value={addIsPusat}
-                                        onChange={(e) => setAddIsPusat(e.target.value)}
-                                    >
-                                        <option value="true">Pusat</option>
-                                        <option value="false">Daerah</option>
-                                    </select>
+                                        onChange={(val) => setAddIsPusat(val)}
+                                        options={[
+                                            { value: "true", label: "Pusat" },
+                                            { value: "false", label: "Daerah" }
+                                        ]}
+                                    />
                                 </div>
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Jenis Jabatan</label>
-                                    <select
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    <CustomSelect
                                         value={addJenisJabatan}
-                                        onChange={(e) => setAddJenisJabatan(e.target.value)}
-                                    >
-                                        <option value="">(Pilih Jenis Jabatan)</option>
-                                        <option value="ESELON I">ESELON I</option>
-                                        <option value="ESELON II">ESELON II</option>
-                                        <option value="ESELON III">ESELON III</option>
-                                        <option value="ESELON IV">ESELON IV</option>
-                                        <option value="JABATAN FUNGSIONAL">JABATAN FUNGSIONAL</option>
-                                        <option value="JABATAN PELAKSANA">JABATAN PELAKSANA</option>
-                                        <option value="PEGAWAI DPK">PEGAWAI DPK</option>
-                                        <option value="PEGAWAI CLTN">PEGAWAI CLTN</option>
-                                    </select>
+                                        onChange={(val) => setAddJenisJabatan(val)}
+                                        options={[
+                                            { value: "", label: "(Pilih Jenis Jabatan)" },
+                                            { value: "ESELON I", label: "ESELON I" },
+                                            { value: "ESELON II", label: "ESELON II" },
+                                            { value: "ESELON III", label: "ESELON III" },
+                                            { value: "ESELON IV", label: "ESELON IV" },
+                                            { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
+                                            { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
+                                            { value: "PEGAWAI DPK", label: "PEGAWAI DPK" },
+                                            { value: "PEGAWAI CLTN", label: "PEGAWAI CLTN" }
+                                        ]}
+                                        placeholder="Pilih Jenis Jabatan"
+                                        searchable={true}
+                                    />
                                 </div>
 
                                 {/*<div>*/}

@@ -650,9 +650,9 @@ export default function TugasPokokForm({ viewerPath }: { viewerPath: string; }) 
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                             <NumberInput label="Nomor" value={row.nomor_tugas} onChange={(v) => updateLocal(idx, {nomor_tugas: v})}/>
-                                            <NumberInput label="Jumlah Hasil" value={row.jumlah_hasil} onChange={(v) => updateLocal(idx, {jumlah_hasil: v})}/>
-                                            <NumberInput label="Waktu Penyelesaian (jam)" value={row.waktu_penyelesaian_jam} onChange={(v) => updateLocal(idx, {waktu_penyelesaian_jam: v})}/>
-                                            <NumberInput label="Waktu Efektif" value={row.waktu_efektif} onChange={(v) => updateLocal(idx, {waktu_efektif: v})}/>
+                                            <NumberInput label="Jumlah Hasil" value={row.jumlah_hasil} onChange={(v) => updateLocal(idx, {jumlah_hasil: v})} disabled/>
+                                            <NumberInput label="Waktu Penyelesaian (jam)" value={row.waktu_penyelesaian_jam} onChange={(v) => updateLocal(idx, {waktu_penyelesaian_jam: v})} disabled/>
+                                            <NumberInput label="Waktu Efektif" value={row.waktu_efektif} onChange={(v) => updateLocal(idx, {waktu_efektif: v})} disabled/>
                                         </div>
 
                                         <div>
@@ -717,8 +717,8 @@ export default function TugasPokokForm({ viewerPath }: { viewerPath: string; }) 
 
 /** ================== Subcomponents kecil ================== */
 function NumberInput({
-                         label, value, onChange,
-                     }: { label: string; value: number | null; onChange: (v: number | null) => void; }) {
+                         label, value, onChange, disabled,
+                     }: { label: string; value: number | null; onChange: (v: number | null) => void; disabled?: boolean; }) {
     return (
         <div>
             <label className="block text-sm font-bold mb-1">{label}</label>
@@ -726,9 +726,10 @@ function NumberInput({
                 type="number"
                 value={value ?? ""}
                 onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
-                className="w-full rounded border px-3 py-2"
+                className={`w-full rounded border px-3 py-2 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 inputMode="numeric"
                 pattern="[0-9]*"
+                disabled={disabled}
             />
         </div>
     );

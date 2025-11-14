@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiFetch";
 import { useRouter } from "next/navigation";
+import { CustomSelect } from "@/components/form/CustomSelect";
+import Swal from "sweetalert2";
 
 type APIRow = {
   id: string;
@@ -36,15 +38,30 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
   const [loadingParents, setLoadingParents] = useState(false);
 
   // Form fields
-  const [namaJabatan, setNamaJabatan] = useState("Penata Kelola Sistem dan Teknologi Informasi");
-  const [slug, setSlug] = useState("pksti");
+  const [namaJabatan, setNamaJabatan] = useState("");
+  const [slug, setSlug] = useState("");
   const [parentId, setParentId] = useState<string | "">("");
   const [unitKerja, setUnitKerja] = useState("");
   const [orderIndex, setOrderIndex] = useState("");
   const [isPusat, setIsPusat] = useState("true");
-  const [jenisJabatan, setJenisJabatan] = useState("JABATAN PELAKSANA");
+  const [jenisJabatan, setJenisJabatan] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [slugTouched, setSlugTouched] = useState(false);
+  
+  // Anjab matching states
+  const [matchedAnjab, setMatchedAnjab] = useState<{
+    jabatan_id: string;
+    nama_jabatan: string;
+    similarity: number;
+    confidence: string;
+  } | null>(null);
+  const [matchingSuggestions, setMatchingSuggestions] = useState<Array<{
+    id: string;
+    nama_jabatan: string;
+    similarity: number;
+  }>>([]);
+  const [checkingMatch, setCheckingMatch] = useState(false);
+  const [selectedAnjabId, setSelectedAnjabId] = useState<string | null>(null);
 
   // Auto-generate slug from nama jabatan
   const toSlug = (s: string) => {
@@ -151,6 +168,56 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
     suggestJenisJabatan();
   }, [parentId, isOpen]);
 
+  // Check anjab matching
+  const checkAnjabMatch = useCallback(async (namaJabatan: string) => {
+    if (!namaJabatan.trim() || namaJabatan.length < 3) {
+      setMatchedAnjab(null);
+      setMatchingSuggestions([]);
+      return;
+    }
+
+    setCheckingMatch(true);
+    try {
+      const res = await apiFetch(
+        `/api/anjab/match?nama_jabatan=${encodeURIComponent(namaJabatan.trim())}`,
+        { cache: "no-store" }
+      );
+      
+      if (!res.ok) {
+        setMatchedAnjab(null);
+        setMatchingSuggestions([]);
+        return;
+      }
+
+      const data = await res.json();
+      
+      if (data.match) {
+        setMatchedAnjab(data.match);
+        setMatchingSuggestions(data.alternatives || []);
+      } else {
+        setMatchedAnjab(null);
+        setMatchingSuggestions(data.suggestions || []);
+      }
+    } catch (e) {
+      console.error("Error checking anjab match:", e);
+      setMatchedAnjab(null);
+      setMatchingSuggestions([]);
+    } finally {
+      setCheckingMatch(false);
+    }
+  }, []);
+
+  // Debounce anjab matching
+  useEffect(() => {
+    if (!isOpen || !namaJabatan) return;
+    
+    const timer = setTimeout(() => {
+      checkAnjabMatch(namaJabatan);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [namaJabatan, isOpen, checkAnjabMatch]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -177,6 +244,13 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
         is_pusat: isPusat === "true",
         jenis_jabatan: jenisJabatan.trim() || null,
       };
+      
+      // Add jabatan_id if matched
+      if (selectedAnjabId) {
+        payload.jabatan_id = selectedAnjabId;
+      } else if (matchedAnjab) {
+        payload.jabatan_id = matchedAnjab.jabatan_id;
+      }
 
       const res = await apiFetch("/api/peta-jabatan", {
         method: "POST",
@@ -197,6 +271,39 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
       // Trigger sidebar refresh by dispatching custom event
       window.dispatchEvent(new CustomEvent('anjab-tree-updated'));
 
+      // Determine anjab name used
+      let usedAnjabName = null;
+      if (selectedAnjabId) {
+        const selected = matchingSuggestions.find(s => s.id === selectedAnjabId);
+        usedAnjabName = selected?.nama_jabatan;
+      } else if (created?.matched_anjab) {
+        usedAnjabName = created.matched_anjab.nama_anjab;
+      }
+      
+      // Show success message
+      if (usedAnjabName) {
+        await Swal.fire({
+          icon: "success", 
+          title: "Jabatan berhasil ditambah", 
+          html: `<div class="text-sm">
+            <p class="mb-2">Jabatan <b>${namaJabatan}</b> berhasil ditambahkan.</p>
+            <div class="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 mt-2">
+              <div class="font-medium">✓ Anjab ${selectedAnjabId ? 'yang dipilih' : 'terdeteksi'}:</div>
+              <div class="mt-1">${usedAnjabName}</div>
+            </div>
+          </div>`,
+          timer: 3000, 
+          showConfirmButton: false
+        });
+      } else {
+        await Swal.fire({
+          icon: "success", 
+          title: "Jabatan berhasil ditambah", 
+          timer: 1500, 
+          showConfirmButton: false
+        });
+      }
+
       // Navigate to the new jabatan using the full path
       const fullPath = created.path || created.node?.slug || 'undefined';
       router.push(`/anjab/${fullPath}`);
@@ -212,15 +319,18 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
     if (!loading) {
       onClose();
       // Reset form
-      setNamaJabatan("Penata Kelola Sistem dan Teknologi Informasi");
-      setSlug("pksti");
+      setNamaJabatan("");
+      setSlug("");
       setParentId("");
       setUnitKerja("");
       setOrderIndex("");
       setIsPusat("true");
-      setJenisJabatan("JABATAN PELAKSANA");
+      setJenisJabatan("");
       setError(null);
       setSlugTouched(false);
+      setMatchedAnjab(null);
+      setMatchingSuggestions([]);
+      setSelectedAnjabId(null);
     }
   };
 
@@ -258,8 +368,116 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Contoh: Penata Kelola Sistem dan Teknologi Informasi"
                     disabled={loading}
+                    autoFocus
                 />
               </div>
+
+              {/* Anjab Match Indicator */}
+              {checkingMatch && (
+                <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Mencari anjab yang cocok...
+                </div>
+              )}
+
+              {!checkingMatch && matchedAnjab && (
+                <div className={`text-xs border rounded-lg px-3 py-2 ${
+                  matchedAnjab.confidence === 'high' 
+                    ? 'bg-green-50 border-green-200 text-green-700' 
+                    : 'bg-blue-50 border-blue-200 text-blue-700'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                    </svg>
+                    <div className="flex-1">
+                      <div className="font-medium">
+                        {matchedAnjab.confidence === 'high' ? '✓ Anjab cocok ditemukan!' : 'Anjab mirip ditemukan'}
+                      </div>
+                      <div className="mt-1">{matchedAnjab.nama_jabatan}</div>
+                      <div className="mt-0.5 text-xs opacity-75">
+                        Kemiripan: {(matchedAnjab.similarity * 100).toFixed(0)}%
+                      </div>
+                      {matchingSuggestions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setMatchedAnjab(null)}
+                          className="mt-2 text-xs underline hover:no-underline"
+                        >
+                          Pilih anjab lain dari saran
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!checkingMatch && !matchedAnjab && matchingSuggestions.length > 0 && (
+                <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-3">
+                  <div className="flex items-start gap-2 mb-3">
+                    <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                    </svg>
+                    <div className="flex-1">
+                      <div className="font-semibold text-yellow-800 text-sm mb-1">⚠️ Tidak ada anjab yang cocok</div>
+                      <div className="text-xs text-yellow-700">Pilih salah satu anjab yang mirip di bawah ini:</div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {matchingSuggestions.slice(0, 5).map((sug) => (
+                      <button
+                        key={sug.id}
+                        type="button"
+                        onClick={() => setSelectedAnjabId(sug.id)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all ${
+                          selectedAnjabId === sug.id
+                            ? 'bg-purple-600 border-2 border-purple-700 text-white font-semibold shadow-md'
+                            : 'bg-white border-2 border-gray-300 text-gray-800 hover:border-purple-400 hover:bg-purple-50 hover:shadow'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1">
+                            <div className={`font-medium ${selectedAnjabId === sug.id ? 'text-white' : 'text-gray-900'}`}>
+                              {sug.nama_jabatan}
+                            </div>
+                            <div className={`text-xs mt-1 ${selectedAnjabId === sug.id ? 'text-purple-100' : 'text-gray-600'}`}>
+                              Kemiripan: {(sug.similarity * 100).toFixed(0)}%
+                            </div>
+                          </div>
+                          {selectedAnjabId === sug.id && (
+                            <div className="flex-shrink-0">
+                              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {selectedAnjabId && (
+                    <div className="mt-3 pt-3 border-t border-yellow-300">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-yellow-800 font-medium">
+                          ✓ Anjab dipilih: {matchingSuggestions.find(s => s.id === selectedAnjabId)?.nama_jabatan}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAnjabId(null)}
+                          className="text-xs text-purple-700 hover:text-purple-900 underline font-medium"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Slug */}
               <div>
@@ -274,9 +492,12 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
                       setSlugTouched(true);
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="pksti"
+                    placeholder="Otomatis dari nama atau ketik manual"
                     disabled={loading}
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Kode unik untuk URL jabatan
+                </p>
               </div>
 
               {/* Parent Jabatan */}
@@ -289,18 +510,16 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
                       Memuat data jabatan...
                     </div>
                 ) : (
-                    <select
+                    <CustomSelect
                         value={parentId}
-                        onChange={(e) => setParentId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        disabled={loading || loadingParents}
-                    >
-                      {parentOptions.map((opt) => (
-                          <option key={opt.id || "root"} value={opt.id}>
-                            {opt.label}
-                          </option>
-                      ))}
-                    </select>
+                        onChange={(val) => setParentId(val)}
+                        options={parentOptions.map(opt => ({
+                          value: String(opt.id),
+                          label: opt.label
+                        }))}
+                        placeholder="Pilih Atasan"
+                        searchable={true}
+                    />
                 )}
               </div>
 
@@ -341,15 +560,14 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Lokasi
                   </label>
-                  <select
+                  <CustomSelect
                       value={isPusat}
-                      onChange={(e) => setIsPusat(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      disabled={loading}
-                  >
-                    <option value="true">Pusat</option>
-                    <option value="false">Daerah</option>
-                  </select>
+                      onChange={(val) => setIsPusat(val)}
+                      options={[
+                        { value: "true", label: "Pusat" },
+                        { value: "false", label: "Daerah" }
+                      ]}
+                  />
                 </div>
 
                 {/* Jenis Jabatan */}
@@ -357,19 +575,23 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Jenis Jabatan <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <CustomSelect
                       value={jenisJabatan}
-                      onChange={(e) => setJenisJabatan(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      disabled={loading}
-                  >
-                    <option value="ESELON I">Eselon I</option>
-                    <option value="ESELON II">Eselon II</option>
-                    <option value="ESELON III">Eselon III</option>
-                    <option value="ESELON IV">Eselon IV</option>
-                    <option value="JABATAN FUNGSIONAL">Jabatan Fungsional</option>
-                    <option value="JABATAN PELAKSANA">Jabatan Pelaksana</option>
-                  </select>
+                      onChange={(val) => setJenisJabatan(val)}
+                      options={[
+                        { value: "", label: "(Pilih Jenis Jabatan)" },
+                        { value: "ESELON I", label: "ESELON I" },
+                        { value: "ESELON II", label: "ESELON II" },
+                        { value: "ESELON III", label: "ESELON III" },
+                        { value: "ESELON IV", label: "ESELON IV" },
+                        { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
+                        { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
+                        { value: "PEGAWAI DPK", label: "PEGAWAI DPK" },
+                        { value: "PEGAWAI CLTN", label: "PEGAWAI CLTN" }
+                      ]}
+                      placeholder="Pilih Jenis Jabatan"
+                      searchable={true}
+                  />
                 </div>
               </div>
             </div>

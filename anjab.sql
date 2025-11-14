@@ -98,6 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_expires    ON password_reset(expir
 CREATE TABLE IF NOT EXISTS peta_jabatan (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id    uuid NULL REFERENCES peta_jabatan(id) ON DELETE CASCADE,
+  jabatan_id   uuid NULL REFERENCES jabatan(id) ON DELETE SET NULL,
   nama_jabatan text NOT NULL,
   unit_kerja   text,
   slug         text NOT NULL,
@@ -115,6 +116,7 @@ CREATE TABLE IF NOT EXISTS peta_jabatan (
 CREATE INDEX IF NOT EXISTS idx_so_parent      ON peta_jabatan(parent_id);
 CREATE INDEX IF NOT EXISTS idx_so_parent_ord  ON peta_jabatan(parent_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_so_level       ON peta_jabatan(level);
+CREATE INDEX IF NOT EXISTS idx_so_jabatan     ON peta_jabatan(jabatan_id);
 
 DROP TRIGGER IF EXISTS so_touch ON peta_jabatan;
 CREATE TRIGGER so_touch
@@ -154,8 +156,6 @@ CREATE TABLE IF NOT EXISTS jabatan (
   ikhtisar_jabatan    text,
   kelas_jabatan       text,
   prestasi_diharapkan text,
-  slug                text,
-  peta_id             uuid REFERENCES peta_jabatan(id) ON DELETE SET NULL,
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
@@ -439,12 +439,33 @@ CREATE TRIGGER trg_touch_parent_syarat
 AFTER INSERT OR UPDATE OR DELETE ON syarat_jabatan
 FOR EACH ROW EXECUTE FUNCTION touch_parent_jabatan();
 
+/* ---------------- ABK per Position ---------------- */
+
+CREATE TABLE IF NOT EXISTS tugas_pokok_abk (
+  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  peta_jabatan_id          uuid NOT NULL REFERENCES peta_jabatan(id) ON DELETE CASCADE,
+  tugas_pokok_id           int NOT NULL REFERENCES tugas_pokok(id) ON DELETE CASCADE,
+  jumlah_hasil             numeric(10,2),
+  waktu_penyelesaian_jam   numeric(10,2),
+  waktu_efektif            numeric(10,2),
+  kebutuhan_pegawai        numeric(10,2),
+  created_at               timestamptz NOT NULL DEFAULT now(),
+  updated_at               timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_peta_tugas UNIQUE (peta_jabatan_id, tugas_pokok_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tugas_pokok_abk_peta  ON tugas_pokok_abk(peta_jabatan_id);
+CREATE INDEX IF NOT EXISTS idx_tugas_pokok_abk_tugas ON tugas_pokok_abk(tugas_pokok_id);
+
+DROP TRIGGER IF EXISTS tugas_pokok_abk_touch ON tugas_pokok_abk;
+CREATE TRIGGER tugas_pokok_abk_touch
+BEFORE UPDATE ON tugas_pokok_abk
+FOR EACH ROW EXECUTE FUNCTION trg_touch_updated_at();
+
 /* ============================================================================
    INDEX tambahan
    ============================================================================ */
 CREATE INDEX IF NOT EXISTS idx_jabatan_id           ON jabatan (id);
-CREATE INDEX IF NOT EXISTS idx_jabatan_slug         ON jabatan (slug);
-CREATE INDEX IF NOT EXISTS idx_jabatan_peta_id      ON jabatan (peta_id);
 CREATE INDEX IF NOT EXISTS idx_jabatan_updated_at   ON jabatan (updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_unit_kerja_jabatan       ON unit_kerja (jabatan_id);

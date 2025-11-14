@@ -8,12 +8,18 @@ import {apiFetch} from "@/lib/apiFetch";
 
 const MySwal = withReactContent(Swal);
 
+const DEFAULT_ACCEPT = ".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 interface WordAbkProps {
     id: string; // jabatan_id (UUID)
+    petaJabatanId: string; // peta_jabatan_id (UUID) - spesifik untuk posisi ini
+    viewerPath: string; // untuk redirect setelah berhasil
+    acceptExt?: string;
 }
 
-export default function WordAbk({id}: WordAbkProps) {
+export default function WordAbk({id, petaJabatanId, viewerPath, acceptExt = DEFAULT_ACCEPT}: WordAbkProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const clearFileInput = () => {
@@ -40,29 +46,66 @@ export default function WordAbk({id}: WordAbkProps) {
         return result.isConfirmed;
     };
 
-    const showResultModal = async (success: boolean, message: string, detailsHtml = "") => {
-        await Swal.fire({
-            title: success ? "Berhasil" : "Gagal",
-            html: `
-        <p>${message}</p>
-        ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ""}
-      `,
-            icon: success ? "success" : "error",
-            confirmButtonColor: success ? "#10B981" : "#EF4444",
-            width: "520px",
-            allowOutsideClick: true,
-            allowEscapeKey: true,
-            didClose: () => {
-                if (success) window.location.reload();
-            },
-        });
+    const parseAccept = (accept: string) => {
+        const items = accept.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        const exts = new Set<string>();
+        const mimes = new Set<string>();
+        for (const it of items) {
+            if (it.startsWith('.')) exts.add(it);
+            else if (it.includes('/')) mimes.add(it);
+        }
+        if (!exts.size) {
+            exts.add('.doc');
+            exts.add('.docx');
+        }
+        if (!mimes.size) {
+            mimes.add('application/msword');
+            mimes.add('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        }
+        return {exts, mimes};
+    };
+
+    const getExt = (filename: string): string => {
+        const i = filename.lastIndexOf('.');
+        if (i < 0) return '';
+        return filename.slice(i).toLowerCase();
+    };
+
+    const isAllowedWordFile = (f: File, exts: Set<string>, mimes: Set<string>) => {
+        const ext = getExt(f.name);
+        const mime = (f.type || '').toLowerCase();
+        return (exts.has(ext)) || (mime && mimes.has(mime));
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        await processFiles(files);
     };
 
     const handleFileUploadWord = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
+        await processFiles(files);
+    };
 
-        // Batasi 1 file saja
+    const processFiles = async (files: FileList) => {
         if (files.length > 1) {
             await MySwal.fire({
                 icon: "error",
@@ -73,16 +116,31 @@ export default function WordAbk({id}: WordAbkProps) {
             return;
         }
 
-        // Konfirmasi (tetap tampilkan nama file)
-        const confirmed = await showConfirmModal(Array.from(files).map(f => f.name));
+        const {exts, mimes} = parseAccept(acceptExt);
+        const f = files[0];
+        if (!isAllowedWordFile(f, exts, mimes)) {
+            await MySwal.fire({
+                icon: "error",
+                title: "Ekstensi/MIME tidak didukung",
+                html: `
+          <p>File: <b>${f.name}</b></p>
+          <p class="mt-2">Hanya <code>.doc</code> / <code>.docx</code> yang diperbolehkan.</p>
+        `,
+            });
+            clearFileInput();
+            return;
+        }
+
+        const confirmed = await showConfirmModal([f.name]);
         if (!confirmed) {
             clearFileInput();
             return;
         }
 
         const formData = new FormData();
-        formData.append('file', files[0]); // hanya 1 file
-        formData.append('id', id);         // jabatan_id
+        formData.append('file', f);
+        formData.append('jabatan_id', id);
+        formData.append('peta_jabatan_id', petaJabatanId);
 
         setIsLoading(true);
         try {
@@ -90,21 +148,38 @@ export default function WordAbk({id}: WordAbkProps) {
             const result = await res.json().catch(() => ({} as any));
 
             if (res.ok) {
-                const details = `
-          <ul class="list-disc pl-5">
-            ${result.jabatan_id ? `<li><b>jabatan_id:</b> <code>${result.jabatan_id}</code></li>` : ''}
-            ${result.file ? `<li><b>file:</b> <code>${result.file}</code></li>` : ''}
-          </ul>
-        `;
-                await showResultModal(true, result.message || 'Upload berhasil', details);
+                await MySwal.fire({
+                    title: "Berhasil",
+                    html: `
+                        <div class="text-left">
+                            <p class="mb-2">Dokumen ABK berhasil diproses!</p>
+                            ${result.inserted ? `<p class="text-sm text-green-600">✓ ${result.inserted} data berhasil diimpor</p>` : ''}
+                            ${result.skipped ? `<p class="text-sm text-gray-600">⊘ ${result.skipped} data dilewati (duplikat)</p>` : ''}
+                        </div>
+                    `,
+                    icon: "success",
+                    confirmButtonColor: "#10B981",
+                    didClose: () => {
+                        // Redirect ke viewerPath dengan tab PDF
+                        window.location.href = `/anjab/${viewerPath}?tab=pdf`;
+                    },
+                });
             } else {
-                const serverMsg = result?.message || result?.error || `Gagal mengunggah (${res.status})`;
-                const serverDetail = result?.detail ? `<pre class="mt-2 p-2 bg-gray-100 rounded">${String(result.detail)}</pre>` : "";
-                await showResultModal(false, serverMsg, serverDetail);
+                await MySwal.fire({
+                    title: "Gagal",
+                    text: result.error || result.message || `Gagal mengunggah (${res.status})`,
+                    icon: "error",
+                    confirmButtonColor: "#EF4444",
+                });
             }
         } catch (err) {
             console.error(err);
-            await showResultModal(false, 'Gagal mengirim ke server.');
+            await MySwal.fire({
+                title: "Gagal",
+                text: 'Gagal mengirim ke server.',
+                icon: "error",
+                confirmButtonColor: "#EF4444",
+            });
         } finally {
             setIsLoading(false);
             clearFileInput();
@@ -112,30 +187,38 @@ export default function WordAbk({id}: WordAbkProps) {
     };
 
     return (
-        <div className="mx-auto mt-10 p-6 bg-white shadow-lg rounded-2xl border">
-            <h2 className="text-xl font-semibold mb-4 text-center text-gray-800">
-                Unggah Dokumen Analisis Beban Kerja
-            </h2>
-
-            <label
-                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 transition">
+        <div className="mx-auto p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+                    isDragging
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 scale-105'
+                        : 'border-gray-300 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500'
+                }`}
+            >
                 {isLoading ? (
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-2"/>
+                    <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-3"/>
                 ) : (
-                    <FileJson className="w-10 h-10 text-purple-500 mb-2"/>
+                    <FileJson className="w-12 h-12 text-purple-500 mb-3"/>
                 )}
-                <p className="text-gray-600 font-medium">Pilih file Word</p>
-
-                {/* hanya 1 file */}
+                <p className="text-gray-700 dark:text-gray-200 font-medium text-center">
+                    {isDragging ? 'Lepaskan file di sini' : 'Klik atau seret file ABK ke sini'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                    Hanya .doc / .docx yang diperbolehkan
+                </p>
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".doc,.docx"
+                    accept={acceptExt}
                     multiple={false}
                     onChange={handleFileUploadWord}
                     className="hidden"
                 />
-            </label>
+            </div>
         </div>
     );
 }

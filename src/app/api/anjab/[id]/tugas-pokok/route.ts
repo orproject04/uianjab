@@ -284,7 +284,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
            (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
               FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
              updated_at = NOW()
-       WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
+       WHERE so.jabatan_id = $1::uuid`,
             [id]
         );
 
@@ -406,7 +406,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
            (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
               FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
              updated_at = NOW()
-       WHERE so.id = (SELECT peta_id FROM jabatan WHERE id = $1::uuid)`,
+       WHERE so.jabatan_id = $1::uuid`,
             [id]
         );
 

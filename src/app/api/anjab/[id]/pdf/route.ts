@@ -27,6 +27,12 @@ async function ensureCacheDir() {
     await fs.mkdir(CACHE_DIR, {recursive: true});
 }
 
+// Helper: cek UUID
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isUuid(s: string) {
+    return UUID_RE.test(s);
+}
+
 export async function GET(
     req: NextRequest,
     ctx: { params: Promise<{ id: string }> }
@@ -39,6 +45,8 @@ export async function GET(
         }
 
         const {id} = await ctx.params;
+        const isMaster = isUuid(id); // Deteksi apakah master (UUID) atau slug (path)
+        
         const data = await getAnjabByIdOrSlug(id);
         if (!data) {
             return NextResponse.json({error: "Data Tidak Ditemukan"}, {status: 404});
@@ -59,7 +67,9 @@ export async function GET(
         }
 
         const safeIso = updatedAt.toISOString().replace(/[:.]/g, "-");
-        const cacheFile = `${data.id}-${safeIso}.pdf`;
+        // Tambahkan prefix "master-" atau "slug-" untuk membedakan cache
+        const cachePrefix = isMaster ? "master" : "slug";
+        const cacheFile = `${cachePrefix}-${data.id}-${safeIso}.pdf`;
         const cachePath = path.join(CACHE_DIR, cacheFile);
 
         // coba load dari cache

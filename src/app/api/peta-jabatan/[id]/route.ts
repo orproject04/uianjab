@@ -240,8 +240,7 @@ export async function PATCH(
             await client.query(q, values);
         }
 
-        // 6) Rebuild slug jabatan (2 segmen terakhir) untuk seluruh subtree
-        await rebuildJabatanSlugsForSubtreeLast2(client, id);
+        // Note: Jabatan no longer has slug, so no need to rebuild jabatan slugs
 
         await client.query("COMMIT");
         return NextResponse.json({ok: true});
@@ -320,62 +319,4 @@ export async function DELETE(
         console.error(e);
         return NextResponse.json({error: "Internal error"}, {status: 500});
     }
-}
-
-/** Helper: rebuild slug jabatan berdasarkan 2 segmen terakhir  */
-async function rebuildJabatanSlugsForSubtreeLast2(client: any, rootId: string) {
-    await client.query(
-        `
-            WITH RECURSIVE subtree AS (SELECT id, parent_id, slug, level
-                                       FROM peta_jabatan
-                                       WHERE id = $1::uuid
-            UNION ALL
-            SELECT so.id, so.parent_id, so.slug, so.level
-            FROM peta_jabatan so
-                     JOIN subtree s ON so.parent_id = s.id ),
-      upwalk AS (
-        SELECT s.id AS node_id, s.id AS anc_id, s.slug AS anc_slug, s.level AS anc_level, s.parent_id
-        FROM subtree s
-        UNION ALL
-        SELECT u.node_id, p.id, p.slug, p.level, p.parent_id
-        FROM upwalk u
-        JOIN peta_jabatan p ON p.id = u.parent_id
-        WHERE u.parent_id IS NOT NULL
-      ),
-      parts AS (
-        SELECT
-          node_id,
-          NULLIF(
-            regexp_replace(replace(lower(trim(anc_slug)), ' ', '-'), '[^a-z0-9-]+', '', 'g'),
-            ''
-          ) AS part,
-          anc_level
-        FROM upwalk
-      ),
-      grouped AS (
-        SELECT node_id, ARRAY_REMOVE(ARRAY_AGG(part ORDER BY anc_level), NULL) AS parts_arr
-        FROM parts
-        GROUP BY node_id
-      ),
-      last2 AS (
-        SELECT node_id,
-          CASE
-            WHEN array_length(parts_arr, 1) >= 2
-              THEN parts_arr[(array_length(parts_arr,1)-1):array_length(parts_arr,1)]
-            ELSE parts_arr
-          END AS last_two
-        FROM grouped
-      ),
-      paths AS (
-        SELECT node_id,
-          regexp_replace(COALESCE(array_to_string(last_two, '-'), ''), '-{2,}', '-', 'g') AS short_slug
-        FROM last2
-      )
-            UPDATE jabatan
-            SET slug       = paths.short_slug,
-                updated_at = NOW() FROM paths
-            WHERE jabatan.peta_id = paths.node_id
-        `,
-        [rootId]
-    );
 }
