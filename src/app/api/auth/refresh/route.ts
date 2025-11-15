@@ -1,5 +1,6 @@
 // src/app/api/auth/refresh/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import pool from "@/lib/db";
 import {
     verifyRefreshToken,
@@ -10,13 +11,15 @@ import {
 import { hashRefreshToken } from "@/lib/tokens";
 
 export async function POST(req: NextRequest) {
-    // Ambil refresh dari Authorization: Bearer <rt> atau body { refresh_token }
+    // Ambil refresh dari cookie (lebih aman) atau fallback ke header/body
+    const cookieStore = await cookies();
+    const cookieRefresh = cookieStore.get('refresh_token')?.value;
     const auth = req.headers.get("authorization") || "";
     const headerRefresh = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const body = await req.json().catch(() => ({}));
-    const refresh = headerRefresh || body?.refresh_token;
+    const refresh = cookieRefresh || headerRefresh || body?.refresh_token;
 
-    if (!refresh) return Response.json({ error: "Tidak ada refresh token" }, { status: 401 });
+    if (!refresh) return NextResponse.json({ error: "Tidak ada refresh token" }, { status: 401 });
 
     try {
         verifyRefreshToken(refresh); // cek signature & exp
@@ -50,14 +53,31 @@ export async function POST(req: NextRequest) {
             [newHash, newExpiry, sess.id]
         );
 
-        return Response.json({
+        // Set new tokens sebagai HTTP-only cookies
+        const cookieStore = await cookies();
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        cookieStore.set('access_token', newAccess, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: 'lax',
+            maxAge: ACCESS_TOKEN_MAXAGE_SEC,
+            path: '/',
+        });
+        
+        cookieStore.set('refresh_token', newRefresh, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30,
+            path: '/',
+        });
+
+        return NextResponse.json({
             ok: true,
-            token_type: "Bearer",
-            access_token: newAccess,
-            refresh_token: newRefresh,
-            expires_in: ACCESS_TOKEN_MAXAGE_SEC,
+            message: "Token refreshed",
         }, { status: 200 });
     } catch {
-        return Response.json({ error: "Invalid refresh, Silakan login kembali" }, { status: 401 });
+        return NextResponse.json({ error: "Invalid refresh, Silakan login kembali" }, { status: 401 });
     }
 }

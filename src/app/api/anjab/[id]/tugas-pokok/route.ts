@@ -132,8 +132,8 @@ async function loadList(jabatanId: string) {
     const { rows } = await pool.query(
         `
     SELECT t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas,
-           t.hasil_kerja, t.jumlah_hasil, t.waktu_penyelesaian_jam,
-           t.waktu_efektif, t.kebutuhan_pegawai,
+           t.hasil_kerja, NULL AS jumlah_hasil, NULL AS waktu_penyelesaian_jam,
+           NULL AS waktu_efektif, NULL AS kebutuhan_pegawai,
            COALESCE(
              (SELECT json_agg(j.x ORDER BY j._ord_nomor NULLS LAST, j._created_at, j._id)
                 FROM (SELECT u.id AS _id, u.created_at AS _created_at,
@@ -220,6 +220,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             jumlah_hasil = null,
             waktu_penyelesaian_jam = null,
             waktu_efektif = null,
+            kebutuhan_pegawai = null,
             detail_uraian_tugas = [],
             tahapan = undefined,
         } = p.data;
@@ -238,13 +239,45 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
         const ins = await client.query(
             `INSERT INTO tugas_pokok
-         (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
-          waktu_penyelesaian_jam, waktu_efektif, created_at, updated_at)
-       VALUES ($1::uuid, $2, $3, $4::text[], $5, $6, $7, NOW(), NOW())
+         (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, created_at, updated_at)
+       VALUES ($1::uuid, $2, $3, $4::text[], NOW(), NOW())
        RETURNING id`,
-            [id, nomor_tugas, uraian_tugas, hasilTextArray, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif]
+            [id, nomor_tugas, uraian_tugas, hasilTextArray]
         );
         const newId: number = Number(ins.rows[0].id);
+
+        // Insert ABK record into tugas_pokok_abk if a peta_jabatan exists for this jabatan
+        try {
+            const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1::uuid LIMIT 1`, [id]);
+            const petaId = petaQ.rows[0]?.id ?? null;
+            if (petaId) {
+                const kebutuhan = (kebutuhan_pegawai != null)
+                    ? kebutuhan_pegawai
+                    : (waktu_efektif && waktu_efektif > 0 && jumlah_hasil != null && waktu_penyelesaian_jam != null)
+                        ? (Number(jumlah_hasil || 0) * Number(waktu_penyelesaian_jam || 0)) / Number(waktu_efektif)
+                        : null;
+
+                await client.query(
+                    `INSERT INTO tugas_pokok_abk
+                     (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
+                     VALUES ($1::uuid, $2::int, $3, $4, $5, $6, NOW(), NOW())`,
+                    [petaId, newId, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan]
+                );
+
+                // Recompute kebutuhan_pegawai on peta_jabatan from tugas_pokok_abk
+                await client.query(
+                    `UPDATE peta_jabatan so
+                     SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0))
+                                                       FROM tugas_pokok_abk tpa WHERE tpa.peta_jabatan_id = so.id),0),
+                         updated_at = NOW()
+                     WHERE so.id = $1::uuid`,
+                    [petaId]
+                );
+            }
+        } catch (e) {
+            // non-blocking: if ABK insert fails, continue but log
+            console.error('[tugas-pokok][POST] ABK insert failed', e);
+        }
 
         // tahapan + detail (tidak berubah)
         for (let i = 0; i < nested.length; i++) {
@@ -268,25 +301,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         }
 
         // hitung kebutuhan_pegawai + update peta_jabatan
-        await client.query(
-            `UPDATE tugas_pokok
-         SET kebutuhan_pegawai =
-           CASE WHEN COALESCE(waktu_efektif, 0) > 0
-             THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric) / waktu_efektif::numeric
-             ELSE NULL END,
-             updated_at = NOW()
-       WHERE id = $1::int`,
-            [newId]
-        );
-        await client.query(
-            `UPDATE peta_jabatan so
-         SET kebutuhan_pegawai = COALESCE(
-           (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
-              FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
-             updated_at = NOW()
-       WHERE so.jabatan_id = $1::uuid`,
-            [id]
-        );
+        // NOTE: legacy ABK columns were removed from `tugas_pokok` and ABK is now stored in `tugas_pokok_abk`.
+        // If you need to compute/update `peta_jabatan.kebutuhan_pegawai` here, run the appropriate aggregation
+        // against `tugas_pokok_abk` for each `peta_jabatan_id` instead.
 
         await client.query("COMMIT"); began = false;
 
@@ -340,21 +357,48 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
             const ins = await client.query(
                 `INSERT INTO tugas_pokok
-           (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, jumlah_hasil,
-            waktu_penyelesaian_jam, waktu_efektif, created_at, updated_at)
-         VALUES ($1::uuid, $2, $3, $4::text[], $5, $6, $7, NOW(), NOW())
-         RETURNING id`,
-                [
-                    id,
-                    it.nomor_tugas ?? null,
-                    it.uraian_tugas ?? "",
-                    hasilTextArray,
-                    it.jumlah_hasil ?? null,
-                    it.waktu_penyelesaian_jam ?? null,
-                    it.waktu_efektif ?? null,
-                ]
-            );
+               (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, created_at, updated_at)
+             VALUES ($1::uuid, $2, $3, $4::text[], NOW(), NOW())
+             RETURNING id`,
+                    [
+                        id,
+                        it.nomor_tugas ?? null,
+                        it.uraian_tugas ?? "",
+                        hasilTextArray,
+                    ]
+                );
             const newId = Number(ins.rows[0].id);
+
+            // Insert ABK record into tugas_pokok_abk if peta_jabatan exists for this jabatan
+            try {
+                const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1::uuid LIMIT 1`, [id]);
+                const petaId = petaQ.rows[0]?.id ?? null;
+                if (petaId) {
+                    const jumlah_hasil_val = it.jumlah_hasil ?? null;
+                    const waktu_penyelesaian_jam_val = it.waktu_penyelesaian_jam ?? null;
+                    const waktu_efektif_val = it.waktu_efektif ?? null;
+                    const kebutuhan_val = it.kebutuhan_pegawai ?? ((waktu_efektif_val && waktu_efektif_val > 0 && jumlah_hasil_val != null && waktu_penyelesaian_jam_val != null)
+                        ? (Number(jumlah_hasil_val || 0) * Number(waktu_penyelesaian_jam_val || 0)) / Number(waktu_efektif_val)
+                        : null);
+
+                    await client.query(
+                        `INSERT INTO tugas_pokok_abk (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
+                         VALUES ($1::uuid, $2::int, $3, $4, $5, $6, NOW(), NOW())`,
+                        [petaId, newId, jumlah_hasil_val, waktu_penyelesaian_jam_val, waktu_efektif_val, kebutuhan_val]
+                    );
+
+                    await client.query(
+                        `UPDATE peta_jabatan so
+                         SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0))
+                                                           FROM tugas_pokok_abk tpa WHERE tpa.peta_jabatan_id = so.id),0),
+                             updated_at = NOW()
+                         WHERE so.id = $1::uuid`,
+                        [petaId]
+                    );
+                }
+            } catch (e) {
+                console.error('[tugas-pokok][PUT] ABK insert failed', e);
+            }
 
             const nested =
                 (it.detail_uraian_tugas && it.detail_uraian_tugas.length)
@@ -388,27 +432,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
                 }
             }
 
-            await client.query(
-                `UPDATE tugas_pokok
-           SET kebutuhan_pegawai =
-             CASE WHEN COALESCE(waktu_efektif, 0) > 0
-               THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric) / waktu_efektif::numeric
-               ELSE NULL END,
-               updated_at = NOW()
-         WHERE id = $1::int`,
-                [newId]
-            );
-        }
+                        // legacy: no tugas_pokok kebutuhan update here (migrated to tugas_pokok_abk)
+                    }
 
-        await client.query(
-            `UPDATE peta_jabatan so
-         SET kebutuhan_pegawai = COALESCE(
-           (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
-              FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
-             updated_at = NOW()
-       WHERE so.jabatan_id = $1::uuid`,
-            [id]
-        );
+                        // NOTE: peta_jabatan.kebutuhan_pegawai aggregation should be computed from tugas_pokok_abk per peta_jabatan.
 
         await client.query("COMMIT"); began = false;
 

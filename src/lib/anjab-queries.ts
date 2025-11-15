@@ -91,7 +91,7 @@ const SELECT_ANJAB = (whereClause: string) => `
 
            -- NEW
            so.jenis_jabatan                             AS jenis_jabatan,
-           so.kebutuhan_pegawai                         AS kebutuhan_pegawai,
+           NULL                                          AS kebutuhan_pegawai,
 
            u.jpt_utama,
            u.jpt_madya,
@@ -249,10 +249,10 @@ const SELECT_ANJAB = (whereClause: string) => `
                                        'nomor_tugas', tp.nomor_tugas,
                                        'uraian_tugas', tp.uraian_tugas,
                                        'hasil_kerja', tp.hasil_kerja,
-                                       'jumlah_hasil', tp.jumlah_hasil,
-                                       'waktu_penyelesaian_jam', tp.waktu_penyelesaian_jam,
-                                       'waktu_efektif', tp.waktu_efektif,
-                                       'kebutuhan_pegawai', tp.kebutuhan_pegawai,
+                                       'jumlah_hasil', NULL,
+                                       'waktu_penyelesaian_jam', NULL,
+                                       'waktu_efektif', NULL,
+                                       'kebutuhan_pegawai', NULL,
                                        'detail_uraian_tugas',
                                        (SELECT COALESCE(
                                                        JSON_AGG(
@@ -454,10 +454,10 @@ const SELECT_ANJAB_WITH_ABK = (whereClause: string) => `
                                        'nomor_tugas', tp.nomor_tugas,
                                        'uraian_tugas', tp.uraian_tugas,
                                        'hasil_kerja', tp.hasil_kerja,
-                                       'jumlah_hasil', COALESCE(tpa.jumlah_hasil, tp.jumlah_hasil),
-                                       'waktu_penyelesaian_jam', COALESCE(tpa.waktu_penyelesaian_jam, tp.waktu_penyelesaian_jam),
-                                       'waktu_efektif', COALESCE(tpa.waktu_efektif, tp.waktu_efektif),
-                                       'kebutuhan_pegawai', COALESCE(tpa.kebutuhan_pegawai, tp.kebutuhan_pegawai),
+                                       'jumlah_hasil', tpa.jumlah_hasil,
+                                       'waktu_penyelesaian_jam', tpa.waktu_penyelesaian_jam,
+                                       'waktu_efektif', tpa.waktu_efektif,
+                                       'kebutuhan_pegawai', tpa.kebutuhan_pegawai,
                                        'detail_uraian_tugas',
                                        (SELECT COALESCE(
                                                        JSON_AGG(

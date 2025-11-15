@@ -7,7 +7,6 @@ import {FaUser} from "react-icons/fa";
 import {useRouter} from "next/navigation";
 
 import {useMe} from "@/context/MeContext";
-import {tokenStore, clearTokens} from "@/lib/tokens";
 
 type Me = { id: string; email: string; role: string; full_name: string | null };
 
@@ -42,20 +41,19 @@ export default function UserDropdown() {
         if (signingOut) return;
         setSigningOut(true);
         try {
-            // Kirim refresh token ke server agar sesi direvoke (jika ada)
-            const refresh = tokenStore.refresh;
-            if (refresh) {
-                await fetch("/api/auth/logout", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    credentials: "omit", // Bearer-only; kita simpan token di sessionStorage
-                    body: JSON.stringify({refresh_token: refresh}),
-                }).catch(() => { /* abaikan error jaringan */
-                });
-            }
+            // Logout ke server untuk revoke session dan clear cookies
+            await fetch("/api/auth/logout", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                credentials: "include", // Penting: kirim cookies
+            }).catch(() => { /* abaikan error jaringan */ });
+            
+            // Broadcast ke tab lain bahwa user sudah logout
+            const channel = new BroadcastChannel('auth_channel');
+            channel.postMessage('logout');
+            channel.close();
         } finally {
-            // Selalu bersihkan token lokal agar benar-benar keluar
-            clearTokens();
+            // Redirect ke signin
             closeDropdown();
             router.replace("/signin?loggedout=1");
             setSigningOut(false);

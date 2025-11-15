@@ -15,26 +15,26 @@ export function hashResetToken(token: string) {
 }
 
 /* ========= Client-side storage helpers (Bearer-only) =========
-   Simpan di sessionStorage agar hilang saat tab ditutup.
+   Simpan di localStorage agar bisa di-share antar tab.
    Pastikan file ini hanya dipakai di Client Components.
 */
 const ACCESS_KEY = "anjab_access_token";
 const REFRESH_KEY = "anjab_refresh_token";
 
-function ss() {
+function ls() {
     if (typeof window === "undefined") return null;
-    return window.sessionStorage;
+    return window.localStorage;
 }
 
 export const tokenStore = {
     get access(): string | null {
-        return ss()?.getItem(ACCESS_KEY) ?? null;
+        return ls()?.getItem(ACCESS_KEY) ?? null;
     },
     get refresh(): string | null {
-        return ss()?.getItem(REFRESH_KEY) ?? null;
+        return ls()?.getItem(REFRESH_KEY) ?? null;
     },
     set(access: string | null, refresh: string | null) {
-        const store = ss();
+        const store = ls();
         if (!store) return;
         if (access) store.setItem(ACCESS_KEY, access);
         else store.removeItem(ACCESS_KEY);
@@ -42,7 +42,7 @@ export const tokenStore = {
         else store.removeItem(REFRESH_KEY);
     },
     clear() {
-        const store = ss();
+        const store = ls();
         if (!store) return;
         store.removeItem(ACCESS_KEY);
         store.removeItem(REFRESH_KEY);

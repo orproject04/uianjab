@@ -9,7 +9,6 @@ import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import {EyeCloseIcon, EyeIcon} from "@/icons";
 
-import {setTokens} from "@/lib/tokens";
 import {useMe} from "@/context/MeContext";
 
 type NoticeType = "success" | "info" | "error";
@@ -50,13 +49,10 @@ export default function SignInForm() {
         setNotice(null);
 
         try {
-            sessionStorage.removeItem("access_token");
-            sessionStorage.removeItem("refresh_token");
-
             const r = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                credentials: "omit",
+                credentials: "include", // Penting: untuk menerima Set-Cookie
                 body: JSON.stringify({email, password}),
             });
 
@@ -66,15 +62,21 @@ export default function SignInForm() {
                 return;
             }
 
-            if (!j?.access_token || !j?.refresh_token) {
-                showNotice({type: "error", text: "Token tidak ditemukan dari server."});
-                return;
-            }
+            // Cookies sudah di-set otomatis oleh browser
 
-            setTokens(j.access_token, j.refresh_token);
+            // Cookies sudah di-set otomatis oleh browser
+            // Broadcast ke tab lain bahwa user sudah login
+            const channel = new BroadcastChannel('auth_channel');
+            channel.postMessage('login');
+            channel.close();
+            
+            // Refresh MeContext untuk load user dari cookies
             await refresh();
+            
+            // Redirect setelah MeContext berhasil load
             router.replace(next);
-        } catch {
+        } catch (err) {
+            console.error('Login error:', err);
             showNotice({type: "error", text: "Tidak bisa menghubungi server."});
         } finally {
             setLoading(false);

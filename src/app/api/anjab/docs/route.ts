@@ -271,26 +271,61 @@ export async function POST(req: NextRequest) {
                         ? parseInt(tugas.kebutuhan_pegawai)
                         : null;
 
+                    // Insert tugas_pokok WITHOUT legacy ABK columns
                     const resTugas = await client.query<{ id: number }>(
                         `
-                            INSERT INTO tugas_pokok (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja,
-                                                     jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif,
-                                                     kebutuhan_pegawai, created_at, updated_at)
-                            VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, NOW(), NOW()) RETURNING id
+                            INSERT INTO tugas_pokok (jabatan_id, nomor_tugas, uraian_tugas, hasil_kerja, created_at, updated_at)
+                            VALUES ($1, $2, $3, $4::text[], NOW(), NOW()) RETURNING id
                         `,
                         [
                             jabatanUUID,
                             nomor_tugas,
                             uraian,
-                            hasilK,                      // ← cast ::text[] di SQL agar tidak kosong
-                            jumlah_hasil,
-                            waktu_penyelesaian_jam,
-                            waktu_efektif,
-                            kebutuhan_pegawai,
+                            hasilK,
                         ]
                     );
 
                     const tugas_id = resTugas.rows[0].id;
+
+                    // If ABK fields exist in payload and a peta_jabatan exists for this jabatan, upsert into tugas_pokok_abk
+                    try {
+                        const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1 LIMIT 1`, [jabatanUUID]);
+                        const petaId = petaQ.rows[0]?.id ?? null;
+                        if (petaId) {
+                            const jumlah = jumlah_hasil;
+                            const waktu_pen = waktu_penyelesaian_jam;
+                            const waktu_eff = waktu_efektif;
+                            const kebutuhan = kebutuhan_pegawai !== null
+                                ? kebutuhan_pegawai
+                                : ((waktu_eff && waktu_eff > 0 && jumlah != null && waktu_pen != null)
+                                    ? (Number(jumlah || 0) * Number(waktu_pen || 0)) / Number(waktu_eff)
+                                    : null);
+
+                            await client.query(
+                                `
+                                    INSERT INTO tugas_pokok_abk (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
+                                    VALUES ($1::uuid, $2::int, $3, $4, $5, $6, NOW(), NOW())
+                                    ON CONFLICT (peta_jabatan_id, tugas_pokok_id) DO UPDATE SET
+                                      jumlah_hasil = EXCLUDED.jumlah_hasil,
+                                      waktu_penyelesaian_jam = EXCLUDED.waktu_penyelesaian_jam,
+                                      waktu_efektif = EXCLUDED.waktu_efektif,
+                                      kebutuhan_pegawai = EXCLUDED.kebutuhan_pegawai,
+                                      updated_at = NOW()
+                                `,
+                                [petaId, tugas_id, jumlah, waktu_pen, waktu_eff, kebutuhan]
+                            );
+
+                            // update peta kebutuhan
+                            await client.query(
+                                `UPDATE peta_jabatan so
+                                 SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0)) FROM tugas_pokok_abk tpa WHERE tpa.peta_jabatan_id = so.id),0), updated_at = NOW()
+                                 WHERE so.id = $1::uuid`,
+                                [petaId]
+                            );
+                        }
+                    } catch (e) {
+                        console.error('[anjab/docs] ABK insert failed', e);
+                    }
 
                     // Insert tahapan (nomor_tahapan auto i+1 jika tidak ada di JSON)
                     for (let i = 0; i < detailArr.length; i++) {

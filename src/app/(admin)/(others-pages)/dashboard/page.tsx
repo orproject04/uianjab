@@ -60,6 +60,15 @@ export default function DashboardPage() {
     const [selectedJenis, setSelectedJenis] = useState<{ value: string; label: string } | null>(null);
     const [selectedLokasi, setSelectedLokasi] = useState<{ value: string; label: string } | null>(null);
 
+    // Responsive YAxis width: mobile -> 150, desktop -> 220
+    const [yAxisWidth, setYAxisWidth] = useState<number>(220);
+    useEffect(() => {
+        const setW = () => setYAxisWidth(typeof window !== 'undefined' && window.innerWidth < 640 ? 150 : 220);
+        setW();
+        window.addEventListener('resize', setW);
+        return () => window.removeEventListener('resize', setW);
+    }, []);
+
     useEffect(() => {
         loadData();
     }, [selectedBiro, selectedJenis, selectedLokasi]);
@@ -130,6 +139,59 @@ export default function DashboardPage() {
 
     const { summary, byJenis, byLokasi, byBiro, byNamaJabatan, filters } = data;
 
+    // --- UI helpers ---
+    // Sort `byJenis` in this order: Eselon 1,2,3,4, Jabatan Pelaksana, Jabatan Fungsional
+    const jenisRank = (j?: string) => {
+        if (!j) return 999;
+        const s = j.toString().toLowerCase().trim();
+
+        // Normalize common separators
+        const norm = s.replace(/[\-|_/\\()\[\]:.,]/g, ' ');
+
+        // Detect ASCII Roman numerals (i, ii, iii, iv) or Arabic digits 1-4
+        const asciiMatch = norm.match(/eselon\s*(?:i{1,3}|iv|[1-4])\b/i);
+        if (asciiMatch) {
+            const token = asciiMatch[0].toLowerCase().replace(/^[^a-z0-9]+/i, '').replace(/^eselon\s*/i, '').trim();
+            if (/^[1-4]$/.test(token)) return parseInt(token, 10);
+            if (/^i{1,3}$/.test(token)) return token.length; // i ->1, ii->2, iii->3
+            if (token === 'iv') return 4;
+            return 5;
+        }
+
+        // Detect Unicode Roman numerals (e.g., Ⅰ Ⅱ Ⅲ Ⅳ)
+        const uniMatch = norm.match(/eselon\s*([\u2160-\u2163])/i);
+        if (uniMatch) {
+            const ch = uniMatch[1];
+            switch (ch) {
+                case '\u2160': return 1; // Ⅰ
+                case '\u2161': return 2; // Ⅱ
+                case '\u2162': return 3; // Ⅲ
+                case '\u2163': return 4; // Ⅳ
+            }
+        }
+
+        // As a fallback, look for 'eselon' followed by any number (maybe with words between)
+        const numMatch = norm.match(/eselon[^0-9A-Za-z]{0,5}([0-9])/i);
+        if (numMatch) {
+            const n = parseInt(numMatch[1], 10);
+            if (n >= 1 && n <= 4) return n;
+        }
+
+        if (/pelaksana/i.test(norm)) return 6;
+        if (/fungsional/i.test(norm)) return 7;
+        return 998;
+    };
+
+    const sortedByJenis = [...byJenis].sort((a, b) => {
+        const r = jenisRank(a.jenis) - jenisRank(b.jenis);
+        if (r !== 0) return r;
+        return (b.jumlah_jabatan || 0) - (a.jumlah_jabatan || 0);
+    });
+
+    
+
+    
+
     // Convert filters to react-select format
     const biroOptions = filters.biroList.map((biro) => ({ value: biro, label: biro }));
     const jenisOptions = filters.jenisList.map((jenis) => ({ value: jenis, label: jenis }));
@@ -137,6 +199,48 @@ export default function DashboardPage() {
         { value: "pusat", label: "Pusat" },
         { value: "daerah", label: "Daerah" },
     ];
+
+    // Custom YAxis tick renderer to wrap long unit names into multiple lines
+    const renderYAxisTick = (props: any) => {
+        const { x, y, payload } = props;
+        const raw: string = String(payload?.value ?? "");
+
+        // Max characters per line (try to break on spaces)
+        const maxLen = 26;
+        const words = raw.split(/\s+/);
+        const lines: string[] = [];
+        let current = "";
+        for (const w of words) {
+            if ((current + " " + w).trim().length <= maxLen) {
+                current = (current + " " + w).trim();
+            } else {
+                if (current) lines.push(current);
+                current = w;
+            }
+        }
+        if (current) lines.push(current);
+
+        // Limit to 3 lines, ellipsize the last line
+        if (lines.length > 3) {
+            const first = lines.slice(0, 2);
+            let last = lines.slice(2).join(" ");
+            if (last.length > maxLen) last = last.slice(0, maxLen - 3) + "...";
+            lines.length = 0; lines.push(...first, last);
+        }
+
+        // Render with tspans; align to end so labels sit left of axis ticks
+        const anchorX = x - 8; // slight padding from axis line
+        return (
+            <text x={anchorX} y={y} textAnchor="end" fontSize={11} fill="#374151">
+                {lines.map((ln, i) => (
+                    // first line offset slightly up, others stacked below
+                    <tspan key={i} x={anchorX} dy={i === 0 ? -8 : 10}>
+                        {ln}
+                    </tspan>
+                ))}
+            </text>
+        );
+    };
 
     // Custom styles for react-select dark mode
     const selectStyles = {
@@ -187,7 +291,7 @@ export default function DashboardPage() {
     };
 
     return (
-        <div className="space-y-6 pb-8">
+        <div className="space-y-6 pb-8 overflow-x-hidden px-4 sm:px-0">
             <style jsx global>{`
                 :root {
                     --select-bg: white;
@@ -233,7 +337,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Filters */}
-            <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-5">
                     <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                         <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -354,7 +458,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Jabatan Breakdown Cards */}
-            <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -367,7 +471,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {byJenis.map((item, index) => (
+                    {sortedByJenis.map((item, index) => (
                         <div
                             key={index}
                             className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
@@ -421,7 +525,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Chart Row 2: Top Biro */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -436,14 +540,14 @@ export default function DashboardPage() {
                     </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={byBiro} layout="vertical">
+                        <BarChart data={byBiro} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis type="number" tick={{ fontSize: 12 }} />
                         <YAxis
                             dataKey="unit_kerja"
                             type="category"
-                            width={150}
-                            tick={{ fontSize: 11 }}
+                            width={yAxisWidth}
+                            tick={renderYAxisTick}
                         />
                         <Tooltip
                             contentStyle={{
@@ -464,7 +568,7 @@ export default function DashboardPage() {
 
             {/* Total Per Nama Jabatan */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-800">
+                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-800">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,7 +584,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                    <table className="min-w-full">
+                    <table className="w-full table-fixed">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
                         <tr>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
@@ -494,14 +598,7 @@ export default function DashboardPage() {
                                     Nama Jabatan
                                 </div>
                             </th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                    </svg>
-                                    Jenis
-                                </div>
-                            </th>
+                            
                             <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                                 <div className="flex items-center justify-center gap-2">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -536,38 +633,34 @@ export default function DashboardPage() {
                                     index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
                                 }`}
                             >
-                                <td className="px-3 py-3 whitespace-nowrap text-center">
+                                <td className="px-3 py-3 whitespace-normal break-words text-center">
                                         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                                             {index + 1}
                                         </span>
                                 </td>
-                                <td className="px-3 py-3">
+                                <td className="px-3 py-3 break-words">
                                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                                         {item.nama_jabatan}
                                     </div>
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300">
-                                            {item.jenis_jabatan}
-                                        </span>
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-center">
+                                
+                                <td className="px-3 py-3 whitespace-normal break-words text-center">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
                                             {item.besetting.toLocaleString("id-ID")}
                                         </span>
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-center">
+                                <td className="px-3 py-3 whitespace-normal break-words text-center">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
                                             {item.kebutuhan.toLocaleString("id-ID")}
                                         </span>
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-center">
+                                <td className="px-3 py-3 whitespace-normal break-words text-center">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                             item.selisih >= 0
                                                 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                                 : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                                         }`}>
-                                            {item.selisih >= 0 ? '-' : ''}{item.selisih.toLocaleString("id-ID")}}
+                                            {item.selisih >= 0 ? '-' : ''}{item.selisih.toLocaleString("id-ID")}
                                         </span>
                                 </td>
                             </tr>
@@ -579,7 +672,7 @@ export default function DashboardPage() {
 
             {/* Table: Detail Breakdown */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-800">
+                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-800">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -595,9 +688,12 @@ export default function DashboardPage() {
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full">
+                    <table className="w-full table-fixed">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800">
                         <tr>
+                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
+                                No
+                            </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                                 <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -636,26 +732,29 @@ export default function DashboardPage() {
                         {byBiro.map((item, index) => (
                             <tr
                                 key={index}
-                                className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${
                                     index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
                                 }`}
                             >
-                                <td className="px-3 py-3 whitespace-nowrap">
+                                <td className="px-3 py-3 whitespace-normal break-words text-center">
+                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{index + 1}</span>
+                                </td>
+                                <td className="px-3 py-3 whitespace-normal break-words">
                                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                                         {item.unit_kerja}
                                     </div>
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap">
+                                <td className="px-3 py-3 whitespace-normal break-words">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
                                             {item.besetting}
                                         </span>
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap">
+                                <td className="px-3 py-3 whitespace-normal break-words">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
                                             {item.kebutuhan}
                                         </span>
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap">
+                                <td className="px-3 py-3 whitespace-normal break-words">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                             item.selisih >= 0
                                                 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
@@ -696,9 +795,9 @@ function SummaryCard({
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-start justify-between mb-4">
-                <div className={`w-14 h-14 bg-gradient-to-br ${gradientClasses[color] || "from-gray-500 to-gray-600"} rounded-xl flex items-center justify-center text-3xl shadow-lg`}>
+                <div className={`w-12 h-12 bg-gradient-to-br ${gradientClasses[color] || "from-gray-500 to-gray-600"} rounded-xl flex items-center justify-center text-2xl shadow-lg`}>
                     {icon}
                 </div>
                 {subtitle && (

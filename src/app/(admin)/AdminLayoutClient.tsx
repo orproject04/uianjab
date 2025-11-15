@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useEffect, useMemo, useState} from "react";
+import React, {useEffect, useState} from "react";
 import {useRouter, usePathname, useSearchParams} from "next/navigation";
 
 import AppHeader from "@/layout/AppHeader";
@@ -8,8 +8,7 @@ import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
 
 import {useOptionalSidebar} from "@/context/SidebarContext";
-import {tokenStore} from "@/lib/tokens";
-import {apiFetch} from "@/lib/apiFetch";
+import {useMe} from "@/context/MeContext";
 
 const AdminLayoutClient: React.FC<{ children: React.ReactNode }> = ({children}) => {
     const sidebar = useOptionalSidebar();
@@ -17,54 +16,37 @@ const AdminLayoutClient: React.FC<{ children: React.ReactNode }> = ({children}) 
     const isHovered = !!sidebar?.isHovered;
     const isMobileOpen = !!sidebar?.isMobileOpen;
 
+    const {me, loading} = useMe();
     const router = useRouter();
     const pathname = usePathname();
     const sp = useSearchParams();
-    const next = useMemo(() => {
-        const q = sp.toString();
-        return (pathname || "/") + (q ? `?${q}` : "");
-    }, [pathname, sp]);
 
     const [canRender, setCanRender] = useState(false);
 
     useEffect(() => {
-        let alive = true;
-        (async () => {
-            if (!tokenStore.access) {
-                router.replace(`/signin?next=${encodeURIComponent(next)}`);
-                return;
-            }
+        if (loading) return; // Tunggu MeContext selesai load
 
-            const r = await apiFetch("/api/auth/me", {cache: "no-store"});
-            if (!alive) return;
+        const next = `${pathname || "/"}${sp.toString() ? `?${sp.toString()}` : ""}`;
 
-            if (!r.ok) {
-                router.replace(`/signin?next=${encodeURIComponent(next)}`);
-                return;
-            }
+        // Jika tidak ada user, redirect ke login
+        if (!me) {
+            router.replace(`/signin?next=${encodeURIComponent(next)}`);
+            return;
+        }
 
-            const j = await r.json();
-            const role = j?.data?.role ?? "user";
+        // Cek role untuk halaman tertentu
+        if (
+            me.role !== "admin" &&
+            (pathname?.startsWith("/anjab/edit") || pathname?.startsWith("/anjab/create"))
+        ) {
+            router.replace("/");
+            return;
+        }
 
-            if (
-                role !== "admin" &&
-                (pathname?.startsWith("anjab/edit") || pathname?.startsWith("anjab/create"))
-            ) {
-                router.replace("/");
-                return;
-            }
+        setCanRender(true);
+    }, [me, loading, router, pathname, sp]);
 
-            setCanRender(true);
-        })();
-
-        return () => {
-            alive = false;
-        };
-    }, [router, next, pathname]);
-
-    // (debug useEffect removed)
-
-    if (!canRender) {
+    if (loading || !canRender) {
         return (
             <div className="w-full h-screen flex items-center justify-center">
                 <div className="text-sm text-gray-500">Memeriksa sesi…</div>

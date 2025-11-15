@@ -142,10 +142,6 @@ CREATE TABLE IF NOT EXISTS tugas_pokok (
   nomor_tugas              int,
   uraian_tugas             text,
   hasil_kerja              text[],
-  jumlah_hasil             int,
-  waktu_penyelesaian_jam   int,
-  waktu_efektif            int,
-  kebutuhan_pegawai        numeric(10,4),
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
 );
@@ -294,7 +290,7 @@ CREATE TABLE IF NOT EXISTS tugas_pokok_abk (
   jumlah_hasil             numeric(10,2),
   waktu_penyelesaian_jam   numeric(10,2),
   waktu_efektif            numeric(10,2),
-  kebutuhan_pegawai        numeric(10,2),
+  kebutuhan_pegawai        numeric(10,4),
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT uq_peta_tugas UNIQUE (peta_jabatan_id, tugas_pokok_id)
@@ -548,3 +544,29 @@ CREATE INDEX IF NOT EXISTS idx_tugas_pokok_abk_tugas ON tugas_pokok_abk(tugas_po
 -- ============================================================================
 -- END OF SCHEMA
 -- ============================================================================
+-- UTILITAS: RESET DATA ABK
+-- ============================================================================
+
+-- Reset semua data ABK
+-- Hapus semua data di tugas_pokok_abk dan reset kebutuhan_pegawai di peta_jabatan menjadi 0
+
+-- BEGIN;
+
+-- Hapus semua data tugas_pokok_abk
+-- DELETE FROM tugas_pokok_abk;
+
+-- Reset kebutuhan_pegawai di peta_jabatan menjadi 0
+-- UPDATE peta_jabatan
+-- SET kebutuhan_pegawai = 0,
+--     updated_at = NOW();
+
+-- Tampilkan hasil
+-- SELECT 
+--     (SELECT COUNT(*) FROM tugas_pokok_abk) as total_tugas_pokok_abk,
+--     (SELECT COUNT(*) FROM peta_jabatan WHERE kebutuhan_pegawai != 0) as peta_dengan_kebutuhan_nonzero,
+--     (SELECT COUNT(*) FROM peta_jabatan) as total_peta_jabatan;
+
+-- COMMIT;
+
+-- Verifikasi
+-- SELECT 'Data ABK berhasil direset' as status;

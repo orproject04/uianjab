@@ -141,36 +141,70 @@ export async function POST(req: NextRequest) {
                         const tahapan = tugas.uraian_tugas?.tahapan || [];
                         const hasil_kerja = tugas.hasil_kerja || [];
 
+                        // parse ABK-like fields if present in payload (but do not insert them into tugas_pokok)
                         const jumlah_hasil = tugas.jumlah_hasil ? parseInt(tugas.jumlah_hasil) : null;
                         const waktu_penyelesaian_jam = tugas['waktu_penyelesaian_(jam)'] ? parseInt(tugas['waktu_penyelesaian_(jam)']) : null;
                         const waktu_efektif = tugas.waktu_efektif ? parseInt(tugas.waktu_efektif) : null;
                         const kebutuhan_pegawai = tugas.kebutuhan_pegawai ? parseInt(tugas.kebutuhan_pegawai) : null;
 
+                        // Insert tugas_pokok WITHOUT legacy ABK columns (these columns were removed from schema)
                         const resTugas = await client.query(
                             `INSERT INTO tugas_pokok (id_jabatan,
                                                       nomor_tugas,
                                                       uraian_tugas,
                                                       hasil_kerja,
-                                                      jumlah_hasil,
-                                                      waktu_penyelesaian_jam,
-                                                      waktu_efektif,
-                                                      kebutuhan_pegawai,
                                                       created_at,
                                                       updated_at)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id_tugas`,
+                             VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id_tugas`,
                             [
                                 id_jabatan,
                                 nomor_tugas,
                                 uraian,
-                                hasil_kerja,
-                                jumlah_hasil,
-                                waktu_penyelesaian_jam,
-                                waktu_efektif,
-                                kebutuhan_pegawai
+                                hasil_kerja
                             ]
                         );
 
                         const id_tugas = resTugas.rows[0].id_tugas;
+
+                        // If ABK fields are present in payload and a peta_jabatan exists for this jabatan, upsert into tugas_pokok_abk
+                        try {
+                            const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1 LIMIT 1`, [id_jabatan]);
+                            const petaId = petaQ.rows[0]?.id ?? null;
+                            if (petaId) {
+                                const jumlah = jumlah_hasil;
+                                const waktu_pen = waktu_penyelesaian_jam;
+                                const waktu_eff = waktu_efektif;
+                                const kebutuhan = kebutuhan_pegawai !== null
+                                    ? kebutuhan_pegawai
+                                    : ((waktu_eff && waktu_eff > 0 && jumlah != null && waktu_pen != null)
+                                        ? (Number(jumlah || 0) * Number(waktu_pen || 0)) / Number(waktu_eff)
+                                        : null);
+
+                                await client.query(
+                                    `INSERT INTO tugas_pokok_abk
+                                     (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
+                                     VALUES ($1::uuid, $2::int, $3, $4, $5, $6, NOW(), NOW())
+                                     ON CONFLICT (peta_jabatan_id, tugas_pokok_id) DO UPDATE SET
+                                       jumlah_hasil = EXCLUDED.jumlah_hasil,
+                                       waktu_penyelesaian_jam = EXCLUDED.waktu_penyelesaian_jam,
+                                       waktu_efektif = EXCLUDED.waktu_efektif,
+                                       kebutuhan_pegawai = EXCLUDED.kebutuhan_pegawai,
+                                       updated_at = NOW()`,
+                                    [petaId, id_tugas, jumlah, waktu_pen, waktu_eff, kebutuhan]
+                                );
+
+                                // Recompute kebutuhan_pegawai for the peta_jabatan
+                                await client.query(
+                                    `UPDATE peta_jabatan so
+                                     SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0)) FROM tugas_pokok_abk tpa WHERE tpa.peta_jabatan_id = so.id),0),
+                                         updated_at = NOW()
+                                     WHERE so.id = $1::uuid`,
+                                    [petaId]
+                                );
+                            }
+                        } catch (e) {
+                            console.error('[anjab/upload] ABK insert failed', e);
+                        }
 
                         for (const tahap of tahapan) {
                             await client.query(

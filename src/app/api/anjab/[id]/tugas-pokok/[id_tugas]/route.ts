@@ -141,10 +141,8 @@ export async function PATCH(
             const hasilText = serializeHasilForDb(p.data.hasil_kerja);
             push(`hasil_kerja = $${values.length + 1}::text[]`, hasilText);
         }
-        if (p.data.jumlah_hasil !== undefined) push(`jumlah_hasil = $${values.length + 1}`, p.data.jumlah_hasil);
-        if (p.data.waktu_penyelesaian_jam !== undefined)
-            push(`waktu_penyelesaian_jam = $${values.length + 1}`, p.data.waktu_penyelesaian_jam);
-        if (p.data.waktu_efektif !== undefined) push(`waktu_efektif = $${values.length + 1}`, p.data.waktu_efektif);
+        // Note: legacy ABK columns were removed from `tugas_pokok`.
+        // ABK fields are handled separately and synced to `tugas_pokok_abk` below.
 
         await client.query("BEGIN"); began = true;
 
@@ -162,6 +160,54 @@ export async function PATCH(
                 return NextResponse.json({ error: "Not Found, (Tugas Pokok tidak ditemukan)" }, { status: 404 });
             }
         }
+
+            // After updating tugas_pokok, sync ABK into tugas_pokok_abk (upsert)
+            // NOTE: read ABK values from tugas_pokok_abk (not from tugas_pokok which may no longer have ABK columns)
+            try {
+                const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1::uuid LIMIT 1`, [id]);
+                const petaId = petaQ.rows[0]?.id ?? null;
+                if (petaId) {
+                    // fetch existing ABK row (if any)
+                    const abkQ = await client.query(
+                        `SELECT jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai
+                         FROM tugas_pokok_abk
+                         WHERE peta_jabatan_id = $1::uuid AND tugas_pokok_id = $2::int LIMIT 1`,
+                        [petaId, tugasId]
+                    );
+                    const abkRow = abkQ.rows[0] ?? {};
+
+                    // Prefer values provided in the PATCH payload; fall back to existing ABK row; else null
+                    const jumlah = p.data.jumlah_hasil !== undefined ? p.data.jumlah_hasil : (abkRow.jumlah_hasil ?? null);
+                    const waktu_pen = p.data.waktu_penyelesaian_jam !== undefined ? p.data.waktu_penyelesaian_jam : (abkRow.waktu_penyelesaian_jam ?? null);
+                    const waktu_eff = p.data.waktu_efektif !== undefined ? p.data.waktu_efektif : (abkRow.waktu_efektif ?? null);
+
+                    // Compute kebutuhan: explicit payload value takes precedence; else compute from numbers; else reuse existing kebutuhan if present
+                    const kebutuhan = p.data.kebutuhan_pegawai !== undefined
+                        ? p.data.kebutuhan_pegawai
+                        : ((waktu_eff && waktu_eff > 0 && jumlah != null && waktu_pen != null)
+                            ? (Number(jumlah || 0) * Number(waktu_pen || 0)) / Number(waktu_eff)
+                            : (abkRow.kebutuhan_pegawai ?? null));
+
+                    await client.query(
+                        `INSERT INTO tugas_pokok_abk (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, created_at, updated_at)
+                         VALUES ($1::uuid, $2::int, $3, $4, $5, $6, NOW(), NOW())
+                         ON CONFLICT (peta_jabatan_id, tugas_pokok_id) DO UPDATE SET
+                           jumlah_hasil = EXCLUDED.jumlah_hasil,
+                           waktu_penyelesaian_jam = EXCLUDED.waktu_penyelesaian_jam,
+                           waktu_efektif = EXCLUDED.waktu_efektif,
+                           kebutuhan_pegawai = EXCLUDED.kebutuhan_pegawai,
+                           updated_at = NOW()`,
+                        [petaId, tugasId, jumlah, waktu_pen, waktu_eff, kebutuhan]
+                    );
+
+                    // recompute peta kebutuhan from tugas_pokok_abk
+                    await client.query(`UPDATE peta_jabatan so
+                                         SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0)) FROM tugas_pokok_abk tpa WHERE tpa.peta_jabatan_id = so.id),0), updated_at = NOW()
+                                         WHERE so.id = $1::uuid`, [petaId]);
+                }
+            } catch (e) {
+                console.error('[tugas-pokok][PATCH] ABK sync failed', e);
+            }
 
         // Replace-all tahapan jika dikirim (sama seperti punyamu)
         let nested = p.data.detail_uraian_tugas;
@@ -191,24 +237,16 @@ export async function PATCH(
             }
         }
 
-        await client.query(
-            `UPDATE tugas_pokok
-         SET kebutuhan_pegawai =
-           CASE WHEN COALESCE(waktu_efektif, 0) > 0
-             THEN (COALESCE(jumlah_hasil,0)::numeric * COALESCE(waktu_penyelesaian_jam,0)::numeric) / waktu_efektif::numeric
-             ELSE NULL END,
-             updated_at = NOW()
-       WHERE jabatan_id = $1::uuid AND id = $2::int`,
-            [id, tugasId]
-        );
+                // legacy: tugas_pokok no longer stores kebutuhan_pegawai; ABK values live in tugas_pokok_abk
 
+        // Recompute peta_jabatan.kebutuhan_pegawai based on tugas_pokok_abk aggregation
         await client.query(
             `UPDATE peta_jabatan so
-         SET kebutuhan_pegawai = COALESCE(
-           (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
-              FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
-             updated_at = NOW()
-       WHERE so.jabatan_id = $1::uuid`,
+             SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0))
+                                               FROM tugas_pokok_abk tpa JOIN peta_jabatan so2 ON tpa.peta_jabatan_id = so2.id
+                                               WHERE so2.jabatan_id = $1::uuid),0),
+                 updated_at = NOW()
+             WHERE so.jabatan_id = $1::uuid`,
             [id]
         );
 
@@ -218,8 +256,8 @@ export async function PATCH(
         const { rows } = await pool.query(
             `
       SELECT t.id, t.jabatan_id, t.nomor_tugas, t.uraian_tugas,
-             t.hasil_kerja, t.jumlah_hasil, t.waktu_penyelesaian_jam,
-             t.waktu_efektif, t.kebutuhan_pegawai,
+             t.hasil_kerja, NULL AS jumlah_hasil, NULL AS waktu_penyelesaian_jam,
+             NULL AS waktu_efektif, NULL AS kebutuhan_pegawai,
              COALESCE(
                (SELECT json_agg(j.x ORDER BY j._ord_nomor NULLS LAST, j._created_at, j._id)
                   FROM (SELECT u.id AS _id, u.created_at AS _created_at,
@@ -299,15 +337,17 @@ export async function DELETE(
             return NextResponse.json({ error: "Not Found, (Tugas Pokok tidak ditemukan)" }, { status: 404 });
         }
 
-        await pool.query(
-            `UPDATE peta_jabatan so
-         SET kebutuhan_pegawai = COALESCE(
-           (SELECT CEIL(COALESCE(SUM(tp.kebutuhan_pegawai)::numeric,0))
-              FROM tugas_pokok tp WHERE tp.jabatan_id = $1::uuid),0),
-             updated_at = NOW()
-       WHERE so.jabatan_id = $1::uuid`,
-            [id]
-        );
+        // Delete any ABK rows referencing this tugas and recompute peta_jabatan kebutuhan
+        try {
+            await pool.query(`DELETE FROM tugas_pokok_abk WHERE tugas_pokok_id = $1::int`, [tugasId]);
+            await pool.query(`UPDATE peta_jabatan so
+                               SET kebutuhan_pegawai = COALESCE((SELECT CEIL(COALESCE(SUM(tpa.kebutuhan_pegawai)::numeric,0))
+                                                                 FROM tugas_pokok_abk tpa JOIN peta_jabatan so2 ON tpa.peta_jabatan_id = so2.id
+                                                                 WHERE so2.jabatan_id = $1::uuid),0), updated_at = NOW()
+                               WHERE so.jabatan_id = $1::uuid`, [id]);
+        } catch (e) {
+            console.error('[tugas-pokok][DELETE] ABK cleanup failed', e);
+        }
 
         return NextResponse.json({ ok: true });
     } catch (e: any) {

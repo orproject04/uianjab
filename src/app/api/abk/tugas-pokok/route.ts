@@ -25,9 +25,9 @@ export async function GET(req: NextRequest) {
                 tpa.kebutuhan_pegawai,
                 tp.uraian_tugas as uraian,
                 tp.hasil_kerja,
-                tp.jumlah_hasil as tp_jumlah_hasil,
+                NULL as tp_jumlah_hasil,
                 null as satuan_hasil,
-                tp.waktu_penyelesaian_jam as tp_waktu_penyelesaian
+                NULL as tp_waktu_penyelesaian
              FROM tugas_pokok_abk tpa
              INNER JOIN tugas_pokok tp ON tp.id = tpa.tugas_pokok_id
              WHERE tpa.peta_jabatan_id = $1
