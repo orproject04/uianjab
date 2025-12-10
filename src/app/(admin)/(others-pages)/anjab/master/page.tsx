@@ -455,8 +455,8 @@ export default function AnjabListPage() {
                                     className="p-5 cursor-pointer flex-1 flex flex-col"
                                 >
                                     <div className="flex-1 mb-3">
-                                        <h3 className="font-semibold text-sm text-gray-900 dark:text-white leading-snug line-clamp-4 min-h-[4.5rem]" title={slugToTitle(jabatan.nama_jabatan)}>
-                                            {slugToTitle(jabatan.nama_jabatan)}
+                                        <h3 className="font-semibold text-sm text-gray-900 dark:text-white leading-snug line-clamp-4 min-h-[4.5rem]" title={slugToTitle(jabatan.nama_jabatan).toUpperCase()}>
+                                            {slugToTitle(jabatan.nama_jabatan).toUpperCase()}
                                         </h3>
                                     </div>
                                     <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-700">
@@ -577,8 +577,8 @@ export default function AnjabListPage() {
                                                         </svg>
                                                     </div>
                                                     <div className="min-w-0 flex-1">
-                                                        <span className="text-sm font-medium text-gray-900 dark:text-white block" title={slugToTitle(jabatan.nama_jabatan)}>
-                                                            {slugToTitle(jabatan.nama_jabatan)}
+                                                        <span className="text-sm font-medium text-gray-900 dark:text-white block" title={slugToTitle(jabatan.nama_jabatan).toUpperCase()}>
+                                                            {slugToTitle(jabatan.nama_jabatan).toUpperCase()}
                                                         </span>
                                                     </div>
                                                 </div>
