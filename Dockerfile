@@ -42,7 +42,7 @@ WORKDIR /app
 
 # Install deps Node (postinstall Puppeteer akan download Chromium)
 COPY package*.json ./
-RUN npm install && npm rebuild
+RUN npm install
 
 # Python deps untuk extractor
 COPY requirements.txt ./requirements.txt
