@@ -65,10 +65,14 @@ export function safeVerifyRefresh(token: string): BaseClaims | null {
     try { return verifyRefreshToken(token); } catch { return null; }
 }
 
-/* ====== Guard helper untuk API Next.js (Authorization Bearer) ====== */
+/* ====== Guard helper untuk API Next.js (Cookie + Bearer fallback) ====== */
 export type AuthUser = { id: string; email: string; role: string; full_name?: string | null };
 
 export function getBearerFromReq(req: NextRequest): string | null {
+    // Prioritas: 1. Cookie, 2. Authorization header
+    const cookieToken = req.cookies.get('access_token')?.value;
+    if (cookieToken) return cookieToken;
+    
     const auth = req.headers.get("authorization") || "";
     const m = auth.match(/^Bearer\s+(.+)$/i);
     return m?.[1]?.trim() || null;

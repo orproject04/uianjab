@@ -107,31 +107,48 @@ function ArrayInput({
             ) : (
                 <>
                     <div className="space-y-2">
-                        {items.map((v, i) => (
-                            <div key={i} className="flex gap-2">
-                                <input
-                                    ref={(el) => { inputsRef.current[i] = el; }}
-                                    type="text"
-                                    name={`${name}[${i}]`}
-                                    value={v}
-                                    onChange={(e) => updateItem(i, e.target.value)}
-                                    onKeyDown={(e) => onKeyDown(e, i)}
-                                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                                    placeholder={placeholder}
-                                    autoFocus={autoFocus && i === 0}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => removeItem(i)}
-                                    title="Hapus baris ini"
-                                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        ))}
+                        {items.map((v, i) => {
+                            // Check if item should be indented
+                            // Item is indented if it's after a "dari kalangan" and not itself a "dari kalangan"
+                            const isKalangan = v.toLowerCase().trim().startsWith("dari kalangan");
+                            let isIndented = false;
+                            
+                            if (!isKalangan && i > 0) {
+                                // Look backwards to find the last "dari kalangan"
+                                for (let j = i - 1; j >= 0; j--) {
+                                    if (items[j].toLowerCase().trim().startsWith("dari kalangan")) {
+                                        isIndented = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            return (
+                                <div key={i} className={`flex gap-2 ${isIndented ? 'ml-8' : ''}`}>
+                                    <input
+                                        ref={(el) => { inputsRef.current[i] = el; }}
+                                        type="text"
+                                        name={`${name}[${i}]`}
+                                        value={v}
+                                        onChange={(e) => updateItem(i, e.target.value)}
+                                        onKeyDown={(e) => onKeyDown(e, i)}
+                                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                                        placeholder={placeholder}
+                                        autoFocus={autoFocus && i === 0}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeItem(i)}
+                                        title="Hapus baris ini"
+                                        className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                     
                     <button

@@ -3,7 +3,6 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/apiFetch";
-import { tokenStore } from "@/lib/tokens";
 
 export type Me = { id: string; email: string; role: string; full_name: string | null };
 
@@ -28,13 +27,7 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
             setLoading(true);
             setError(null);
 
-            // ⛔️ Guard: jangan fetch kalau belum ada token
-            if (!tokenStore.access) {
-                setMe(null);
-                setLoading(false);
-                return;
-            }
-
+            // Cookie-based: langsung fetch, browser auto kirim cookies
             const r = await apiFetch("/api/auth/me", { cache: "no-store" });
             if (!r.ok) {
                 setMe(null);
@@ -58,21 +51,20 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
             await load();
         })();
         return () => { alive = false; };
-        // tidak perlu depend ke tokenStore.access karena itu bukan state React;
-        // load() sudah aman dipanggil dari luar (mis. setelah login) atau via storage event di bawah.
     }, []);
 
-    // 🔄 Sinkronisasi antar-tab: bila token diubah di tab lain, reload profil
+    // Cookies auto-share antar tab, tapi tetap bisa listen untuk manual refresh
+    // Gunakan BroadcastChannel untuk sinkronisasi login/logout antar tab
     useEffect(() => {
-        function onStorage(ev: StorageEvent) {
-            if (!ev.key) return;
-            if (ev.key === "access_token" || ev.key === "refresh_token") {
-                // saat token berubah, muat ulang profil (guard tetap berlaku)
-                load();
+        const channel = new BroadcastChannel('auth_channel');
+        
+        channel.onmessage = (event) => {
+            if (event.data === 'login' || event.data === 'logout') {
+                load(); // Reload user info
             }
-        }
-        window.addEventListener("storage", onStorage);
-        return () => window.removeEventListener("storage", onStorage);
+        };
+
+        return () => channel.close();
     }, []);
 
     const value = useMemo<MeCtx>(() => ({

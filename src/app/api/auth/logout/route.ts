@@ -1,17 +1,20 @@
 // src/app/api/auth/logout/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import pool from "@/lib/db";
 import { hashRefreshToken } from "@/lib/tokens";
 
 /**
- * Logout: kirim refresh token via Authorization Bearer atau body { refresh_token }.
- * Server akan revoke baris user_session yg cocok. Tidak ada cookie yang dibersihkan.
+ * Logout: ambil refresh token dari cookie atau fallback ke Authorization/body.
+ * Server akan revoke session dan clear cookies.
  */
 export async function POST(req: NextRequest) {
+    const cookieStore = await cookies();
+    const cookieRefresh = cookieStore.get('refresh_token')?.value;
     const auth = req.headers.get("authorization") || "";
     const headerRefresh = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const body = await req.json().catch(() => ({}));
-    const refresh = headerRefresh || body?.refresh_token;
+    const refresh = cookieRefresh || headerRefresh || body?.refresh_token;
 
     if (refresh) {
         await pool.query(
@@ -23,5 +26,9 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    return Response.json({ ok: true }, { status: 200 });
+    // Clear HTTP-only cookies
+    cookieStore.delete('access_token');
+    cookieStore.delete('refresh_token');
+
+    return NextResponse.json({ ok: true, message: "Logout berhasil" }, { status: 200 });
 }

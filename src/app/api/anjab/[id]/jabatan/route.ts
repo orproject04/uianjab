@@ -25,17 +25,54 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         const user = getUserFromReq(_req);
         if (!user) return NextResponse.json({error: "Unauthorized, Silakan login kembali"}, {status: 401});
 
-        const {id} = await ctx.params; // <-- await!
-        // Lapis 1: early validation
-        if (!isUuid(id)) {
-            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
+        const {id} = await ctx.params;
+        
+        let jabatanId: string | null = null;
+
+        if (isUuid(id)) {
+            // Direct UUID - use as is
+            jabatanId = id;
+        } else {
+            // Not UUID - treat as slug path, resolve to jabatan_id
+            const segments = id.split('/').filter(Boolean);
+            
+            if (segments.length > 0) {
+                const query = `
+                    WITH RECURSIVE path_lookup AS (
+                        SELECT id, jabatan_id, slug, parent_id, 1 as depth
+                        FROM peta_jabatan
+                        WHERE parent_id IS NULL AND slug = $1
+                        
+                        UNION ALL
+                        
+                        SELECT p.id, p.jabatan_id, p.slug, p.parent_id, path_lookup.depth + 1
+                        FROM peta_jabatan p
+                        INNER JOIN path_lookup ON p.parent_id = path_lookup.id
+                        WHERE p.slug = CASE path_lookup.depth + 1
+                            ${segments.map((_, i) => `WHEN ${i + 1} THEN $${i + 1}`).join('\n                            ')}
+                            ELSE NULL
+                        END
+                    )
+                    SELECT jabatan_id
+                    FROM path_lookup 
+                    WHERE depth = ${segments.length}
+                    LIMIT 1
+                `;
+
+                const result = await pool.query<{jabatan_id: string | null}>(query, segments);
+                jabatanId = result.rows[0]?.jabatan_id || null;
+            }
+        }
+
+        if (!jabatanId) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
 
         const {rows} = await pool.query(
             `SELECT id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
              FROM jabatan
              WHERE id = $1::uuid`,
-            [id]
+            [jabatanId]
         );
         if (!rows.length) return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
 
@@ -47,10 +84,6 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
             },
         });
     } catch (e: any) {
-        // Lapis 2: map error cast UUID dari PostgreSQL
-        if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
-        }
         console.error(e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     }
@@ -63,10 +96,46 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             return NextResponse.json({error: "Forbidden, Anda tidak berhak mengakses fitur ini"}, {status: 403});
         }
 
-        const {id} = await ctx.params; // <-- await!
-        // Early validation juga di PATCH
-        if (!isUuid(id)) {
-            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
+        const {id} = await ctx.params;
+        
+        let jabatanId: string | null = null;
+
+        if (isUuid(id)) {
+            jabatanId = id;
+        } else {
+            // Resolve slug path to jabatan_id
+            const segments = id.split('/').filter(Boolean);
+            
+            if (segments.length > 0) {
+                const query = `
+                    WITH RECURSIVE path_lookup AS (
+                        SELECT id, jabatan_id, slug, parent_id, 1 as depth
+                        FROM peta_jabatan
+                        WHERE parent_id IS NULL AND slug = $1
+                        
+                        UNION ALL
+                        
+                        SELECT p.id, p.jabatan_id, p.slug, p.parent_id, path_lookup.depth + 1
+                        FROM peta_jabatan p
+                        INNER JOIN path_lookup ON p.parent_id = path_lookup.id
+                        WHERE p.slug = CASE path_lookup.depth + 1
+                            ${segments.map((_, i) => `WHEN ${i + 1} THEN $${i + 1}`).join('\n                            ')}
+                            ELSE NULL
+                        END
+                    )
+                    SELECT jabatan_id
+                    FROM path_lookup 
+                    WHERE depth = ${segments.length}
+                    LIMIT 1
+                `;
+
+                const result = await pool.query<{jabatan_id: string | null}>(query, segments);
+                jabatanId = result.rows[0]?.jabatan_id || null;
+            }
+        }
+
+        if (!jabatanId) {
+            return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
         }
 
         const json = await req.json().catch(() => ({}));
@@ -90,7 +159,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                  prestasi_diharapkan=COALESCE($5, ''),
                  updated_at=NOW()
              WHERE id = $6::uuid`,
-            [kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, id]
+            [kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan, jabatanId]
         );
         if (!rowCount) return NextResponse.json({error: "Not Found, (Dokumen analisis jabatan tidak ditemukan)"}, {status: 404});
 
@@ -98,13 +167,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             `SELECT id, kode_jabatan, nama_jabatan, ikhtisar_jabatan, kelas_jabatan, prestasi_diharapkan
              FROM jabatan
              WHERE id = $1::uuid`,
-            [id]
+            [jabatanId]
         );
         return NextResponse.json({ok: true, data: rows[0]});
     } catch (e: any) {
-        if (e?.code === "22P02") {
-            return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
-        }
         console.error("PATCH error:", e);
         return NextResponse.json({error: "General Error"}, {status: 500});
     }

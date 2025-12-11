@@ -1,5 +1,6 @@
 // src/app/api/auth/login/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import pool from "@/lib/db";
 import {
     comparePassword,
@@ -37,22 +38,40 @@ export async function POST(req: NextRequest) {
 
         // simpan HASH refresh di DB
         const refreshHash = hashRefreshToken(refresh);
-        const expires     = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // atau pakai REFRESH_TOKEN_MAXAGE_SEC jika ingin konsisten
+        const expires     = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
         await pool.query(
             `INSERT INTO user_session (user_id, refresh_token_hash, expires_at)
              VALUES ($1, $2, $3)`,
             [user.id, refreshHash, expires]
         );
 
-        // Kembali JSON tokens (tanpa Set-Cookie)
-        return Response.json({
+        // Set HTTP-only cookies menggunakan cookies() API
+        const cookieStore = await cookies();
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        cookieStore.set('access_token', access, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: 'lax',
+            maxAge: ACCESS_TOKEN_MAXAGE_SEC,
+            path: '/',
+        });
+        
+        cookieStore.set('refresh_token', refresh, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30, // 30 days
+            path: '/',
+        });
+
+
+        return NextResponse.json({
             ok: true,
-            token_type: "Bearer",
-            access_token: access,
-            refresh_token: refresh,
-            expires_in: ACCESS_TOKEN_MAXAGE_SEC,
+            message: "Login berhasil",
         }, { status: 200 });
-    } catch {
-        return Response.json({ error: "Gagal login" }, { status: 500 });
+    } catch (err) {
+        console.error('[LOGIN] Error:', err);
+        return NextResponse.json({ error: "Gagal login" }, { status: 500 });
     }
 }

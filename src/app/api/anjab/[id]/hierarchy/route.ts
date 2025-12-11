@@ -32,36 +32,62 @@ export async function GET(req: NextRequest, ctx: { params: Promise<Params> }) {
 
         const {id} = await ctx.params;
         
-        // First, get the peta_id for the jabatan
+        // First, get the peta_jabatan_id for the jabatan
         let petaId: string | null = null;
 
         if (isUuid(id)) {
-            // Try to find by jabatan id first, then by peta_id
-            const jabatanQuery = await pool.query(
-                `SELECT j.peta_id FROM jabatan j WHERE j.id = $1::uuid LIMIT 1`,
+            // Try to find peta_jabatan by jabatan_id
+            const petaQuery = await pool.query(
+                `SELECT id FROM peta_jabatan WHERE jabatan_id = $1::uuid LIMIT 1`,
                 [id]
             );
             
-            if (jabatanQuery.rows[0]) {
-                petaId = jabatanQuery.rows[0].peta_id;
+            if (petaQuery.rows[0]) {
+                petaId = petaQuery.rows[0].id;
             } else {
-                // Try to find by peta_id directly
-                const petaQuery = await pool.query(
-                    `SELECT j.peta_id FROM jabatan j WHERE j.peta_id = $1::uuid LIMIT 1`,
+                // id might be a peta_jabatan.id directly - check if it exists
+                const directQuery = await pool.query(
+                    `SELECT id FROM peta_jabatan WHERE id = $1::uuid LIMIT 1`,
                     [id]
                 );
-                if (petaQuery.rows[0]) {
-                    petaId = id; // The id is actually a peta_id
+                if (directQuery.rows[0]) {
+                    petaId = id;
                 }
             }
         } else {
-            // Find by slug
-            const slugQuery = await pool.query(
-                `SELECT j.peta_id FROM jabatan j WHERE j.slug = $1 LIMIT 1`,
-                [id]
-            );
-            if (slugQuery.rows[0]) {
-                petaId = slugQuery.rows[0].peta_id;
+            // Not UUID - treat as slug path (e.g., "setjen/depmin/okk")
+            const segments = id.split('/').filter(Boolean);
+            
+            if (segments.length > 0) {
+                // Build recursive query to find peta_jabatan.id by following slug path
+                const query = `
+                    WITH RECURSIVE path_lookup AS (
+                        -- Base: find root with first segment
+                        SELECT id, jabatan_id, slug, parent_id, 1 as depth
+                        FROM peta_jabatan
+                        WHERE parent_id IS NULL AND slug = $1
+                        
+                        UNION ALL
+                        
+                        -- Recursive: follow path by matching next segment
+                        SELECT p.id, p.jabatan_id, p.slug, p.parent_id, path_lookup.depth + 1
+                        FROM peta_jabatan p
+                        INNER JOIN path_lookup ON p.parent_id = path_lookup.id
+                        WHERE p.slug = CASE path_lookup.depth + 1
+                            ${segments.map((_, i) => `WHEN ${i + 1} THEN $${i + 1}`).join('\n                            ')}
+                            ELSE NULL
+                        END
+                    )
+                    SELECT id
+                    FROM path_lookup 
+                    WHERE depth = ${segments.length}
+                    LIMIT 1
+                `;
+
+                const result = await pool.query<{id: string}>(query, segments);
+                if (result.rows[0]) {
+                    petaId = result.rows[0].id;
+                }
             }
         }
 

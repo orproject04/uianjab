@@ -502,10 +502,17 @@ function renderPerangkatTable(data: any[], maxRowsPerPage = 50) {
 
 // ===== Export utama: bangun HTML lengkap =====
 export function buildAnjabHtml(data: any): string {
-    const totalKebutuhan = (data.tugas_pokok || []).reduce(
-        (sum: number, item: any) => sum + (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0),
+  // If this is the master path (SELECT_ANJAB) we set so.kebutuhan_pegawai = NULL.
+  // Detect master by checking data.kebutuhan_pegawai === null and in that case
+  // render KEBUTUHAN PEGAWAI, Jumlah Pegawai, and Pembulatan as blank.
+  const isMaster = data.kebutuhan_pegawai == null;
+  const totalKebutuhan = isMaster
+    ? null
+    : (data.tugas_pokok || []).reduce(
+        (sum: number, item: any) =>
+          sum + (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0),
         0
-    );
+      );
 
     const showSatuanHasil = hasAnySatuanHasil(data);
 
@@ -524,9 +531,11 @@ export function buildAnjabHtml(data: any): string {
     .doc-title { text-align: center; margin-bottom: 19px; }
     .table-section p { page-break-after: avoid; margin: 0; padding: 0; }
     .table-section table { margin: 0; padding: 0; }
-    .word-table { page-break-inside: auto; }
+    .word-table { page-break-inside: auto; border-collapse: collapse; }
     .word-table thead { display: table-header-group; }
-    .word-table tr { page-break-inside: avoid; }
+    .word-table tbody { display: table-row-group; }
+    .word-table tr { page-break-inside: avoid; page-break-after: auto; }
+    .word-table td, .word-table th { page-break-inside: avoid; }
     .section { margin-top: 5px; margin-bottom: 20px; }
     .section .title { font-weight: bold; display: block; margin-bottom: 4px; }
     p { margin: 4px 0; text-align: justify; }
@@ -665,7 +674,11 @@ export function buildAnjabHtml(data: any): string {
         </tr>
       </thead>
       <tbody>
-        ${(data.tugas_pokok || []).map((item: any, index: number) => `
+        ${(data.tugas_pokok || []).map((item: any, index: number) => {
+          const kebutuhanPegawai = isMaster
+              ? null
+              : (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0);
+          return `
           <tr>
             <td style="text-align:center">${index + 1}.</td>
             <td style="text-align: justify">${renderUraianTugasDanTahapan(item)}</td>
@@ -673,16 +686,17 @@ export function buildAnjabHtml(data: any): string {
             <td class="center">${item.jumlah_hasil}</td>
             <td class="center">${item.waktu_penyelesaian_jam}</td>
             <td class="center">${item.waktu_efektif}</td>
-            <td class="center">${item.kebutuhan_pegawai}</td>
+            <td class="center">${kebutuhanPegawai == null ? "null" : kebutuhanPegawai.toFixed(4)}</td>
           </tr>
-        `).join("")}
+        `;
+        }).join("")}
         <tr>
           <td colspan="6" class="center">Jumlah Pegawai Yang Dibutuhkan</td>
-          <td class="center">${totalKebutuhan.toFixed(4)}</td>
+          <td class="center">${totalKebutuhan == null ? "null" : totalKebutuhan.toFixed(4)}</td>
         </tr>
         <tr>
           <td colspan="6" class="center">Pembulatan</td>
-          <td class="center">${Math.ceil(totalKebutuhan)}</td>
+          <td class="center">${totalKebutuhan == null ? "null" : Math.ceil(totalKebutuhan)}</td>
         </tr>
       </tbody>
     </table>

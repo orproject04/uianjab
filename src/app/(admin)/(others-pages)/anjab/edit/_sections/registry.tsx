@@ -2,6 +2,7 @@ import JabatanForm from "./jabatan";
 import UnitKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/unit-kerja";
 import KualifikasiForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/kualifikasi";
 import TugasPokokForm from "./tugas-pokok";
+import TugasPokokABKForm from "./tugas-pokok-abk";
 import HasilKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/hasil-kerja";
 import BahanKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/bahan-kerja";
 import PerangkatKerjaForm from "@/app/(admin)/(others-pages)/anjab/edit/_sections/perangkat-kerja";
@@ -22,6 +23,7 @@ function Stub({id}: { id: string; viewerPath: string }) {
     );
 }
 
+// Components untuk master route (lengkap)
 export const SECTION_COMPONENTS = {
     "jabatan": JabatanForm,
     "unit-kerja": UnitKerjaForm,
@@ -39,6 +41,12 @@ export const SECTION_COMPONENTS = {
     "syarat-jabatan": SyaratJabatanForm,
 } as const;
 
+// Components untuk slug route (ABK-focused)
+export const SECTION_COMPONENTS_SLUG = {
+    "tugas-pokok": TugasPokokABKForm,
+} as const;
+
+// Labels untuk master route (lengkap)
 export const SECTION_LABELS: Record<string, string> = {
     "jabatan": "Jabatan",
     "unit-kerja": "Unit Kerja",
@@ -56,12 +64,29 @@ export const SECTION_LABELS: Record<string, string> = {
     "syarat-jabatan": "Syarat Jabatan",
 };
 
+// Labels untuk slug route (ABK-focused)
+export const SECTION_LABELS_SLUG: Record<string, string> = {
+    "jabatan": "Jabatan",
+    "unit-kerja": "Unit Kerja",
+    "kualifikasi": "Kualifikasi Jabatan",
+    "tugas-pokok": "Beban Kerja",
+    "hasil-kerja": "Hasil Kerja",
+    "bahan-kerja": "Bahan Kerja",
+    "perangkat-kerja": "Perangkat Kerja",
+    "tanggung-jawab": "Tanggung Jawab",
+    "wewenang": "Wewenang",
+    "korelasi-jabatan": "Korelasi Jabatan",
+    "kondisi-lingkungan-kerja": "Kondisi Lingkungan Kerja",
+    "risiko-bahaya": "Risiko Bahaya",
+    "syarat-jabatan": "Syarat Jabatan",
+};
+
+// Order untuk master route (lengkap)
 export const SECTION_ORDER = [
     "jabatan",
     "unit-kerja",
     "kualifikasi",
     "tugas-pokok",
-    // "tahapan-uraian-tugas",
     "hasil-kerja",
     "bahan-kerja",
     "perangkat-kerja",
@@ -71,4 +96,9 @@ export const SECTION_ORDER = [
     "kondisi-lingkungan-kerja",
     "risiko-bahaya",
     "syarat-jabatan",
+] as const;
+
+// Order untuk slug route (hanya tugas-pokok/ABK)
+export const SECTION_ORDER_SLUG = [
+    "tugas-pokok",
 ] as const;

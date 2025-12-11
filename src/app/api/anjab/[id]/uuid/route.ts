@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
         const {id} = await ctx.params;
         if (!id || typeof id !== "string") {
-            return NextResponse.json({error: "Bad Request: id (slug / uuid) wajib diisi"}, {status: 400});
+            return NextResponse.json({error: "Bad Request: id (slug path / uuid) wajib diisi"}, {status: 400});
         }
 
         const isUuid = UUID_RE.test(id);
@@ -24,34 +24,63 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         let row: { id: string } | undefined;
 
         if (isUuid) {
-            // Jika UUID → coba cocokkan sebagai peta_id (dan fallback: id langsung)
+            // If UUID → try to match as jabatan.id directly or via peta_jabatan.id → jabatan_id
             const q = await pool.query<{ id: string }>(
                 `
                     SELECT j.id
                     FROM jabatan j
-                    WHERE j.peta_id = $1::uuid
-             OR j.id = $1::uuid
-                        LIMIT 1
+                    LEFT JOIN peta_jabatan pj ON pj.jabatan_id = j.id
+                    WHERE j.id = $1::uuid
+                       OR pj.id = $1::uuid
+                    LIMIT 1
                 `,
                 [id]
             );
             row = q.rows[0];
         } else {
-            // Jika bukan UUID → perlakukan sebagai slug (2 segmen terakhir yang kamu pakai)
-            const q = await pool.query<{ id: string }>(
-                `
-                    SELECT id
-                    FROM jabatan
-                    WHERE slug = $1 LIMIT 1
-                `,
-                [id]
-            );
+            // If not UUID → treat as peta_jabatan slug path (e.g., "setjen/depmin/okk")
+            // Split path and traverse tree to find jabatan_id
+            const segments = id.split('/').filter(Boolean);
+            
+            if (segments.length === 0) {
+                return NextResponse.json(
+                    {error: "Bad Request: slug path kosong"},
+                    {status: 400}
+                );
+            }
+
+            // Build recursive query to traverse tree by slug path
+            const query = `
+                WITH RECURSIVE path_lookup AS (
+                    -- Base: find root with first segment
+                    SELECT id, jabatan_id, slug, parent_id, 1 as depth
+                    FROM peta_jabatan
+                    WHERE parent_id IS NULL AND slug = $1
+                    
+                    UNION ALL
+                    
+                    -- Recursive: follow path by matching next segment
+                    SELECT p.id, p.jabatan_id, p.slug, p.parent_id, path_lookup.depth + 1
+                    FROM peta_jabatan p
+                    INNER JOIN path_lookup ON p.parent_id = path_lookup.id
+                    WHERE p.slug = CASE path_lookup.depth + 1
+                        ${segments.map((_, i) => `WHEN ${i + 1} THEN $${i + 1}`).join('\n                        ')}
+                        ELSE NULL
+                    END
+                )
+                SELECT jabatan_id AS id
+                FROM path_lookup 
+                WHERE depth = ${segments.length}
+                LIMIT 1
+            `;
+
+            const q = await pool.query<{ id: string }>(query, segments);
             row = q.rows[0];
         }
 
         if (!row) {
             return NextResponse.json(
-                {error: "Not Found, slug / uuid tidak ditemukan"},
+                {error: "Not Found, slug path / uuid tidak ditemukan"},
                 {status: 404, headers: {"Cache-Control": "no-store"}}
             );
         }

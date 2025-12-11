@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import {useParams} from "next/navigation";
+import {useParams, useRouter} from "next/navigation";
 import React, {useEffect, useMemo, useState} from "react";
-import WordAnjab from "@/components/form/form-elements/WordAnjab";
 import {apiFetch} from "@/lib/apiFetch";
 import Button from "@/components/ui/button/Button";
 import AnjabBreadcrumb from "@/components/common/AnjabBreadcrumb";
@@ -40,6 +39,7 @@ function parseContentDispositionFilename(cd: string | null): string | null {
 
 export default function InformasiJabatanPage() {
     const params = useParams();
+    const router = useRouter();
 
     // ---- ambil role user (untuk hide tombol non-admin)
     const [isAdmin, setIsAdmin] = useState(false);
@@ -71,11 +71,17 @@ export default function InformasiJabatanPage() {
         return Array.isArray(s) ? s : [String(s)];
     }, [params]);
 
-    // id = join 2 segmen terakhir pakai "-"
+    // Redirect ke home jika tidak ada slug
+    useEffect(() => {
+        if (rawSlug.length === 0) {
+            router.push("/");
+        }
+    }, [rawSlug, router]);
+
+    // id = full path dengan "/"
     const id = useMemo(() => {
         if (rawSlug.length === 0) return "";
-        if (rawSlug.length === 1) return rawSlug[0];
-        return rawSlug.slice(-2).join("-");
+        return rawSlug.join("/");
     }, [rawSlug]);
 
     const encodedId = useMemo(() => (id ? encodeURIComponent(id) : ""), [id]);
@@ -87,11 +93,11 @@ export default function InformasiJabatanPage() {
         return `Anjab ${titleCase(words)}.pdf`;
     }, [id]);
 
-    // href edit: pakai full path (/)
+    // href edit: pakai full path (/) - langsung ke tugas-pokok (ABK)
     const editHref = useMemo(() => {
         if (rawSlug.length === 0) return "#";
         const fullPath = rawSlug.join("/"); // contoh: "A/B/C/D"
-        return `/anjab/edit/jabatan/${fullPath}`;
+        return `/anjab/edit/tugas-pokok/${fullPath}`;
     }, [rawSlug]);
 
     // Blob URL + blob + filename
@@ -121,7 +127,7 @@ export default function InformasiJabatanPage() {
         }
     }, [status, pdfSrc]);
 
-    // === resolve UUID jabatan dari slug (2 segmen terakhir) & simpan ke localStorage — HANYA untuk admin ===
+    // === resolve UUID jabatan dari peta slug path & simpan ke localStorage — HANYA untuk admin ===
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -132,9 +138,8 @@ export default function InformasiJabatanPage() {
                 const data = await res.json();
                 const createdId = data?.id ?? null;
                 if (!cancelled && createdId && typeof window !== "undefined") {
-                    const slugForUrl = id.replace(/-/g, "/");
-                    // Simpan agar komponen lain bisa baca
-                    localStorage.setItem(slugForUrl, String(createdId));
+                    // Simpan mapping: peta slug → jabatan id (gunakan prefix anjab:)
+                    localStorage.setItem(`anjab:${id}`, String(createdId));
                 }
             } catch {
                 // diamkan bila gagal
@@ -228,8 +233,7 @@ export default function InformasiJabatanPage() {
         if (!isAdmin || !id) return;
 
         // Ambil UUID dari localStorage
-        const slugForUrl = id.replace(/-/g, "/");
-        const uuid = localStorage.getItem(slugForUrl);
+        const uuid = localStorage.getItem(`anjab:${id}`);
 
         if (!uuid) {
             await MySwal.fire({
@@ -278,7 +282,7 @@ export default function InformasiJabatanPage() {
 
             if (res.ok) {
                 // Hapus UUID dari localStorage setelah berhasil dihapus
-                localStorage.removeItem(slugForUrl);
+                localStorage.removeItem(`anjab:${id}`);
 
                 await MySwal.fire({
                     title: "Berhasil!",
@@ -286,7 +290,8 @@ export default function InformasiJabatanPage() {
                     icon: "success",
                     confirmButtonColor: "#059669"
                 });
-                window.location.href = "/anjab";
+                // Redirect ke halaman yang sama untuk refresh
+                window.location.href = `/anjab/${id}`;
             } else {
                 const error = await res.json().catch(() => ({}));
                 await MySwal.fire({
@@ -297,7 +302,6 @@ export default function InformasiJabatanPage() {
                 });
             }
         } catch (error) {
-            console.error("Error deleting anjab:", error);
             await MySwal.fire({
                 title: "Error!",
                 text: "Terjadi kesalahan saat menghapus dokumen anjab",
@@ -310,7 +314,7 @@ export default function InformasiJabatanPage() {
     // === Tanpa slug/id ===
     if (!id) {
         return (
-            <div className="pt-16 p-8 max-w-xl mx-auto text-center space-y-4">
+            <div className="pt-6 p-8 max-w-xl mx-auto text-center space-y-4">
                 <AnjabBreadcrumb currentId="" currentTitle="Analisis Jabatan" rawSlug={[]} />
                 <p className="text-gray-700">Silakan pilih jabatan untuk ditampilkan.</p>
             </div>
@@ -319,7 +323,7 @@ export default function InformasiJabatanPage() {
 
     if (status === "loading" || status === "idle") {
         return (
-            <div className="pt-16">
+            <div className="pt-6">
                 <div className="px-6 py-3 border-b border-gray-200">
                     <AnjabBreadcrumb currentId={id} currentTitle={slugToTitle(id)} rawSlug={rawSlug} />
                 </div>
@@ -387,7 +391,7 @@ export default function InformasiJabatanPage() {
         // Non-admin: pesan sederhana (tanpa aksi)
         if (!isAdmin) {
             return (
-                <div className="pt-16">
+                <div className="pt-6">
                     <div className="px-6 py-3 border-b border-gray-200">
                         <AnjabBreadcrumb currentId={id} currentTitle={slugToTitle(id)} rawSlug={rawSlug} />
                     </div>
@@ -515,23 +519,12 @@ export default function InformasiJabatanPage() {
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Upload Word (.doc saja) */}
-                        <div className="border rounded-lg p-4">
-                            <h3 className="font-medium mb-2 text-center">Upload Dokumen Anjab (.doc)</h3>
-                            <WordAnjab id={id}/>
-                        </div>
-
-                        {/* Buat Manual */}
-                        <div className="border rounded-lg p-4 flex">
-                            <div className="m-auto text-center space-y-3">
-                                <Link href={`/anjab/create/${encodeURIComponent(id)}`}>
-                                    <Button className="w-full" size="sm">
-                                        Buat Anjab Baru
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
+                    <div className="flex items-center justify-center">
+                        <Link href="/anjab/master">
+                            <Button className="w-full sm:w-auto px-6 py-3" size="sm">
+                                Tambah Anjab
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </div>
@@ -597,19 +590,9 @@ export default function InformasiJabatanPage() {
                                 <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
-                                <span className="hidden sm:inline">Edit Anjab</span>
+                                <span className="hidden sm:inline">Edit ABK</span>
                                 <span className="sm:hidden">Edit</span>
                             </Link>
-                            <button
-                                onClick={handleDelete}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm outline-1 outline-red-700 bg-white text-red-700 rounded hover:bg-red-100 transition-colors whitespace-nowrap"
-                            >
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span className="hidden sm:inline">Hapus Anjab</span>
-                                <span className="sm:hidden">Hapus</span>
-                            </button>
                         </div>
                     )}
                 </div>

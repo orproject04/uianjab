@@ -75,7 +75,7 @@ const AnjabBreadcrumb: React.FC<AnjabBreadcrumbProps> = ({currentId, currentTitl
     // Build fallback hierarchy from slug segments
     function buildFallbackHierarchy(slugSegments: string[]): HierarchyNode[] {
         return slugSegments.map((segment, index) => ({
-            id: slugSegments.slice(0, index + 1).join('-'),
+            id: slugSegments.slice(0, index + 1).join('/'),
             nama_jabatan: slugToTitle(segment),
             slug: slugSegments.slice(0, index + 1).join('/'),
             level: index,
@@ -300,7 +300,9 @@ const AnjabBreadcrumb: React.FC<AnjabBreadcrumbProps> = ({currentId, currentTitl
                 {/* Hierarchy items */}
                 {hierarchy.map((node, index) => {
                     const isLast = index === hierarchy.length - 1;
-                    const href = `/anjab/${node.slug}`;
+                    // Build full path by joining all slugs from root to current node
+                    const fullPath = hierarchy.slice(0, index + 1).map(n => n.slug).join('/');
+                    const href = `/anjab/${fullPath}`;
 
                     return (
                         <React.Fragment key={node.id}>

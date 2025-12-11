@@ -1,173 +1,308 @@
-# TailAdmin Next.js - Free Next.js Tailwind Admin Dashboard Template
+# PANDAWA - Portal Anjab dan ABK Berbasis Web Terintegrasi
 
-TailAdmin is a free and open-source admin dashboard template built on **Next.js and Tailwind CSS** providing developers with everything they need to create a feature-rich and data-driven: back-end, dashboard, or admin panel solution for any sort of web project.
+**PANDAWA** adalah sistem manajemen analisis jabatan (Anjab) dan analisis beban kerja (ABK) berbasis web yang terintegrasi. Dibangun dengan teknologi modern untuk memudahkan pengelolaan dokumen Anjab, struktur organisasi, dan perhitungan kebutuhan pegawai.
 
-![TailAdmin - Next.js Dashboard Preview](./banner.png)
+![PANDAWA Dashboard](./banner.png)
 
-With TailAdmin Next.js, you get access to all the necessary dashboard UI components, elements, and pages required to build a high-quality and complete dashboard or admin panel. Whether you're building a dashboard or admin panel for a complex web application or a simple website. 
+Platform ini memanfaatkan **Next.js 15**, **React 19**, dan **TypeScript** untuk memberikan pengalaman pengguna yang cepat dan responsif, dengan database **PostgreSQL** yang robust untuk pengelolaan data yang kompleks.
 
-TailAdmin utilizes the powerful features of **Next.js 15** and common features of Next.js such as server-side rendering (SSR), static site generation (SSG), and seamless API route integration. Combined with the advancements of **React 19** and the robustness of **TypeScript**, TailAdmin is the perfect solution to help get your project up and running quickly.
+## 🎯 Fitur Utama
 
-## Overview
+### 📋 Manajemen Analisis Jabatan
+- **Master Anjab**: Kelola dokumen analisis jabatan lengkap
+- **Upload Word Document**: Import dokumen Anjab dari file .doc/.docx
+- **Export to Word/PDF**: Generate dokumen Anjab dalam format Word dan PDF
+- **Auto-matching**: Pencocokan otomatis antara peta jabatan dan master Anjab menggunakan fuzzy matching
+- **Similarity Score**: Perhitungan tingkat kecocokan dengan algoritme Levenshtein
 
-TailAdmin provides essential UI components and layouts for building feature-rich, data-driven admin dashboards and control panels. It's built on:
+### 🏢 Peta Jabatan (Struktur Organisasi)
+- **Hierarchical Structure**: Visualisasi struktur organisasi multi-level
+- **Drag & Drop**: Reorganisasi struktur dengan mudah
+- **Jenis Jabatan**: Kategorisasi (JPT, Administrator, Pengawas, Pelaksana, Fungsional)
+- **Bezetting vs Kebutuhan**: Perbandingan jumlah pegawai saat ini vs kebutuhan
 
-- Next.js 15.x
-- React 19
-- TypeScript
-- Tailwind CSS V4
+### 📊 Analisis Beban Kerja (ABK)
+- **Tugas Pokok**: Mapping tugas pokok dari master Anjab ke peta jabatan
+- **Perhitungan Otomatis**: Kalkulasi kebutuhan pegawai berdasarkan beban kerja
+- **Custom Values**: Override nilai default untuk setiap tugas
+- **Real-time Updates**: Update otomatis kebutuhan pegawai
 
-### Quick Links
-- [✨ Visit Website](https://tailadmin.com)
-- [📄 Documentation](https://tailadmin.com/docs)
-- [⬇️ Download](https://tailadmin.com/download)
-- [🖌️ Figma Design File (Community Edition)](https://www.figma.com/community/file/1463141366275764364)
-- [⚡ Get PRO Version](https://tailadmin.com/pricing)
+### 🔐 Autentikasi & Otorisasi
+- **Role-based Access**: Admin, Editor, User
+- **Email Verification**: Verifikasi email pengguna
+- **Password Reset**: Recovery password via email
+- **Session Management**: JWT dengan refresh token
 
-### Demos
-- [Free Version](https://nextjs-free-demo.tailadmin.com)
-- [Pro Version](https://nextjs-demo.tailadmin.com)
+### 📱 Mobile Responsive
+- **Full Responsive**: Optimized untuk desktop, tablet, dan mobile
+- **Touch-friendly**: Interface yang mudah digunakan di perangkat sentuh
+- **Adaptive Layout**: Layout menyesuaikan ukuran layar
 
-### Other Versions
-- [HTML Version](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
-- [React Version](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard)
-- [Vue.js Version](https://github.com/TailAdmin/vue-tailwind-admin-dashboard)
+## 🛠️ Tech Stack
 
-## Installation
+### Frontend
+- **Next.js 15.1.5** - React framework dengan App Router
+- **React 19** - UI library
+- **TypeScript** - Type-safe development
+- **Tailwind CSS v4** - Utility-first CSS framework
+- **SweetAlert2** - Beautiful alerts & modals
+- **ApexCharts** - Data visualization
 
-### Prerequisites
-To get started with TailAdmin, ensure you have the following prerequisites installed and set up:
+### Backend
+- **Next.js API Routes** - RESTful API
+- **PostgreSQL** - Primary database
+- **pg (node-postgres)** - PostgreSQL client
+- **bcrypt** - Password hashing
+- **jsonwebtoken** - JWT authentication
+- **nodemailer** - Email sending
 
-- Node.js 18.x or later (recommended to use Node.js 20.x or later)
+### Development Tools
+- **ESLint** - Code linting
+- **Prettier** - Code formatting
+- **Jest** - Unit testing
+- **TypeScript** - Type checking
 
-### Cloning the Repository
-Clone the repository using the following command:
+## 📋 Prerequisites
+
+Pastikan sistem Anda memiliki:
+
+- **Node.js** 20.x atau lebih baru
+- **PostgreSQL** 14.x atau lebih baru
+- **npm** atau **yarn**
+
+## 🚀 Installation
+
+### 1. Clone Repository
 
 ```bash
-git clone https://github.com/TailAdmin/free-nextjs-admin-dashboard.git
+git clone https://github.com/orproject04/uianjab.git
+cd uianjab
 ```
 
-> Windows Users: place the repository near the root of your drive if you face issues while cloning.
+### 2. Install Dependencies
 
-1. Install dependencies:
-    ```bash
-    npm install
-    # or
-    yarn install
-    ```
-    > Use `--legacy-peer-deps` flag if you face peer-dependency error during installation.
+```bash
+npm install
+```
 
-2. Start the development server:
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    ```
+### 3. Setup Database
 
-## Components
+#### Buat Database PostgreSQL
 
-TailAdmin is a pre-designed starting point for building a web-based dashboard using Next.js and Tailwind CSS. The template includes:
+```bash
+createdb pandawa_db
+```
 
-- Sophisticated and accessible sidebar
-- Data visualization components
-- Profile management and custom 404 page
-- Tables and Charts(Line and Bar)
-- Authentication forms and input elements
-- Alerts, Dropdowns, Modals, Buttons and more
-- Can't forget Dark Mode 🕶️
+#### Jalankan Schema & Initial Data
 
-All components are built with React and styled using Tailwind CSS for easy customization.
+```bash
+psql -U postgres -d pandawa_db -f 01-schema.sql
+psql -U postgres -d pandawa_db -f 02-initial-data.sql
+```
 
-## Feature Comparison
+### 4. Environment Variables
 
-### Free Version
-- 1 Unique Dashboard
-- 30+ dashboard components
-- 50+ UI elements
-- Basic Figma design files
-- Community support
+Buat file `.env.local` di root project:
 
-### Pro Version
-- 5 Unique Dashboards: Analytics, Ecommerce, Marketing, CRM, Stocks (more coming soon)
-- 400+ dashboard components and UI elements
-- Complete Figma design file
-- Email support
+```env
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/pandawa_db
 
-To learn more about pro version features and pricing, visit our [pricing page](https://tailadmin.com/pricing).
+# JWT Secret
+JWT_SECRET=your-super-secret-jwt-key-here
+JWT_REFRESH_SECRET=your-super-secret-refresh-key-here
 
-## Changelog
+# Email Configuration (for verification & password reset)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+EMAIL_FROM=PANDAWA <noreply@pandawa.local>
 
-### Version 2.0.2 - [March 25, 2025]
+# App URL
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
-- Upgraded to Next v15.2.3 for [CVE-2025-29927](https://nextjs.org/blog/cve-2025-29927) concerns
-- Included overrides vectormap for packages to prevent peer dependency errors during installation.
-- Migrated from react-flatpickr to flatpickr package for React 19 support
+### 5. Run Development Server
 
-### Version 2.0.1 - [February 27, 2025]
+```bash
+npm run dev
+```
 
-#### Update Overview
+Buka [http://localhost:3000](http://localhost:3000) di browser.
 
-- Upgraded to Tailwind CSS v4 for better performance and efficiency.
-- Updated class usage to match the latest syntax and features.
-- Replaced deprecated class and optimized styles.
+## 📁 Project Structure
 
-#### Next Steps
+```
+uianjab/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── (admin)/           # Admin layout pages
+│   │   │   ├── (others-pages)/
+│   │   │   │   ├── anjab/     # Anjab management pages
+│   │   │   │   └── peta-jabatan/ # Org structure pages
+│   │   │   └── page.tsx       # Dashboard
+│   │   ├── (full-width-pages)/ # Auth & error pages
+│   │   ├── api/               # API routes
+│   │   │   ├── anjab/         # Anjab APIs
+│   │   │   ├── peta-jabatan/  # Peta jabatan APIs
+│   │   │   ├── auth/          # Authentication APIs
+│   │   │   └── abk/           # ABK APIs
+│   │   └── layout.tsx         # Root layout
+│   ├── components/            # React components
+│   │   ├── auth/              # Auth forms
+│   │   ├── form/              # Form components
+│   │   ├── tables/            # Table components
+│   │   └── ui/                # UI components
+│   ├── context/               # React contexts
+│   ├── hooks/                 # Custom hooks
+│   ├── lib/                   # Utilities
+│   │   ├── db.ts              # Database connection
+│   │   ├── auth.ts            # Auth helpers
+│   │   ├── search.ts          # Search/matching logic
+│   │   └── anjab-queries.ts   # Database queries
+│   └── layout/                # Layout components
+├── scripts/                   # Python extraction scripts
+│   ├── ekstrakanjab.py        # Extract Anjab from Word
+│   └── ekstrakabk.py          # Extract ABK from Word
+├── storage/
+│   └── pdf-cache/             # Generated PDF cache
+├── 01-schema.sql              # Database schema
+├── 02-initial-data.sql        # Initial data
+└── 03-backup-restore-guide.sql # Backup guide
+```
 
-- Run npm install or yarn install to update dependencies.
-- Check for any style changes or compatibility issues.
-- Refer to the Tailwind CSS v4 [Migration Guide](https://tailwindcss.com/docs/upgrade-guide) on this release. if needed.
-- This update keeps the project up to date with the latest Tailwind improvements. 🚀
+## 🔑 Default Credentials
 
-### v2.0.0 (February 2025)
-A major update focused on Next.js 15 implementation and comprehensive redesign.
+Setelah menjalankan `02-initial-data.sql`, login dengan:
 
-#### Major Improvements
-- Complete redesign using Next.js 15 App Router and React Server Components
-- Enhanced user interface with Next.js-optimized components
-- Improved responsiveness and accessibility
-- New features including collapsible sidebar, chat screens, and calendar
-- Redesigned authentication using Next.js App Router and server actions
-- Updated data visualization using ApexCharts for React
+- **Email**: `admin@pandawa.local`
+- **Password**: `password123`
 
-#### Breaking Changes
+⚠️ **Penting**: Ganti password default setelah login pertama kali!
 
-- Migrated from Next.js 14 to Next.js 15
-- Chart components now use ApexCharts for React
-- Authentication flow updated to use Server Actions and middleware
+## 🐳 Docker Deployment
 
-[Read more](https://tailadmin.com/docs/update-logs/nextjs) on this release.
+### Build & Run
 
-#### Breaking Changes
-- Migrated from Next.js 14 to Next.js 15
-- Chart components now use ApexCharts for React
-- Authentication flow updated to use Server Actions and middleware
+```bash
+docker-compose up -d
+```
 
-### v1.3.4 (July 01, 2024)
-- Fixed JSvectormap rendering issues
+### Stop
 
-### v1.3.3 (June 20, 2024)
-- Fixed build error related to Loader component
+```bash
+docker-compose down
+```
 
-### v1.3.2 (June 19, 2024)
-- Added ClickOutside component for dropdown menus
-- Refactored sidebar components
-- Updated Jsvectormap package
+Database akan persist di volume Docker.
 
-### v1.3.1 (Feb 12, 2024)
-- Fixed layout naming consistency
-- Updated styles
+## 📖 Dokumentasi API
 
-### v1.3.0 (Feb 05, 2024)
-- Upgraded to Next.js 14
-- Added Flatpickr integration
-- Improved form elements
-- Enhanced multiselect functionality
-- Added default layout component
+### Authentication
 
-## License
+#### POST `/api/auth/login`
+Login pengguna
 
-TailAdmin Next.js Free Version is released under the MIT License.
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
 
-## Support
+**Response:**
+```json
+{
+  "success": true,
+  "accessToken": "jwt-token",
+  "refreshToken": "refresh-token",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "role": "admin"
+  }
+}
+```
 
-If you find this project helpful, please consider giving it a star on GitHub. Your support helps us continue developing and maintaining this template.
+### Anjab Management
+
+#### GET `/api/anjab/list`
+Mendapatkan daftar semua dokumen Anjab
+
+#### GET `/api/anjab/detail?id={uuid}`
+Detail dokumen Anjab tertentu
+
+#### POST `/api/anjab/update`
+Update dokumen Anjab
+
+#### POST `/api/upload-json/route`
+Upload dokumen Word dan convert ke Anjab
+
+### Peta Jabatan
+
+#### GET `/api/peta-jabatan`
+Mendapatkan struktur organisasi lengkap
+
+#### POST `/api/peta-jabatan`
+Tambah jabatan baru
+
+#### PATCH `/api/peta-jabatan/[id]`
+Update jabatan
+
+## 🧪 Testing
+
+### Run Tests
+
+```bash
+npm test
+```
+
+### Run Tests with Coverage
+
+```bash
+npm run test:coverage
+```
+
+## 📝 Scripts Tambahan
+
+### Extract Anjab dari Word
+
+```bash
+python scripts/ekstrakanjab.py input.doc output.json
+```
+
+### Extract ABK dari Word
+
+```bash
+python scripts/ekstrakabk.py input.doc output.json
+```
+
+## 🤝 Contributing
+
+Kontribusi selalu diterima! Silakan:
+
+1. Fork repository
+2. Buat branch fitur (`git checkout -b feature/AmazingFeature`)
+3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
+4. Push ke branch (`git push origin feature/AmazingFeature`)
+5. Buat Pull Request
+
+## 📄 License
+
+Project ini dilisensikan di bawah MIT License.
+
+## 🙏 Acknowledgments
+
+- Template dashboard dari [TailAdmin](https://tailadmin.com)
+- Icon dari [Heroicons](https://heroicons.com)
+- Fuzzy matching menggunakan Levenshtein distance algorithm
+
+## 📞 Support
+
+Jika menemukan bug atau memiliki saran, silakan buat [issue](https://github.com/orproject04/uianjab/issues).
+
+---
+
+**Built with ❤️ for efficient workforce planning**

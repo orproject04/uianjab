@@ -84,6 +84,8 @@ def extract_docx(filepath):
                     "waktu_penyelesaian": cells[colmap.get("waktu_penyelesaian", 0)],
                     "waktu_kerja_efektif": cells[colmap.get("waktu_kerja_efektif", 0)],
                     "beban_kerja": cells[colmap.get("beban_kerja", 0)],
+                    # NOTE: pegawai_dibutuhkan diekstrak tapi tidak digunakan
+                    # Perhitungan dilakukan di backend: (beban_kerja * waktu_penyelesaian) / waktu_kerja_efektif
                     "pegawai_dibutuhkan": cells[colmap.get("pegawai_dibutuhkan", 0)]
                 })
 

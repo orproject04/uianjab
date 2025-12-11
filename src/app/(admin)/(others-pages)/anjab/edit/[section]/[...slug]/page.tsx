@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMemo } from "react";
 import Link from "next/link";
-import { SECTION_COMPONENTS, SECTION_LABELS } from "../../_sections/registry";
+import { SECTION_COMPONENTS_SLUG as SECTION_COMPONENTS, SECTION_LABELS_SLUG } from "../../_sections/registry";
 import AnjabBreadcrumb from "@/components/common/AnjabBreadcrumb";
 import { slugToTitle } from "@/lib/text-utils";
 
@@ -14,14 +14,10 @@ export default function EditAnySectionPage() {
         [params.slug]
     );
 
-    // id untuk DB/API = dua segmen terakhir digabung dengan "-"
-    const id = useMemo(() => {
-        if (rawSlug.length === 0) return "";
-        if (rawSlug.length === 1) return rawSlug[0];
-        return rawSlug.slice(-2).join("-");
-    }, [rawSlug]);
+    // id untuk DB/API = path lengkap dengan "/"
+    const id = useMemo(() => rawSlug.join("/"), [rawSlug]);
 
-    // path viewer pakai "/"
+    // path viewer sama dengan id
     const viewerPath = useMemo(() => rawSlug.join("/"), [rawSlug]);
 
     const SectionForm = (SECTION_COMPONENTS as any)[params.section];
@@ -46,13 +42,13 @@ export default function EditAnySectionPage() {
         <div className="max-w-4xl mx-auto p-6">
             <AnjabBreadcrumb
                 currentId={id}
-                currentTitle={`Edit ${(SECTION_LABELS as any)[params.section] ?? params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`}
+                currentTitle={`Edit ${(SECTION_LABELS_SLUG as any)[params.section] ?? params.section} - ${rawSlug.length > 0 ? slugToTitle(rawSlug.join('-')) : 'Unknown'}`}
                 rawSlug={rawSlug}
             />
 
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-semibold">
-                    Edit {(SECTION_LABELS as any)[params.section] ?? params.section}
+                    Edit {(SECTION_LABELS_SLUG as any)[params.section] ?? params.section}
                 </h1>
                 <Link href={`/anjab/${viewerPath}?tab=pdf`} className="rounded border px-3 py-1.5">
                     Lihat PDF
