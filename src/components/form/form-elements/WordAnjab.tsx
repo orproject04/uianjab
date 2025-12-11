@@ -6,6 +6,7 @@ import withReactContent from 'sweetalert2-react-content';
 import {FileJson, Loader2} from 'lucide-react';
 import {apiFetch} from "@/lib/apiFetch";
 import {usePathname} from 'next/navigation';
+import {sanitizeFilename, sanitizeForAlert} from '@/lib/sanitize';
 
 const MySwal = withReactContent(Swal);
 
@@ -34,7 +35,7 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
 
     const showConfirmModal = async (fileNames: string[]): Promise<boolean> => {
         const htmlList = `<ol class="text-left text-sm list-decimal pl-5">
-      ${fileNames.map(f => `<li>📄 ${f}</li>`).join('')}
+      ${fileNames.map(f => `<li>📄 ${sanitizeFilename(f)}</li>`).join('')}
     </ol>`;
 
         const result = await MySwal.fire({
@@ -56,8 +57,8 @@ export default function WordAnjab({id, acceptExt = DEFAULT_ACCEPT}: WordAnjabPro
         await Swal.fire({
             title: success ? "Berhasil" : "Gagal",
             html: `
-        <p>${message}</p>
-        ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${detailsHtml}</div>` : ""}
+        <p>${sanitizeForAlert(message)}</p>
+        ${detailsHtml ? `<hr class="my-2" /><div class="text-left">${sanitizeForAlert(detailsHtml)}</div>` : ""}
       `,
             icon: success ? "success" : "error",
             confirmButtonColor: success ? "#10B981" : "#EF4444",

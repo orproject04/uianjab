@@ -13,6 +13,7 @@ import {createPortal} from "react-dom";
 import Swal from "sweetalert2";
 import {apiFetch} from "@/lib/apiFetch";
 import {CustomSelect} from "@/components/form/CustomSelect";
+import {sanitizeForAlert} from '@/lib/sanitize';
 
 // Tipe API dan Internal tetap sama
 type APIRow = {
@@ -417,7 +418,7 @@ const AppSidebar: React.FC = () => {
 
                 setShowEdit(true);
             } catch (e: any) {
-                await Swal.fire({icon: "error", title: "Oops", text: e?.message || "Gagal membuka editor"});
+                await Swal.fire({icon: "error", title: "Oops", text: sanitizeForAlert(e?.message) || "Gagal membuka editor"});
             }
         },
         [fetchParentOptions]
