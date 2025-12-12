@@ -10,6 +10,8 @@ services:
       - .env.docker
     environment:
       POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5437:5437"                           # host=5437 → container=5437
     command: ["postgres", "-c", "port=5437"]  # override port internal
@@ -47,6 +49,9 @@ services:
     container_name: anjab-pgadmin
     env_file:
       - .env.docker
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "9097:80"
     depends_on:
