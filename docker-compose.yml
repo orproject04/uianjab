@@ -6,17 +6,17 @@ services:
   anjab-db:
     image: postgres:17-alpine
     container_name: anjab-db
+    env_file:
+      - .env.docker
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Ortalayes1
-      POSTGRES_DB: eaa
     ports:
       - "5437:5437"                           # host=5437 → container=5437
     command: ["postgres", "-c", "port=5437"]  # override port internal
     volumes:
       - anjab-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d eaa -p 5437 || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pandawa -p 5437 || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -45,9 +45,8 @@ services:
   anjab-pgadmin:
     image: dpage/pgadmin4:8
     container_name: anjab-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ortala@dpd.go.id
-      PGADMIN_DEFAULT_PASSWORD: Ortalayes1
+    env_file:
+      - .env.docker
     ports:
       - "9097:80"
     depends_on:
