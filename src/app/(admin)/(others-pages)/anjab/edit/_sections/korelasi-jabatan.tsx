@@ -306,10 +306,10 @@ export default function KorelasiJabatanForm({
                             Coba lagi
                         </button>
                         <Link 
-                            href={`/anjab/${viewerPath}`} 
+                            href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`} 
                             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                            Kembali
+                            Batal
                         </Link>
                     </div>
                 </div>
@@ -466,6 +466,14 @@ export default function KorelasiJabatanForm({
                 </div>
             )}
 
+            <FormActions>
+                <Link 
+                    href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                    Batal
+                </Link>
+            </FormActions>
         </EditSectionWrapper>
     );
 }

@@ -216,10 +216,10 @@ export default function WewenangForm({
                             Coba lagi
                         </button>
                         <Link 
-                            href={`/anjab/${viewerPath}`} 
+                            href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`} 
                             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                            Kembali
+                            Batal
                         </Link>
                     </div>
                 </div>
@@ -356,14 +356,11 @@ export default function WewenangForm({
             )}
 
             <FormActions>
-                <Link
-                    href={`/anjab/${viewerPath}`}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                <Link 
+                    href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    Kembali
+                    Batal
                 </Link>
             </FormActions>
         </EditSectionWrapper>

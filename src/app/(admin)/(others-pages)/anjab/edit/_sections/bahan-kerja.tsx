@@ -377,10 +377,10 @@ export default function BahanKerjaForm({ viewerPath }: { viewerPath: string }) {
                             Coba lagi
                         </button>
                         <Link 
-                            href={`/anjab/${viewerPath}`} 
+                        href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`}
                             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                            Kembali
+                            Batal
                         </Link>
                     </div>
                 </div>
@@ -495,10 +495,10 @@ export default function BahanKerjaForm({ viewerPath }: { viewerPath: string }) {
 
                 <FormActions>
                     <Link 
-                        href={`/anjab/${viewerPath}`} 
+                        href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`}
                         className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                        Kembali
+                        Batal
                     </Link>
                 </FormActions>
             </div>

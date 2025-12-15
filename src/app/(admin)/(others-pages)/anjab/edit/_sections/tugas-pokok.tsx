@@ -601,7 +601,7 @@ export default function TugasPokokForm({ viewerPath }: { viewerPath: string; }) 
                     <p className="text-red-600 dark:text-red-400 mb-4">ID (UUID) untuk path ini belum ditemukan di penyimpanan lokal.</p>
                     <div className="flex items-center justify-center gap-3">
                         <button onClick={retry} className="px-4 py-2 rounded-lg border">Coba lagi</button>
-                        <Link href={`/anjab/${viewerPath}`} className="px-4 py-2 rounded-lg border">Kembali</Link>
+                        <Link href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`} className="px-4 py-2 rounded-lg border">Batal</Link>
                     </div>
                 </div>
             </EditSectionWrapper>

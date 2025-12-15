@@ -281,10 +281,10 @@ export default function SyaratJabatanForm({
                             Coba lagi
                         </button>
                         <Link 
-                            href={`/anjab/${viewerPath}`} 
+                            href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`}
                             className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                         >
-                            Kembali
+                            Batal
                         </Link>
                     </div>
                 </div>
@@ -466,6 +466,13 @@ export default function SyaratJabatanForm({
                 </FormSection>
 
                 <div className="flex items-center gap-3 pt-4">
+                    <Link 
+                        href={viewerPath?.startsWith("master/") ? "/anjab/master" : `/anjab/${viewerPath}`}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                        Batal
+                    </Link>
+                    
                     <button
                         type="button"
                         onClick={onSave}
@@ -488,7 +495,6 @@ export default function SyaratJabatanForm({
                     </button>
                 </div>
             </div>
-
         </EditSectionWrapper>
     );
 }
