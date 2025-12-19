@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*) as total_jabatan,
                 COALESCE(SUM(bezetting), 0) as total_besetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as total_kebutuhan,
-                COALESCE(SUM(kebutuhan_pegawai - bezetting), 0) as total_selisih
+                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as total_selisih
             FROM peta_jabatan
             ${whereClause}
         `;
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*) as jumlah_jabatan,
                 COALESCE(SUM(bezetting), 0) as besetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(kebutuhan_pegawai - bezetting), 0) as selisih
+                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
             ${whereClause}
             GROUP BY jenis_jabatan
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*) as jumlah_jabatan,
                 COALESCE(SUM(bezetting), 0) as besetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(kebutuhan_pegawai - bezetting), 0) as selisih
+                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
             ${whereClause}
             GROUP BY is_pusat
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*) as jumlah_jabatan,
                 COALESCE(SUM(bezetting), 0) as besetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(kebutuhan_pegawai - bezetting), 0) as selisih
+                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
             ${whereClause}
             GROUP BY unit_kerja
@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*) as jumlah_jabatan,
                 COALESCE(SUM(bezetting), 0) as besetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(kebutuhan_pegawai - bezetting), 0) as selisih
+                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
             ${whereClause}
             GROUP BY nama_jabatan, jenis_jabatan

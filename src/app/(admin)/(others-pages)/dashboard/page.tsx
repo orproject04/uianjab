@@ -247,12 +247,12 @@ export default function DashboardPage() {
         control: (base: any, state: any) => ({
             ...base,
             backgroundColor: 'var(--select-bg)',
-            borderColor: state.isFocused ? '#8b5cf6' : 'var(--select-border)',
+            borderColor: state.isFocused ? 'var(--select-border)' : 'var(--select-border)',
             borderRadius: '0.75rem',
             padding: '0.125rem',
-            boxShadow: state.isFocused ? '0 0 0 2px rgba(139, 92, 246, 0.2)' : 'none',
+            boxShadow: 'none',
             '&:hover': {
-                borderColor: '#8b5cf6',
+                borderColor: 'var(--select-border)',
             },
         }),
         menu: (base: any) => ({
@@ -265,15 +265,13 @@ export default function DashboardPage() {
         }),
         option: (base: any, state: any) => ({
             ...base,
-            backgroundColor: state.isSelected
-                ? '#8b5cf6'
-                : state.isFocused
-                    ? 'var(--select-hover)'
-                    : 'transparent',
-            color: state.isSelected ? 'white' : 'var(--select-text)',
+            backgroundColor: state.isFocused
+                ? 'var(--select-hover)'
+                : 'transparent',
+            color: 'var(--select-text)',
             cursor: 'pointer',
             '&:active': {
-                backgroundColor: '#7c3aed',
+                backgroundColor: 'var(--select-hover)',
             },
         }),
         singleValue: (base: any) => ({
@@ -515,7 +513,7 @@ export default function DashboardPage() {
                                             ? "text-orange-600 dark:text-orange-400"
                                             : "text-red-600 dark:text-red-400"
                                     }`}>
-                                        {item.selisih >= 0 ? "+" : ""}{item.selisih.toLocaleString("id-ID")}
+                                        {item.selisih > 0 ? "+" : ""}{item.selisih.toLocaleString("id-ID")}
                                     </span>
                                 </div>
                             </div>
@@ -560,7 +558,6 @@ export default function DashboardPage() {
                         <Legend wrapperStyle={{ paddingTop: '20px' }} />
                         <Bar dataKey="besetting" fill="#10b981" name="Bezetting" radius={[0, 8, 8, 0]} />
                         <Bar dataKey="kebutuhan" fill="#8b5cf6" name="Kebutuhan" radius={[0, 8, 8, 0]} />
-                        <Bar dataKey="selisih" fill="#f59e0b" name="Selisih" radius={[0, 8, 8, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
             </div>
@@ -660,7 +657,7 @@ export default function DashboardPage() {
                                                 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                                 : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                                         }`}>
-                                            {item.selisih >= 0 ? '-' : ''}{item.selisih.toLocaleString("id-ID")}
+                                            {item.selisih > 0 ? '+' : ''}{item.selisih.toLocaleString("id-ID")}
                                         </span>
                                 </td>
                             </tr>
@@ -687,9 +684,9 @@ export default function DashboardPage() {
                         </div>
                     </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                     <table className="w-full table-fixed">
-                        <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800">
+                        <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
                         <tr>
                             <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
                                 No
@@ -729,7 +726,7 @@ export default function DashboardPage() {
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {byBiro.map((item, index) => (
+                        {byBiro.slice(0, 50).map((item, index) => (
                             <tr
                                 key={index}
                                 className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${
@@ -760,7 +757,7 @@ export default function DashboardPage() {
                                                 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                                 : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                                         }`}>
-                                            {item.selisih >= 0 ? '-' : ''}{item.selisih}
+                                            {item.selisih > 0 ? '+' : ''}{item.selisih}
                                         </span>
                                 </td>
                             </tr>
