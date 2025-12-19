@@ -2,6 +2,7 @@
 
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import dynamic from "next/dynamic";
+import {useRouter} from "next/navigation";
 import {apiFetch} from "@/lib/apiFetch";
 import type {RawNodeDatum, CustomNodeElementProps} from "react-d3-tree";
 
@@ -214,6 +215,7 @@ type ScopeOpt = "PUSAT" | "DAERAH";
 type FungsionalOpt = "STRUKTURAL" | "FUNGSIONAL";
 
 export default function PetaJabatanClient() {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({w: 0, h: 0});
 
@@ -232,6 +234,8 @@ export default function PetaJabatanClient() {
   // collapse map
   const [collapseMap, setCollapseMap] = useState<Record<string, boolean>>({});
   const [lastClickedPath, setLastClickedPath] = useState<string | null>(null);
+  const hasFocusedOnce = useRef(false);
+  const [highlightUpdate, setHighlightUpdate] = useState(0); // Counter to force re-render for highlight
 
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
@@ -326,6 +330,7 @@ export default function PetaJabatanClient() {
       const savedFungsionalMode = sessionStorage.getItem('petaJabatan_fungsionalMode');
       const savedFilterText = sessionStorage.getItem('petaJabatan_filterText');
       const savedLastPath = sessionStorage.getItem('petaJabatan_lastClickedPath');
+      const returnFromAnjab = sessionStorage.getItem('petaJabatan_returnFromAnjab');
 
       if (savedScope && (savedScope === 'PUSAT' || savedScope === 'DAERAH')) {
         setScope(savedScope as ScopeOpt);
@@ -339,8 +344,11 @@ export default function PetaJabatanClient() {
         setFilterText(savedFilterText);
       }
 
-      if (savedLastPath) {
+      // Only restore lastClickedPath if returning from anjab page
+      if (returnFromAnjab === 'true' && savedLastPath) {
         setLastClickedPath(savedLastPath);
+        // Clear the flag after using it
+        sessionStorage.removeItem('petaJabatan_returnFromAnjab');
       }
     } catch (e: any) {
       setErr(e?.message || "Gagal memuat data");
@@ -370,11 +378,45 @@ export default function PetaJabatanClient() {
       }
     };
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
+    // Safari support
+    document.addEventListener("webkitfullscreenchange", onFs);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs);
+    };
   }, []);
 
-  const enterFullscreen = async () => { if (containerRef.current) try { await containerRef.current.requestFullscreen(); } catch {} };
-  const exitFullscreen = async () => { if (document.fullscreenElement) try { await document.exitFullscreen(); } catch {} };
+  const enterFullscreen = async () => { 
+    if (!containerRef.current) return;
+    try {
+      // Try standard Fullscreen API
+      if (containerRef.current.requestFullscreen) {
+        await containerRef.current.requestFullscreen();
+      } 
+      // Safari support
+      else if ((containerRef.current as any).webkitRequestFullscreen) {
+        await (containerRef.current as any).webkitRequestFullscreen();
+      }
+      // For mobile devices, use alternative approach
+      else if ((containerRef.current as any).webkitEnterFullscreen) {
+        (containerRef.current as any).webkitEnterFullscreen();
+      }
+    } catch (e) {
+      console.error('Fullscreen error:', e);
+    }
+  };
+  
+  const exitFullscreen = async () => { 
+    try {
+      if (document.exitFullscreen && document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen && (document as any).webkitFullscreenElement) {
+        await (document as any).webkitExitFullscreen();
+      }
+    } catch (e) {
+      console.error('Exit fullscreen error:', e);
+    }
+  };
 
   // Map enum → skenario boolean
   const scenario = useMemo(() => {
@@ -386,17 +428,34 @@ export default function PetaJabatanClient() {
   const rows = scenario.rows;
   const syntheticFlags = scenario.synthetic;
 
+  // Reset collapse state ONLY when scope changes (PUSAT <-> DAERAH)
   useEffect(() => {
+    if (rows.length === 0) return;
+    
+    // Reset and collapse all when scope changes
     const map: Record<string, boolean> = {};
     for (const r of rows) map[r.id] = true;
+    setCollapseMap(map);
+    hasFocusedOnce.current = false; // Allow focus to work again if needed
+  }, [scope]); // Only reset when scope changes, NOT fungsionalMode
 
-    // If we have a last clicked path, ensure all nodes in that path are expanded
-    if (lastClickedPath && rows.length > 0) {
+  useEffect(() => {
+    if (rows.length === 0) return;
+
+    // If we have a last clicked path and haven't focused yet, expand to that path
+    if (lastClickedPath && rows.length > 0 && !hasFocusedOnce.current) {
+      console.log('Expanding path to:', lastClickedPath);
       const expandedMap = expandNodesAlongPath(lastClickedPath, rows);
       setCollapseMap(expandedMap);
-    } else {
+      hasFocusedOnce.current = true;
+    } else if (!lastClickedPath && !hasFocusedOnce.current) {
+      // Initial load without focus - collapse all
+      const map: Record<string, boolean> = {};
+      for (const r of rows) map[r.id] = true;
       setCollapseMap(map);
+      hasFocusedOnce.current = true; // Mark as focused to prevent re-expansion on user clicks
     }
+    // Don't re-collapse when lastClickedPath is cleared
   }, [rows, lastClickedPath, expandNodesAlongPath]);
 
   // Auto-expand and highlight matching nodes when searching (with debounce)
@@ -447,9 +506,15 @@ export default function PetaJabatanClient() {
   }, [filterText, rows]);
 
   // ---------- Breakpoints (berbasis lebar kontainer) ----------
+  // Adjusted for 14-inch laptops (~1366px width)
   const bp = useMemo(() => {
     const w = containerSize.w || (typeof window !== "undefined" ? window.innerWidth : 0);
-    return { isMobile: w < 640, isTablet: w >= 640 && w < 1024, isDesktop: w >= 1024, w };
+    return { 
+      isMobile: w < 640, 
+      isTablet: w >= 640 && w < 1366, // Extended tablet range to cover 14-inch laptops
+      isDesktop: w >= 1366, 
+      w 
+    };
   }, [containerSize.w]);
 
   // ==== Build tree roots (D3Node) ====
@@ -660,28 +725,33 @@ export default function PetaJabatanClient() {
   }, []);
 
   // -------- Responsive sizing tokens (card, fonts, node gap) --------
-  const cardW = bp.isMobile ? 400 : bp.isTablet ? 520 : 620;
+  // Optimized for 14-inch laptops and mobile devices
+  const cardW = bp.isMobile ? 280 : bp.isTablet ? 340 : 400;
   const padX = bp.isMobile ? 14 : 16;
   const padY = bp.isMobile ? 12 : 14;
 
-  const titleFontPx = bp.isMobile ? 12 : 13;
+  const titleFontPx = bp.isMobile ? 10 : bp.isTablet ? 11 : 12;
   const approxCharPx = 5;
-  const usableTitleW = cardW - 10 * padX;
-  const maxTitleChars = Math.max(30, Math.floor(usableTitleW / approxCharPx));
+  const usableTitleW = cardW - 8 * padX;
+  const maxTitleChars = Math.max(25, Math.floor(usableTitleW / approxCharPx));
 
-  const boxW = bp.isMobile ? 30 : 36;
-  const boxH = bp.isMobile ? 24 : 26;
-  const boxGap = 10;
-  const textFieldH = bp.isMobile ? 26 : 30;
+  const boxW = bp.isMobile ? 28 : 32;
+  const boxH = bp.isMobile ? 22 : 24;
+  const boxGap = 8;
+  const textFieldH = bp.isMobile ? 24 : 28;
 
   const nodeSize = useMemo(() => {
-    const x = cardW + (bp.isMobile ? 80 : bp.isTablet ? 110 : 140);
-    const y = bp.isMobile ? 200 : bp.isTablet ? 240 : 270;
+    // Reduced horizontal spacing for better fit on smaller screens
+    const x = cardW + (bp.isMobile ? 60 : bp.isTablet ? 80 : 100);
+    // Increased vertical spacing to prevent cramping
+    const y = bp.isMobile ? 220 : bp.isTablet ? 250 : 280;
     return { x, y };
   }, [cardW, bp.isMobile, bp.isTablet]);
 
-  const initialZoom = bp.isMobile ? 0.55 : bp.isTablet ? 0.7 : 0.85;
-  const separation = { siblings: bp.isMobile ? 1.3 : 1.5, nonSiblings: bp.isMobile ? 1.4 : 1.7 };
+  // Lower zoom for better overview on 14-inch laptops
+  const initialZoom = bp.isMobile ? 0.45 : bp.isTablet ? 0.55 : 0.65;
+  // Balanced separation - not too cramped, not too wide
+  const separation = { siblings: bp.isMobile ? 1.15 : 1.25, nonSiblings: bp.isMobile ? 1.25 : 1.35 };
 
   // Function to calculate subtree width (for proper horizontal positioning)
   const calculateSubtreeWidth = useCallback((node: RawNodeDatum): number => {
@@ -762,8 +832,11 @@ export default function PetaJabatanClient() {
     const nodePos = findNodePosition(lastClickedPath, rd3Data);
 
     if (!nodePos) {
+      console.log('Node position not found for path:', lastClickedPath);
       return defaultTranslate;
     }
+
+    console.log('Focusing on node:', lastClickedPath, 'at position:', nodePos);
 
     // Calculate translate to center the node
     // X: center the node horizontally in the viewport
@@ -772,20 +845,25 @@ export default function PetaJabatanClient() {
     const centerY = (isFullscreen ? window.innerHeight : (bp.isMobile ? window.innerHeight * 0.8 : window.innerHeight * 0.7)) / 2;
 
     // Adjust for zoom level (we'll use a slightly higher zoom)
-    const zoomLevel = Math.min(initialZoom * 1.3, 1.2); // Zoom in a bit more
-    const adjustedX = centerX - (nodePos.x * zoomLevel);
-    const adjustedY = centerY - (nodePos.y * zoomLevel);
+    const targetZoom = Math.min(initialZoom * 1.3, 1.2); // Zoom in a bit more
+    const adjustedX = centerX - (nodePos.x * targetZoom);
+    const adjustedY = centerY - (nodePos.y * targetZoom);
 
-    return {
+    const finalTranslate = {
       x: Math.max(24, adjustedX),
       y: Math.max(bp.isMobile ? 80 : 110, adjustedY)
     };
+
+    console.log('Calculated translate:', finalTranslate, 'zoom:', targetZoom);
+
+    return finalTranslate;
   }, [containerSize, bp.isMobile, lastClickedPath, rd3Data, findNodePosition, initialZoom, isFullscreen]);
 
   // Calculate zoom level - slightly higher if we have a target node
   const zoomLevel = useMemo(() => {
     if (lastClickedPath && rd3Data.length > 0) {
-      return Math.min(initialZoom * 1.3, 1.2); // Zoom in 30% more, max 1.2
+      // Lower max zoom to prevent horizontal overflow
+      return Math.min(initialZoom * 1.2, 0.9); // Zoom in 20% more, max 0.9
     }
     return initialZoom;
   }, [lastClickedPath, rd3Data.length, initialZoom]);
@@ -798,23 +876,44 @@ export default function PetaJabatanClient() {
 
     // NODE SINTETIS
     if (attrs.syntheticSimple) {
-      const W = cardW;
-      const H = bp.isMobile ? 70 : 80;
-      const xLeft = -W / 2;
-      const yTop = -H / 2;
+      const W = cardW; // Same width as regular nodes for consistency
       const label: string = attrs.syntheticLabel || (nodeDatum.name || "");
       const isCollapsed = !!attrs.isCollapsed;
       const hasChildren = !!attrs.hasChildren;
+      
+      // Wrap text for long labels
+      const maxCharsPerLine = bp.isMobile ? 25 : bp.isTablet ? 35 : 45;
+      const labelLines = wrapText(label, maxCharsPerLine);
+      const lineHeight = bp.isMobile ? 18 : 20;
+      const H = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
+      
+      const xLeft = -W / 2;
+      const yTop = -H / 2;
+      const centerY = 0;
 
       return (
           <g>
             <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
                   fill="#F3E8FF" strokeWidth={1}
                   style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
-            <text x={0} y={0} textAnchor="middle" alignmentBaseline="central"
-                  fill="#111827" style={{ fontSize: bp.isMobile ? "12px" : "13px", fontWeight: 200 }}>
-              {String(label).toUpperCase()}
-            </text>
+            
+            {/* Multi-line text for synthetic labels */}
+            {labelLines.map((line, i) => (
+                <text 
+                    key={i}
+                    x={0} 
+                    y={centerY - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
+                    textAnchor="middle" 
+                    alignmentBaseline="middle"
+                    fill="#111827" 
+                    style={{ 
+                      fontSize: bp.isMobile ? "10px" : bp.isTablet ? "11px" : "12px", 
+                      fontWeight: 600 
+                    }}
+                >
+                  {String(line).toUpperCase()}
+                </text>
+            ))}
 
             {hasChildren && (
                 <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
@@ -835,11 +934,11 @@ export default function PetaJabatanClient() {
 
     const title = String(nodeDatum.name ?? "").toUpperCase();
     const titleLines = wrapText(title, maxTitleChars);
-    const lineH = 28;
+    const lineH = bp.isMobile ? 24 : bp.isTablet ? 26 : 28;
 
     const kelas: string = attrs.kelas_jabatan ?? "-";
-    const kelasHLocal = bp.isMobile ? 16 : 18;
-    const headerH = Math.max(bp.isMobile ? 36 : 40, titleLines.length * lineH + 6) + kelasHLocal + 8;
+    const kelasHLocal = bp.isMobile ? 16 : bp.isTablet ? 18 : 20;
+    const headerH = Math.max(bp.isMobile ? 36 : bp.isTablet ? 40 : 44, titleLines.length * lineH + 8) + kelasHLocal + 10;
 
     const bez: number = attrs.bezetting ?? 0;
     const keb: number = attrs.kebutuhan_pegawai ?? 0;
@@ -850,9 +949,9 @@ export default function PetaJabatanClient() {
         : attrs.nama_pejabat ? [attrs.nama_pejabat as string] : [];
     const namaPejabatText = namesArr.join(", ");
 
-    const labelGapTop = bp.isMobile ? 8 : 10;
+    const labelGapTop = bp.isMobile ? 10 : 12;
     const metricsTotalW = boxW * 3 + boxGap * 2;
-    const gapAfterBoxes = bp.isMobile ? 10 : 12;
+    const gapAfterBoxes = bp.isMobile ? 12 : 14;
 
     const cardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
 
@@ -883,14 +982,34 @@ export default function PetaJabatanClient() {
     const pathStr: string = attrs.pathStr || "";
     const href = `/anjab/${pathStr}`;
 
-    const handleJabatanClick = () => {
-      // Save the path before navigation
+    const handleJabatanClick = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Exit fullscreen before opening new tab (for better UX)
+      if (isFullscreen || document.fullscreenElement || (document as any).webkitFullscreenElement) {
+        try {
+          await exitFullscreen();
+          // Small delay after exit fullscreen
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (err) {
+          console.log('Exit fullscreen before navigation:', err);
+        }
+      }
+      
+      // Save to sessionStorage for highlighting only
       sessionStorage.setItem('petaJabatan_lastClickedPath', pathStr);
-      setLastClickedPath(pathStr);
+      
+      // Open in new tab and focus on it
+      window.open(href, '_blank', 'noopener,noreferrer');
+      
+      // Force re-render to update highlight WITHOUT triggering useEffect
+      setHighlightUpdate(prev => prev + 1);
     };
 
-    // Check if this is the last clicked node
-    const isLastClicked = lastClickedPath === pathStr;
+    // Check if this is the last clicked node - read from sessionStorage to avoid dependency
+    const sessionLastClicked = typeof window !== 'undefined' ? sessionStorage.getItem('petaJabatan_lastClickedPath') : null;
+    const isLastClicked = sessionLastClicked === pathStr;
 
     // Check if this node matches current search
     const isSearchMatch = searchMatches.includes(attrs.id);
@@ -920,19 +1039,21 @@ export default function PetaJabatanClient() {
 
     return (
         <g>
-          {/* KARTU */}
+          {/* KARTU - Clickable except toggle button */}
           <rect x={xLeft} y={yTop} width={cardW} height={cardH}
                 rx={8} ry={8} fill="#ffffff"
                 stroke={borderColor}
                 strokeWidth={borderWidth}
-                style={{ filter: shadowFilter }} />
+                style={{ filter: shadowFilter, cursor: 'pointer' }}
+                onClick={handleJabatanClick} />
 
           {/* HEADER UNGU */}
           <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
-                rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1} />
+                rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1}
+                style={{ cursor: 'pointer', pointerEvents: 'none' }} />
 
           {/* JUDUL */}
-          <a href={href} target="_self" rel="noopener noreferrer" onClick={handleJabatanClick}>
+          <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
             {titleLines.map((line, i) => (
                 <text key={i} x={centerX} y={yTitleStart + i * lineH}
                       textAnchor="middle" alignmentBaseline="hanging"
@@ -941,30 +1062,32 @@ export default function PetaJabatanClient() {
                   {line}
                 </text>
             ))}
-          </a>
+          </g>
 
           {/* KELAS JABATAN */}
           <text x={centerX} y={yKelas} textAnchor="middle" alignmentBaseline="hanging"
                 strokeWidth={1} fill="#6b7280"
-                style={{ fontSize: bp.isMobile ? "10px" : "11px", fontWeight: 50, opacity: 0.5 }}>
+                style={{ fontSize: bp.isMobile ? "10px" : "11px", fontWeight: 50, opacity: 0.5, pointerEvents: 'none' }}>
             {`Kelas Jabatan : ${kelas || "-"}`}
           </text>
 
           {/* LABEL B K ± */}
           <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>B</text>
+                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>B</text>
           <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>K</text>
+                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>K</text>
           <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>±</text>
+                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>±</text>
 
           {/* KOTAK ANGKA */}
-          {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
-          {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
-          {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
+          <g style={{ pointerEvents: 'none' }}>
+            {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
+            {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
+            {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
+          </g>
 
           {/* TEXT FIELD NAMA */}
-          <g>
+          <g style={{ pointerEvents: 'none' }}>
             <rect x={xLeft + padX} y={yBoxes + boxH +  (bp.isMobile ? 10 : 12)}
                   width={cardW - padX * 2} height={textFieldH}
                   rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
@@ -990,10 +1113,10 @@ export default function PetaJabatanClient() {
           )}
         </g>
     );
-  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex]);
+  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen]);
 
   return (
-      <div className="flex flex-col gap-3 p-3 sm:p-4">
+      <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
         {/* ===== TOP BAR (mobile seperti screenshot, desktop seperti semula) ===== */}
         {bp.isMobile ? (
             <div className="flex flex-col gap-2">
@@ -1013,6 +1136,7 @@ export default function PetaJabatanClient() {
                       sessionStorage.removeItem('petaJabatan_collapseMap');
                       sessionStorage.removeItem('petaJabatan_scope');
                       sessionStorage.removeItem('petaJabatan_fungsionalMode');
+                      sessionStorage.removeItem('petaJabatan_returnFromAnjab');
 
                       // Reset all state to defaults
                       setFilterText("");
@@ -1021,6 +1145,7 @@ export default function PetaJabatanClient() {
                       setCurrentMatchIndex(0);
                       setScope("PUSAT");
                       setFungsionalMode("STRUKTURAL");
+                      hasFocusedOnce.current = false;
 
                       // Force reload the data to ensure clean state
                       load();
@@ -1102,6 +1227,7 @@ export default function PetaJabatanClient() {
                       sessionStorage.removeItem('petaJabatan_collapseMap');
                       sessionStorage.removeItem('petaJabatan_scope');
                       sessionStorage.removeItem('petaJabatan_fungsionalMode');
+                      sessionStorage.removeItem('petaJabatan_returnFromAnjab');
 
                       // Reset all state to defaults
                       setFilterText("");
@@ -1110,6 +1236,7 @@ export default function PetaJabatanClient() {
                       setCurrentMatchIndex(0);
                       setScope("PUSAT");
                       setFungsionalMode("STRUKTURAL");
+                      hasFocusedOnce.current = false;
 
                       // Force reload the data to ensure clean state
                       load();
@@ -1187,26 +1314,67 @@ export default function PetaJabatanClient() {
 
         {err && <div className="text-sm text-red-600">{err}</div>}
 
+        {/* Info card untuk panduan singkat */}
+        {!loading && rd3Data.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="space-y-1 text-blue-900">
+                <p className="font-medium">Tips Navigasi:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-xs">
+                  <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
+                  <li>Drag background untuk menggeser tampilan</li>
+                  <li>Klik panah di card untuk expand/collapse cabang</li>
+                  {bp.isMobile && <li className="text-orange-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div
             ref={containerRef}
-            style={{width: "100%", height: (isFullscreen ? "100vh" : (bp.isMobile ? "80vh" : "70vh")), border: "1px solid #e5e7eb", background: "#fff"}}
-            className="rounded"
+            style={{
+              width: "100%", 
+              height: (isFullscreen ? "100vh" : (bp.isMobile ? "80vh" : "70vh")), 
+              border: "1px solid #e5e7eb", 
+              background: "#fff",
+              overflow: "auto",
+              position: "relative"
+            }}
+            className="rounded custom-scrollbar"
         >
+          {/* Loading indicator */}
+          {loading && (
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="text-center space-y-2">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+                <p className="text-sm text-gray-600">Memuat peta jabatan...</p>
+              </div>
+            </div>
+          )}
+          
           {/* Render Tree hanya jika ada data valid */}
-          {typeof window !== "undefined" && rd3Data.length > 0 ? (
-              <Tree
-                  data={rd3Data}
-                  orientation="vertical"
-                  translate={translate}
-                  zoomable
-                  collapsible={false}
-                  zoom={zoomLevel}
-                  pathFunc="step"
-                  nodeSize={nodeSize}
-                  separation={separation}
-                  transitionDuration={300}
-                  renderCustomNodeElement={renderNode}
-              />
+          {!loading && typeof window !== "undefined" && rd3Data.length > 0 ? (
+              <>
+                <Tree
+                    data={rd3Data}
+                    orientation="vertical"
+                    translate={translate}
+                    zoomable
+                    collapsible={false}
+                    zoom={zoomLevel}
+                    pathFunc="step"
+                    nodeSize={nodeSize}
+                    separation={separation}
+                    transitionDuration={bp.isMobile ? 200 : 300}
+                    scaleExtent={{ min: 0.1, max: 2 }}
+                    renderCustomNodeElement={renderNode}
+                    enableLegacyTransitions={false}
+                />
+              </>
           ) : (
               !loading && (
                   <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
@@ -1214,10 +1382,6 @@ export default function PetaJabatanClient() {
                   </div>
               )
           )}
-        </div>
-
-        <div className="text-[10px] sm:text-xs text-gray-500">
-          • Drag background untuk pan, scroll untuk zoom. Klik panah untuk collapse/expand subtree. Klik judul jabatan untuk buka halaman anjab.
         </div>
       </div>
   );

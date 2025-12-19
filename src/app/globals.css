@@ -864,3 +864,52 @@ span.flatpickr-weekday,
 .dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
 }
+
+/* Peta Jabatan optimizations for small screens */
+@media (max-width: 1366px) {
+  .peta-jabatan-container {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .peta-jabatan-container {
+    font-size: 12px;
+  }
+  
+  /* Improve touch targets on mobile */
+  .peta-jabatan-container button,
+  .peta-jabatan-container a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Landscape mode optimization for tablets and small laptops */
+@media (min-width: 641px) and (max-width: 1366px) and (orientation: landscape) {
+  .peta-jabatan-container {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+/* Peta Jabatan focus notification animation */
+@keyframes slideInDown {
+  from {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

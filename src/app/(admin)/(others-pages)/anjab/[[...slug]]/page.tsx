@@ -107,25 +107,15 @@ export default function InformasiJabatanPage() {
     const [status, setStatus] = useState<Status>("idle");
     const [activeTab, setActiveTab] = useState<TabType>("info");
 
-    // Check URL param for tab preference on mount and update
+    // Check URL param for tab preference ONCE on mount only
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
         if (tabParam === 'pdf') {
             setActiveTab('pdf');
         }
-    }, []);
-
-    // Also check when status or pdfSrc changes
-    useEffect(() => {
-        if (status === "ok" && pdfSrc) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const tabParam = urlParams.get('tab');
-            if (tabParam === 'pdf') {
-                setActiveTab('pdf');
-            }
-        }
-    }, [status, pdfSrc]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Run ONLY once on mount
 
     // === resolve UUID jabatan dari peta slug path & simpan ke localStorage — HANYA untuk admin ===
     useEffect(() => {
