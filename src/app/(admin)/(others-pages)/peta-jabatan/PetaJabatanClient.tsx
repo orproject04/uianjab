@@ -601,7 +601,7 @@ export default function PetaJabatanClient() {
           _id: `synthetic-skdp:${n.id}`,
           _slug: "skdp",
           _path: [...myPath, "skdp"],
-          nama_jabatan: "Sekretariat Kantor DPD RI di Ibu Kota Provinsi",
+          nama_jabatan: "Kantor DPD RI di Ibu Kota Provinsi",
           jenis_jabatan: "ESELON III",
           bezetting: null,
           kebutuhan_pegawai: null,
@@ -609,7 +609,7 @@ export default function PetaJabatanClient() {
           nama_pejabat: null,
           children: [],
           _syntheticSimple: true,
-          _syntheticLabel: "SEKRETARIAT KANTOR DPD RI DI IBU KOTA PROVINSI",
+          _syntheticLabel: "KANTOR DPD RI DI IBU KOTA PROVINSI",
         });
       }
 
@@ -953,10 +953,22 @@ export default function PetaJabatanClient() {
     const metricsTotalW = boxW * 3 + boxGap * 2;
     const gapAfterBoxes = bp.isMobile ? 12 : 14;
 
-    const cardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
+    // Hitung tinggi untuk multiple boxes (setiap nama punya kotak sendiri)
+    const namesCount = namesArr.length;
+    const boxGapVertical = bp.isMobile ? 6 : 8; // Jarak antar kotak
+    const totalNamesHeight = namesCount > 0 
+        ? (textFieldH * namesCount) + (boxGapVertical * (namesCount - 1))
+        : textFieldH;
+
+    // Hitung tinggi base card (dengan 1 nama field)
+    const baseCardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
+    
+    // Hitung tinggi card sebenarnya dengan semua nama
+    const cardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY;
 
     const xLeft = -cardW / 2;
-    const yTop = -cardH / 2;
+    // Gunakan base height untuk positioning agar tidak naik, tapi card tetap memanjang
+    const yTop = -baseCardH / 2;
 
     const yHeaderTop = yTop + padY;
     const centerX = 0;
@@ -1086,18 +1098,35 @@ export default function PetaJabatanClient() {
             {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
           </g>
 
-          {/* TEXT FIELD NAMA */}
+          {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
           <g style={{ pointerEvents: 'none' }}>
-            <rect x={xLeft + padX} y={yBoxes + boxH +  (bp.isMobile ? 10 : 12)}
-                  width={cardW - padX * 2} height={textFieldH}
-                  rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
-            {namaPejabatText && (
-                <text x={xLeft + padX + 10} y={yBoxes + boxH + (bp.isMobile ? 10 : 12) + textFieldH / 2}
-                      textAnchor="start" alignmentBaseline="central"
-                      fill="#111827" strokeWidth={1}
-                      style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
-                  {namaPejabatText}
-                </text>
+            {namesArr.length > 0 ? (
+                namesArr.map((name, idx) => {
+                  const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
+                  const textAlign = namesArr.length === 1 ? "middle" : "start";
+                  const textX = namesArr.length === 1 ? centerX : xLeft + padX + 10;
+                  
+                  return (
+                      <g key={idx}>
+                        {/* Kotak untuk setiap nama */}
+                        <rect x={xLeft + padX} y={yBoxStart}
+                              width={cardW - padX * 2} height={textFieldH}
+                              rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
+                        {/* Text nama */}
+                        <text x={textX} y={yBoxStart + textFieldH / 2}
+                              textAnchor={textAlign} alignmentBaseline="central"
+                              fill="#111827" strokeWidth={1}
+                              style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
+                          {name}
+                        </text>
+                      </g>
+                  );
+                })
+            ) : (
+                // Jika tidak ada nama, tampilkan kotak kosong
+                <rect x={xLeft + padX} y={yBoxes + boxH + (bp.isMobile ? 10 : 12)}
+                      width={cardW - padX * 2} height={textFieldH}
+                      rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
             )}
           </g>
 
