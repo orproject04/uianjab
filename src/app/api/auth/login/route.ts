@@ -65,10 +65,16 @@ export async function POST(req: NextRequest) {
             path: '/',
         });
 
-
+        // Return tokens di body untuk aplikasi eksternal (mobile/desktop/API consumers)
+        // Browser tetap bisa pakai cookies (lebih aman)
         return NextResponse.json({
             ok: true,
             message: "Login berhasil",
+            // Tokens untuk eksternal apps (opsional untuk browser)
+            access_token: access,
+            refresh_token: refresh,
+            token_type: "Bearer",
+            expires_in: ACCESS_TOKEN_MAXAGE_SEC,
         }, { status: 200 });
     } catch (err) {
         console.error('[LOGIN] Error:', err);
