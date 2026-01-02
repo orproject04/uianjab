@@ -68,6 +68,7 @@ const AppSidebar: React.FC = () => {
     const [editUnitKerja, setEditUnitKerja] = useState<string>("");
     const [editIsPusat, setEditIsPusat] = useState<string>("true");
     const [editJenisJabatan, setEditJenisJabatan] = useState<string>("");
+    const [editNamaPejabat, setEditNamaPejabat] = useState<string[]>([]);
     const [parentOptions, setParentOptions] = useState<Array<{ id: string | ""; label: string }>>([]);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -416,6 +417,24 @@ const AppSidebar: React.FC = () => {
                 setEditIsPusat(currentIsPusat);
                 setEditJenisJabatan(currentJenisJabatan || "");
 
+                // Fetch nama_pejabat dari API
+                try {
+                    const res = await apiFetch(`/api/peta-jabatan?root_id=${node.id}`, {cache: "no-store"});
+                    if (res.ok) {
+                        const data: APIRow[] = await res.json();
+                        const currentNode = data.find((r: APIRow) => r.id === node.id);
+                        if (currentNode && Array.isArray(currentNode.nama_pejabat)) {
+                            setEditNamaPejabat(currentNode.nama_pejabat.filter(n => n && n.trim()));
+                        } else {
+                            setEditNamaPejabat([]);
+                        }
+                    } else {
+                        setEditNamaPejabat([]);
+                    }
+                } catch {
+                    setEditNamaPejabat([]);
+                }
+
                 setShowEdit(true);
             } catch (e: any) {
                 await Swal.fire({icon: "error", title: "Oops", text: sanitizeForAlert(e?.message) || "Gagal membuka editor"});
@@ -444,8 +463,13 @@ const AppSidebar: React.FC = () => {
 
     const is_pusat = editIsPusat === "true";
         const jenis_jabatan = editJenisJabatan || null;
+        
+        // Filter dan trim nama_pejabat, remove empty strings
+        const nama_pejabat = editNamaPejabat
+            .map(n => n.trim())
+            .filter(n => n.length > 0);
 
-        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan};
+        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, nama_pejabat};
         if (editOrder.trim() !== "") {
             const parsed = Number(editOrder);
             if (!Number.isFinite(parsed)) {
@@ -520,7 +544,7 @@ const AppSidebar: React.FC = () => {
         } finally {
             setSaving(false);
         }
-    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, loadData, anjabSubs]);
+    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, editNamaPejabat, loadData, anjabSubs]);
 
     const openAddModal = (parent: SubNavItem) => {
         setAddParentFor(parent);
@@ -1204,6 +1228,51 @@ const AppSidebar: React.FC = () => {
                                 {/*        placeholder="Kosongkan untuk auto"*/}
                                 {/*    />*/}
                                 {/*</div>*/}
+
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">
+                                        Nama Pejabat
+                                        <span className="text-xs text-gray-500 ml-2 font-normal">
+                                            (Bezetting: {editNamaPejabat.filter(n => n.trim()).length})
+                                        </span>
+                                    </label>
+                                    <div className="space-y-2">
+                                        {editNamaPejabat.map((nama, idx) => (
+                                            <div key={idx} className="flex gap-2">
+                                                <input
+                                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                    value={nama}
+                                                    onChange={(e) => {
+                                                        const newNames = [...editNamaPejabat];
+                                                        newNames[idx] = e.target.value;
+                                                        setEditNamaPejabat(newNames);
+                                                    }}
+                                                    placeholder={`Nama pejabat ${idx + 1}`}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newNames = editNamaPejabat.filter((_, i) => i !== idx);
+                                                        setEditNamaPejabat(newNames);
+                                                    }}
+                                                    className="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                                                >
+                                                    Hapus
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditNamaPejabat([...editNamaPejabat, ""])}
+                                            className="w-full px-3 py-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors text-sm font-medium"
+                                        >
+                                            + Tambah Pejabat
+                                        </button>
+                                    </div>
+                                    <p className="mt-1.5 text-xs text-gray-500">
+                                        Bezetting akan otomatis disesuaikan dengan jumlah nama pejabat yang diisi.
+                                    </p>
+                                </div>
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Atasan</label>

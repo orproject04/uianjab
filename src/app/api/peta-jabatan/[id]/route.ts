@@ -83,6 +83,31 @@ export async function PATCH(
             );
         }
 
+        // ✅ NEW: nama_pejabat (array string|skip)
+        const hasNamaPejabat = Object.prototype.hasOwnProperty.call(body, "nama_pejabat");
+        let nama_pejabat: string[] | undefined = undefined;
+        let bezetting: number | undefined = undefined;
+        
+        if (hasNamaPejabat) {
+            if (Array.isArray(body.nama_pejabat)) {
+                // Filter empty strings and trim
+                nama_pejabat = body.nama_pejabat
+                    .filter((n: any) => typeof n === "string" && n.trim().length > 0)
+                    .map((n: string) => n.trim());
+                
+                // Auto-update bezetting berdasarkan jumlah nama
+                bezetting = nama_pejabat.length;
+            } else if (body.nama_pejabat === null) {
+                nama_pejabat = [];
+                bezetting = 0;
+            } else {
+                return NextResponse.json(
+                    {error: "nama_pejabat harus array atau null"},
+                    {status: 400}
+                );
+            }
+        }
+
         await client.query("BEGIN");
 
         // 1) Ambil node saat ini
@@ -228,6 +253,12 @@ export async function PATCH(
 
         setIf("is_pusat", is_pusat);
         setIf("jenis_jabatan", jenis_jabatan);
+        
+        // Update nama_pejabat dan bezetting
+        if (hasNamaPejabat) {
+            setIf("nama_pejabat", nama_pejabat);
+            setIf("bezetting", bezetting);
+        }
 
         if (fields.length) {
             const q = `
