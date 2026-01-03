@@ -58,6 +58,14 @@ export async function fetchPegawaiData(
   
   const url = `${baseUrl}?per_page=${perPage}&page=${page}`;
   
+  console.log('[FETCH_PEGAWAI] Starting fetch:', {
+    url,
+    page,
+    perPage,
+    timeout,
+    hasToken: !!process.env.EXTERNAL_API_TOKEN,
+  });
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
@@ -80,16 +88,46 @@ export async function fetchPegawaiData(
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text().catch(() => 'Unable to read response');
+      console.error('[FETCH_PEGAWAI] HTTP error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+        url,
+      });
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log('[FETCH_PEGAWAI] Success:', {
+      page,
+      dataCount: data.data?.length || 0,
+      totalPages: data.meta?.last_page,
+    });
+    
+    return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
+    
+    console.error('[FETCH_PEGAWAI] Error details:', {
+      name: error.name,
+      message: error.message,
+      cause: error.cause,
+      stack: error.stack,
+      url,
+      page,
+    });
+    
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout - API took too long to respond');
+      throw new Error(`Request timeout - API took too long to respond (>${timeout}ms)`);
     }
-    throw error;
+    
+    // Enhance error message with context
+    const enhancedError = new Error(
+      `Failed to fetch pegawai data from ${url}: ${error.message}`
+    );
+    enhancedError.cause = error;
+    throw enhancedError;
   }
 }
 
