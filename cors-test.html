@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test - UIANJAB API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 CORS Test - UIANJAB API</h1>
+        
+        <div class="test-section">
+            <h3>⚙️ Configuration</h3>
+            <label>API Base URL:</label>
+            <input type="text" id="baseUrl" value="http://localhost:3000" placeholder="http://localhost:3000">
+        </div>
+
+        <div class="test-section">
+            <h3>🔐 Test 1: Login API</h3>
+            <label>Email:</label>
+            <input type="email" id="email" value="admin@example.com" placeholder="admin@example.com">
+            <label>Password:</label>
+            <input type="password" id="password" value="password123" placeholder="password">
+            <button onclick="testLogin()">Test Login</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🗺️ Test 2: Peta Jabatan API</h3>
+            <button onclick="testPetaJabatan()">Test Get Peta Jabatan</button>
+            <div id="petaJabatanResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test 3: OPTIONS Preflight</h3>
+            <button onclick="testPreflight('/api/auth/login')">Test Login Preflight</button>
+            <button onclick="testPreflight('/api/peta-jabatan')">Test Peta Jabatan Preflight</button>
+            <div id="preflightResult"></div>
+        </div>
+    </div>
+
+    <script>
+        function showResult(elementId, message, isSuccess) {
+            const element = document.getElementById(elementId);
+            element.className = `result ${isSuccess ? 'success' : 'error'}`;
+            element.textContent = message;
+        }
+
+        async function testLogin() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            showResult('loginResult', 'Testing...', true);
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    if (key.toLowerCase().includes('access-control')) {
+                        headers[key] = value;
+                    }
+                });
+                
+                const result = `Status: ${response.status} ${response.statusText}\n\nCORS Headers:\n${JSON.stringify(headers, null, 2)}\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                
+                showResult('loginResult', result, response.ok);
+            } catch (error) {
+                showResult('loginResult', `Error: ${error.message}\n\nCORS mungkin diblokir oleh browser. Cek console untuk detail.`, false);
+                console.error('Login test error:', error);
+            }
+        }
+
+        async function testPetaJabatan() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            
+            showResult('petaJabatanResult', 'Testing...', true);
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/peta-jabatan`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                });
+                
+                const data = await response.json();
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    if (key.toLowerCase().includes('access-control')) {
+                        headers[key] = value;
+                    }
+                });
+                
+                const dataPreview = Array.isArray(data) ? 
+                    `Array with ${data.length} items` : 
+                    JSON.stringify(data, null, 2);
+                
+                const result = `Status: ${response.status} ${response.statusText}\n\nCORS Headers:\n${JSON.stringify(headers, null, 2)}\n\nResponse:\n${dataPreview}`;
+                
+                showResult('petaJabatanResult', result, response.ok);
+            } catch (error) {
+                showResult('petaJabatanResult', `Error: ${error.message}\n\nCORS mungkin diblokir oleh browser. Cek console untuk detail.`, false);
+                console.error('Peta Jabatan test error:', error);
+            }
+        }
+
+        async function testPreflight(endpoint) {
+            const baseUrl = document.getElementById('baseUrl').value;
+            
+            showResult('preflightResult', 'Testing OPTIONS request...', true);
+            
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type, Authorization',
+                    },
+                });
+                
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    if (key.toLowerCase().includes('access-control')) {
+                        headers[key] = value;
+                    }
+                });
+                
+                const result = `Endpoint: ${endpoint}\nStatus: ${response.status} ${response.statusText}\n\nCORS Headers:\n${JSON.stringify(headers, null, 2)}`;
+                
+                showResult('preflightResult', result, response.ok);
+            } catch (error) {
+                showResult('preflightResult', `Error: ${error.message}`, false);
+                console.error('Preflight test error:', error);
+            }
+        }
+
+        // Show current page origin
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Current origin:', window.location.origin);
+            console.log('Testing CORS from this origin to the API');
+        });
+    </script>
+</body>
+</html>

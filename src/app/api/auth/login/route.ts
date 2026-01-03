@@ -9,12 +9,20 @@ import {
     ACCESS_TOKEN_MAXAGE_SEC
 } from "@/lib/auth";
 import { hashRefreshToken } from "@/lib/tokens";
+import { handleCorsOptions, addCorsHeaders } from "@/lib/cors";
+
+// Handle preflight OPTIONS request
+export async function OPTIONS(req: NextRequest) {
+    return handleCorsOptions(req);
+}
 
 export async function POST(req: NextRequest) {
+    const origin = req.headers.get('origin');
     try {
         const { email, password } = await req.json();
         if (!email || !password) {
-            return Response.json({ error: "Email & password wajib dikirim" }, { status: 400 });
+            const response = NextResponse.json({ error: "Email & password wajib dikirim" }, { status: 400 });
+            return addCorsHeaders(response, origin);
         }
 
         const { rows } = await pool.query(
@@ -23,15 +31,22 @@ export async function POST(req: NextRequest) {
              WHERE email=$1`,
             [email]
         );
-        if (!rows.length) return Response.json({ error: "Email / Password salah" }, { status: 401 });
+        if (!rows.length) {
+            const response = NextResponse.json({ error: "Email / Password salah" }, { status: 401 });
+            return addCorsHeaders(response, origin);
+        }
         const user = rows[0];
 
         if (!user.is_email_verified) {
-            return Response.json({ error: "Email belum diverifikasi" }, { status: 403 });
+            const response = NextResponse.json({ error: "Email belum diverifikasi" }, { status: 403 });
+            return addCorsHeaders(response, origin);
         }
 
         const ok = await comparePassword(password, user.password_hash);
-        if (!ok) return Response.json({ error: "Email / Password salah" }, { status: 401 });
+        if (!ok) {
+            const response = NextResponse.json({ error: "Email / Password salah" }, { status: 401 });
+            return addCorsHeaders(response, origin);
+        }
 
         const access  = signAccessToken({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name });
         const refresh = signRefreshToken({ sub: user.id });
@@ -67,7 +82,7 @@ export async function POST(req: NextRequest) {
 
         // Return tokens di body untuk aplikasi eksternal (mobile/desktop/API consumers)
         // Browser tetap bisa pakai cookies (lebih aman)
-        return NextResponse.json({
+        const response = NextResponse.json({
             ok: true,
             message: "Login berhasil",
             // Tokens untuk eksternal apps (opsional untuk browser)
@@ -76,8 +91,11 @@ export async function POST(req: NextRequest) {
             token_type: "Bearer",
             expires_in: ACCESS_TOKEN_MAXAGE_SEC,
         }, { status: 200 });
+        
+        return addCorsHeaders(response, origin);
     } catch (err) {
         console.error('[LOGIN] Error:', err);
-        return NextResponse.json({ error: "Gagal login" }, { status: 500 });
+        const response = NextResponse.json({ error: "Gagal login" }, { status: 500 });
+        return addCorsHeaders(response, origin);
     }
 }

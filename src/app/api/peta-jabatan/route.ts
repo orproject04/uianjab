@@ -3,6 +3,7 @@ import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth";
 import {z} from "zod";
+import { handleCorsOptions, addCorsHeaders } from "@/lib/cors";
 
 // --- UPDATE tipe Row (letakkan di atas, menggantikan tipe Row lama)
 type Row = {
@@ -37,14 +38,21 @@ const CreateSchema = z.object({
     jabatan_id: z.string().uuid().optional().nullable(), // Manual override
 });
 
+// Handle preflight OPTIONS request
+export async function OPTIONS(req: NextRequest) {
+    return handleCorsOptions(req);
+}
+
 export async function GET(req: NextRequest) {
+    const origin = req.headers.get('origin');
     try {
         const user = getUserFromReq(req);
         if (!user) {
-            return NextResponse.json(
+            const response = NextResponse.json(
                 { error: "Unauthorized, Silakan login kembali" },
                 { status: 401 }
             );
+            return addCorsHeaders(response, origin);
         }
 
         const { searchParams } = new URL(req.url);
@@ -54,7 +62,8 @@ export async function GET(req: NextRequest) {
         // Query by jabatan_id (simple query, tidak recursive)
         if (jabatan_id) {
             if (!isUuid(jabatan_id)) {
-                return NextResponse.json({ error: "jabatan_id harus UUID" }, { status: 400 });
+                const response = NextResponse.json({ error: "jabatan_id harus UUID" }, { status: 400 });
+                return addCorsHeaders(response, origin);
             }
 
             const { rows } = await pool.query<Row>(
@@ -79,7 +88,8 @@ export async function GET(req: NextRequest) {
                  ORDER BY pj.order_index`,
                 [jabatan_id]
             );
-            return NextResponse.json({ success: true, data: rows });
+            const response = NextResponse.json({ success: true, data: rows });
+            return addCorsHeaders(response, origin);
         }
 
         // SELECT final agar tidak duplikatif (dipakai di cabang subtree & full tree)
@@ -107,7 +117,8 @@ export async function GET(req: NextRequest) {
 
         if (root_id) {
             if (!isUuid(root_id)) {
-                return NextResponse.json({ error: "root_id harus UUID" }, { status: 400 });
+                const response = NextResponse.json({ error: "root_id harus UUID" }, { status: 400 });
+                return addCorsHeaders(response, origin);
             }
 
             // Subtree mulai root_id, urut preorder
@@ -160,7 +171,8 @@ export async function GET(req: NextRequest) {
         `,
                 [root_id]
             );
-            return NextResponse.json(rows);
+            const response = NextResponse.json(rows);
+            return addCorsHeaders(response, origin);
         }
 
         // Semua pohon (root → preorder)
@@ -213,29 +225,34 @@ export async function GET(req: NextRequest) {
       `
         );
 
-        return NextResponse.json(rows);
+        const response = NextResponse.json(rows);
+        return addCorsHeaders(response, origin);
     } catch (e) {
-        return NextResponse.json({ error: "Internal error" }, { status: 500 });
+        const response = NextResponse.json({ error: "Internal error" }, { status: 500 });
+        return addCorsHeaders(response, origin);
     }
 }
 
 export async function POST(req: NextRequest) {
+    const origin = req.headers.get('origin');
     try {
         const user = getUserFromReq(req);
         if (!user || !hasRole(user, ["admin"])) {
-            return NextResponse.json(
+            const response = NextResponse.json(
                 {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
                 {status: 403}
             );
+            return addCorsHeaders(response, origin);
         }
 
         const body = await req.json().catch(() => ({}));
         const parsed = CreateSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json(
+            const response = NextResponse.json(
                 {error: "Validasi gagal", detail: parsed.error.flatten()},
                 {status: 400}
             );
+            return addCorsHeaders(response, origin);
         }
 
         const {
@@ -256,10 +273,11 @@ export async function POST(req: NextRequest) {
                 [parent_id]
             );
             if (p.rowCount === 0) {
-                return NextResponse.json(
+                const response = NextResponse.json(
                     {error: "parent_id tidak ditemukan"},
                     {status: 400}
                 );
+                return addCorsHeaders(response, origin);
             }
         }
 
@@ -277,10 +295,11 @@ export async function POST(req: NextRequest) {
             [parent_id, finalSlug]
         );
         if (dup.rows[0]?.exists) {
-            return NextResponse.json(
+            const response = NextResponse.json(
                 {error: "Slug sudah dipakai di parent yang sama"},
                 {status: 409}
             );
+            return addCorsHeaders(response, origin);
         }
 
         // Prioritas: manual_jabatan_id > auto-match
@@ -369,22 +388,26 @@ export async function POST(req: NextRequest) {
                 }
         }
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             ok: true, 
             node: newNode, 
             path: fullPath,
             matched_anjab: matchInfo
         });
+        return addCorsHeaders(response, origin);
     } catch (e: any) {
         if (e?.code === "23505") {
-            return NextResponse.json(
+            const response = NextResponse.json(
                 {error: "Slug sudah dipakai di parent yang sama"},
                 {status: 409}
             );
+            return addCorsHeaders(response, origin);
         }
         if (e?.code === "22P02") {
-            return NextResponse.json({error: "parent_id harus UUID"}, {status: 400});
+            const response = NextResponse.json({error: "parent_id harus UUID"}, {status: 400});
+            return addCorsHeaders(response, origin);
         }
-        return NextResponse.json({error: "Internal error"}, {status: 500});
+        const response = NextResponse.json({error: "Internal error"}, {status: 500});
+        return addCorsHeaders(response, origin);
     }
 }
