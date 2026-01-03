@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
+import { useMe } from "@/context/MeContext";
 import {
     BarChart,
     Bar,
@@ -12,14 +13,11 @@ import {
     Tooltip,
     Legend,
     ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
 } from "recharts";
 
 type SummaryData = {
     total_jabatan: number;
-    total_besetting: number;
+    total_bezetting: number;
     total_kebutuhan: number;
     total_selisih: number;
 };
@@ -30,12 +28,20 @@ type BreakdownItem = {
     unit_kerja?: string;
     nama_jabatan?: string;
     jenis_jabatan?: string;
-    jumlah_jabatan: number;
-    besetting: number;
+    bezetting: number;
     kebutuhan: number;
     selisih: number;
 };
 
+type PetaJabatanItem = {
+    id: number;
+    nama_jabatan: string;
+    unit_kerja: string;
+    jenis_jabatan: string;
+    nama_pejabat: string[];
+    bezetting: number;
+    kebutuhan_pegawai: number;
+};
 type DashboardData = {
     summary: SummaryData;
     byJenis: BreakdownItem[];
@@ -51,9 +57,16 @@ type DashboardData = {
 const COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
 export default function DashboardPage() {
+    const { isAdmin, loading: meLoading } = useMe();
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // modal removed — jenis cards now act as filters
+    const [sortField, setSortField] = useState<string>("selisih");
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+    const [searchNama, setSearchNama] = useState<string>('');
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const itemsPerPage = 100;
 
     // Filters
     const [selectedBiro, setSelectedBiro] = useState<{ value: string; label: string } | null>(null);
@@ -95,6 +108,28 @@ export default function DashboardPage() {
         } finally {
             setLoading(false);
         }
+    }
+
+    if (meLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
+                    <h3 className="text-red-800 dark:text-red-200 font-semibold mb-2">Akses Ditolak</h3>
+                    <p className="text-red-600 dark:text-red-300 text-sm">Halaman ini hanya dapat diakses oleh Admin</p>
+                </div>
+            </div>
+        );
     }
 
     if (loading) {
@@ -185,8 +220,87 @@ export default function DashboardPage() {
     const sortedByJenis = [...byJenis].sort((a, b) => {
         const r = jenisRank(a.jenis) - jenisRank(b.jenis);
         if (r !== 0) return r;
-        return (b.jumlah_jabatan || 0) - (a.jumlah_jabatan || 0);
+        // Sort by kebutuhan if same rank
+        return (b.kebutuhan || 0) - (a.kebutuhan || 0);
     });
+
+    // Dedupe by (nama_jabatan, unit_kerja) to avoid exact duplicate rows
+    const dedupeByNamaUnitMap: Record<string, BreakdownItem> = {};
+    for (const item of byNamaJabatan) {
+        const nama = String(item.nama_jabatan || '').trim();
+        const unit = String(item.unit_kerja || '').trim();
+        const key = `${nama}|||${unit}`;
+        if (!nama) continue;
+        if (!dedupeByNamaUnitMap[key]) {
+            // keep the first occurrence (preserve original per-row behavior)
+            dedupeByNamaUnitMap[key] = { ...item, display_label: `${nama} — ${unit || 'Unit Tidak Diketahui'}` } as any;
+        }
+        // if duplicate exact pair appears later, ignore it
+    }
+    const dedupedByNamaJabatan = Object.values(dedupeByNamaUnitMap) as Array<BreakdownItem & { display_label?: string }>;
+
+    // Prepare sortable data for Total Per Nama Jabatan
+    const getSortedByNama = () => {
+        const arr = [...byNamaJabatan];
+        const field = sortField;
+        const dir = sortDir === 'desc' ? -1 : 1;
+        arr.sort((a: any, b: any) => {
+            const va = (a as any)[field];
+            const vb = (b as any)[field];
+            if (field === 'nama_jabatan' || field === 'unit_kerja') {
+                return (String(va || '').localeCompare(String(vb || ''))) * dir;
+            }
+            // numeric
+            const na = Number(va ?? 0);
+            const nb = Number(vb ?? 0);
+            if (na === nb) return 0;
+            return (na - nb) * dir;
+        });
+        return arr;
+    };
+
+    const sortedNamaJabatan = getSortedByNama();
+    const displayedNamaJabatan = sortedNamaJabatan.filter((it: any) => {
+        if (!searchNama) return true;
+        return String(it.nama_jabatan || '').toLowerCase().includes(searchNama.toLowerCase());
+    });
+
+    const totalPages = Math.max(1, Math.ceil(displayedNamaJabatan.length / itemsPerPage));
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+    const currentPageItems = displayedNamaJabatan.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
+    const maxPageButtons = 3;
+    const halfWindow = Math.floor(maxPageButtons / 2);
+    let startPage = Math.max(1, currentPage - halfWindow);
+    let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+    if (endPage - startPage + 1 < maxPageButtons) {
+        startPage = Math.max(1, endPage - maxPageButtons + 1);
+    }
+    const visiblePages = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+    const showLeftEllipsis = startPage > 1;
+    const showRightEllipsis = endPage < totalPages;
+
+    // Prepare Top-10 datasets for charts (positive uses selisih, negative uses absolute selisih)
+    const topPositive = dedupedByNamaJabatan
+        .filter(d => d.selisih > 0)
+        .sort((a, b) => (b.selisih || 0) - (a.selisih || 0))
+        .slice(0, 10)
+        .map(d => ({ ...d, display_label: d.display_label || `${d.nama_jabatan} — ${d.unit_kerja}` }));
+
+    const topNegative = dedupedByNamaJabatan
+        .filter(d => d.selisih < 0)
+        .sort((a, b) => (a.selisih || 0) - (b.selisih || 0))
+        .slice(0, 10)
+        .map(d => ({ ...d, abs_selisih: Math.abs(d.selisih || 0), display_label: d.display_label || `${d.nama_jabatan} — ${d.unit_kerja}` }));
+
+    function toggleSort(field: string) {
+        if (sortField === field) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortField(field);
+            setSortDir('desc');
+        }
+    }
 
     
 
@@ -204,10 +318,13 @@ export default function DashboardPage() {
     const renderYAxisTick = (props: any) => {
         const { x, y, payload } = props;
         const raw: string = String(payload?.value ?? "");
+        // If Y axis value is a combined display_label like "Nama Jabatan — Unit",
+        // only show the Nama Jabatan part on the axis.
+        const labelSource = raw.includes(' — ') ? raw.split(' — ')[0] : raw;
 
         // Max characters per line (try to break on spaces)
         const maxLen = 26;
-        const words = raw.split(/\s+/);
+        const words = String(labelSource).split(/\s+/);
         const lines: string[] = [];
         let current = "";
         for (const w of words) {
@@ -223,7 +340,7 @@ export default function DashboardPage() {
         // Limit to 3 lines, ellipsize the last line
         if (lines.length > 3) {
             const first = lines.slice(0, 2);
-            let last = lines.slice(2).join(" ");
+                let last = lines.slice(2).join(" ");
             if (last.length > maxLen) last = last.slice(0, maxLen - 3) + "...";
             lines.length = 0; lines.push(...first, last);
         }
@@ -434,7 +551,7 @@ export default function DashboardPage() {
                 />
                 <SummaryCard
                     title="Bezetting"
-                    value={summary.total_besetting}
+                    value={summary.total_bezetting}
                     icon="👥"
                     color="bg-green-500"
                     subtitle=""
@@ -467,12 +584,30 @@ export default function DashboardPage() {
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Per Jenis Jabatan</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Rincian jumlah untuk setiap jenis jabatan</p>
                     </div>
+                    <div className="ml-auto">
+                        {selectedJenis && (
+                            <button
+                                onClick={() => setSelectedJenis(null)}
+                                className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
+                            >
+                                Reset Filter
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {sortedByJenis.map((item, index) => (
-                        <div
-                            key={index}
-                            className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+                    {sortedByJenis.map((item, index) => {
+                        // Hitung jumlah jabatan untuk jenis ini dari byNamaJabatan
+                        const jumlahJabatan = byNamaJabatan.filter(j => j.jenis_jabatan === item.jenis).length;
+                        
+                        return (
+                        <div key={index} className="relative">
+                        <button
+                            onClick={() => {
+                                // Set the Jenis filter (behaves like the Jenis dropdown)
+                                setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
+                            }}
+                            className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer text-left w-full"
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex-1">
@@ -481,7 +616,7 @@ export default function DashboardPage() {
                                     </h4>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                                            {item.jumlah_jabatan}
+                                            {jumlahJabatan}
                                         </span>
                                         <span className="text-xs text-gray-500 dark:text-gray-400">jabatan</span>
                                     </div>
@@ -493,78 +628,41 @@ export default function DashboardPage() {
                                     {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "⚙️" : "📋"}
                                 </div>
                             </div>
-                            <div className="space-y-1.5">
+                                <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-xs">
                                     <span className="text-gray-600 dark:text-gray-400">Bezetting</span>
-                                    <span className="font-semibold text-green-600 dark:text-green-400">
-                                        {item.besetting.toLocaleString("id-ID")}
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                        {(item.bezetting ?? 0).toLocaleString("id-ID")}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
                                     <span className="text-gray-600 dark:text-gray-400">Kebutuhan</span>
-                                    <span className="font-semibold text-purple-600 dark:text-purple-400">
-                                        {item.kebutuhan.toLocaleString("id-ID")}
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                        {(item.kebutuhan ?? 0).toLocaleString("id-ID")}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-200 dark:border-gray-600">
                                     <span className="text-gray-600 dark:text-gray-400">Selisih</span>
                                     <span className={`font-semibold ${
-                                        item.selisih >= 0
-                                            ? "text-orange-600 dark:text-orange-400"
-                                            : "text-red-600 dark:text-red-400"
+                                        (item.selisih === 0)
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : (item.selisih > 0)
+                                                ? 'text-red-600 dark:text-red-400'
+                                                : 'text-yellow-600 dark:text-yellow-400'
                                     }`}>
-                                        {item.selisih > 0 ? "+" : ""}{item.selisih.toLocaleString("id-ID")}
+                                        {item.selisih > 0 ? '+' : ''}{(item.selisih ?? 0).toLocaleString("id-ID")}
                                     </span>
                                 </div>
                             </div>
+                        </button>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* Chart Row 2: Top Biro */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                            Top 10 Unit Kerja
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Berdasarkan Kebutuhan Pegawai</p>
-                    </div>
-                </div>
-                <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={byBiro} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 12 }} />
-                        <YAxis
-                            dataKey="unit_kerja"
-                            type="category"
-                            width={yAxisWidth}
-                            tick={renderYAxisTick}
-                        />
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '12px',
-                                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                            }}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                        <Bar dataKey="besetting" fill="#10b981" name="Bezetting" radius={[0, 8, 8, 0]} />
-                        <Bar dataKey="kebutuhan" fill="#8b5cf6" name="Kebutuhan" radius={[0, 8, 8, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-
-
-            {/* Total Per Nama Jabatan */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Total Per Nama Jabatan (moved up) */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
                 <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-800">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -572,11 +670,20 @@ export default function DashboardPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                             </svg>
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                Total Per Nama Jabatan
-                            </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Total Jabatan berdasarkan kebutuhan pegawai</p>
+                        <div className="flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Total Jabatan
+                                </h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Total Jabatan berdasarkan selisih kebutuhan pegawai</p>
+                            </div>
+                        <div className="ml-3 w-full sm:w-48">
+                            <label className="sr-only">Cari Nama Jabatan</label>
+                            <input
+                                value={searchNama}
+                                onChange={(e) => { setSearchNama(e.target.value); setCurrentPage(1); }}
+                                placeholder="Cari nama jabatan..."
+                                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                            />
                         </div>
                     </div>
                 </div>
@@ -584,46 +691,54 @@ export default function DashboardPage() {
                     <table className="w-full table-fixed">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
                         <tr>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
+                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-14">
                                 No
                             </th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center gap-2">
+                            <th onClick={() => toggleSort('nama_jabatan')} className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                <div className="flex items-center gap-2 select-none">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                     </svg>
-                                    Nama Jabatan
+                                    Jabatan {sortField==='nama_jabatan' ? (sortDir==='asc' ? '▲' : '▼') : ''}
+                                </div>
+                            </th>
+                            <th onClick={() => toggleSort('unit_kerja')} className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                <div className="flex items-center gap-2 select-none">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                    Unit Kerja {sortField==='unit_kerja' ? (sortDir==='asc' ? '▲' : '▼') : ''}
                                 </div>
                             </th>
                             
-                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center justify-center gap-2">
+                            <th onClick={() => toggleSort('bezetting')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                <div className="flex items-center justify-center gap-2 select-none">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
-                                    Bezetting
+                                    Bezetting {sortField==='bezetting' ? (sortDir==='asc' ? '▲' : '▼') : ''}
                                 </div>
                             </th>
-                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center justify-center gap-2">
+                            <th onClick={() => toggleSort('kebutuhan')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                <div className="flex items-center justify-center gap-2 select-none">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                     </svg>
-                                    Kebutuhan
+                                    Kebutuhan {sortField==='kebutuhan' ? (sortDir==='asc' ? '▲' : '▼') : ''}
                                 </div>
                             </th>
-                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center justify-center gap-2">
+                            <th onClick={() => toggleSort('selisih')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                <div className="flex items-center justify-center gap-2 select-none">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                                     </svg>
-                                    Selisih
+                                    Selisih {sortField==='selisih' ? (sortDir==='asc' ? '▲' : '▼') : ''}
                                 </div>
                             </th>
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {byNamaJabatan.map((item, index) => (
+                        {currentPageItems.map((item, index) => (
                             <tr
                                 key={index}
                                 className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${
@@ -631,33 +746,40 @@ export default function DashboardPage() {
                                 }`}
                             >
                                 <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                            {index + 1}
+                                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                            {(currentPage - 1) * itemsPerPage + index + 1}
                                         </span>
                                 </td>
                                 <td className="px-3 py-3 break-words">
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                    <div className="text-xs font-medium text-gray-900 dark:text-white">
                                         {item.nama_jabatan}
+                                    </div>
+                                </td>
+                                <td className="px-3 py-3 break-words">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        {item.unit_kerja}
                                     </div>
                                 </td>
                                 
                                 <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                                            {item.besetting.toLocaleString("id-ID")}
+                                        <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                            {(item.bezetting ?? 0).toLocaleString("id-ID")}
                                         </span>
                                 </td>
                                 <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
-                                            {item.kebutuhan.toLocaleString("id-ID")}
+                                        <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                            {(item.kebutuhan ?? 0).toLocaleString("id-ID")}
                                         </span>
                                 </td>
                                 <td className="px-3 py-3 whitespace-normal break-words text-center">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                            item.selisih >= 0
-                                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
-                                                : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                            (item.selisih === 0)
+                                                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                                : (item.selisih > 0)
+                                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                                    : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
                                         }`}>
-                                            {item.selisih > 0 ? '+' : ''}{item.selisih.toLocaleString("id-ID")}
+                                            {item.selisih > 0 ? '+' : ''}{(item.selisih ?? 0).toLocaleString("id-ID")}
                                         </span>
                                 </td>
                             </tr>
@@ -665,107 +787,190 @@ export default function DashboardPage() {
                         </tbody>
                     </table>
                 </div>
-            </div>
 
-            {/* Table: Detail Breakdown */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-800">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0a2 2 0 012 2v6a2 2 0 01-2 2m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
+                <div className="p-4 sm:p-6 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                        Menampilkan {displayedNamaJabatan.length === 0 ? 0 : (currentPageItems.length)} dari {displayedNamaJabatan.length} jabatan
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage <= 1}
+                            aria-label="First page"
+                            title="First"
+                            className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17L6 12l5-5M18 17l-5-5 5-5" />
                             </svg>
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                Detail Breakdown Per Unit Kerja
-                            </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Data lengkap semua unit kerja</p>
-                        </div>
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage <= 1}
+                            aria-label="Previous page"
+                            title="Prev"
+                            className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+
+                        {showLeftEllipsis && (
+                            <span className="px-2 text-sm text-gray-500">...</span>
+                        )}
+
+                        {visiblePages.map((n) => (
+                            <button
+                                key={n}
+                                onClick={() => setCurrentPage(n)}
+                                className={`px-3 py-1 text-sm rounded-md ${currentPage === n ? 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white' : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}
+                            >
+                                {n}
+                            </button>
+                        ))}
+
+                        {showRightEllipsis && (
+                            <span className="px-2 text-sm text-gray-500">...</span>
+                        )}
+
+                        <button
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={currentPage >= totalPages}
+                            aria-label="Next page"
+                            title="Next"
+                            className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage >= totalPages}
+                            aria-label="Last page"
+                            title="Last"
+                            className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17l5-5-5-5M6 17l5-5-5-5" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
-                <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                    <table className="w-full table-fixed">
-                        <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
-                        <tr>
-                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
-                                No
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                    </svg>
-                                    Unit Kerja
-                                </div>
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                    </svg>
-                                    Bezetting
-                                </div>
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                    </svg>
-                                    Kebutuhan
-                                </div>
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                    </svg>
-                                    Selisih
-                                </div>
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {byBiro.slice(0, 50).map((item, index) => (
-                            <tr
-                                key={index}
-                                className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${
-                                    index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
-                                }`}
-                            >
-                                <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{index + 1}</span>
-                                </td>
-                                <td className="px-3 py-3 whitespace-normal break-words">
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {item.unit_kerja}
-                                    </div>
-                                </td>
-                                <td className="px-3 py-3 whitespace-normal break-words">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                                            {item.besetting}
-                                        </span>
-                                </td>
-                                <td className="px-3 py-3 whitespace-normal break-words">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
-                                            {item.kebutuhan}
-                                        </span>
-                                </td>
-                                <td className="px-3 py-3 whitespace-normal break-words">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                            item.selisih >= 0
-                                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
-                                                : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
-                                        }`}>
-                                            {item.selisih > 0 ? '+' : ''}{item.selisih}
-                                        </span>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                </div>
+
             </div>
+
+            {/* Chart Row 2: Top Biro */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Top 10 Jabatan dengan Kelebihan Pegawai Terbanyak
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting melebihi kebutuhan pegawai</p>
+                    </div>
+                </div>
+                        <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topPositive} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fontSize: 12 }} />
+                        <YAxis
+                            dataKey="display_label"
+                            type="category"
+                            width={yAxisWidth}
+                            tick={renderYAxisTick}
+                        />
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: 'rgba(255, 245, 245, 0.97)',
+                                border: '1px solid #fee2e2',
+                                borderRadius: '12px',
+                                boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
+                            }}
+                            content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                    return (
+                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                                            <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320}}>Unit: {payload[0].payload.unit_kerja}</p>
+                                            <p className="text-xs text-green-600 dark:text-green-400">Bezetting: {payload[0].payload.bezetting}</p>
+                                            <p className="text-xs text-purple-600 dark:text-purple-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
+                                            <p className="text-xs text-red-600 dark:text-red-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <Bar dataKey="selisih" fill="#ef4444" name="Selisih" radius={[0, 8, 8, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Top Jabatan (Selisih Negatif) */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Top 10 Jabatan dengan Kekurangan Pegawai Terbanyak
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
+                    </div>
+                </div>
+                        <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topNegative} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fontSize: 12 }} domain={[0, 'dataMax']} />
+                        <YAxis
+                            dataKey="display_label"
+                            type="category"
+                            width={yAxisWidth}
+                            tick={renderYAxisTick}
+                        />
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: 'rgba(255, 251, 235, 0.97)',
+                                border: '1px solid #fffbeb',
+                                borderRadius: '12px',
+                                boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
+                            }}
+                            content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                    return (
+                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                                            <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320}}>Unit: {payload[0].payload.unit_kerja}</p>
+                                            <p className="text-xs text-green-600 dark:text-green-400">Bezetting: {payload[0].payload.bezetting}</p>
+                                            <p className="text-xs text-purple-600 dark:text-purple-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
+                                            <p className="text-xs text-yellow-600 dark:text-yellow-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <Bar dataKey="abs_selisih" fill="#f59e0b" name="Selisih" radius={[0, 8, 8, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+
+            
+
+            {/* Modal untuk detail jenis jabatan */}
+            {/* modal removed — jenis cards use the Jenis filter now */}
         </div>
     );
 }
@@ -805,7 +1010,7 @@ function SummaryCard({
             </div>
             <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{title}</h3>
             <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-                {value.toLocaleString("id-ID")}
+                {(value ?? 0).toLocaleString("id-ID")}
             </p>
         </div>
     );

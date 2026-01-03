@@ -107,7 +107,8 @@ export default function SyncPegawaiPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Sinkronisasi Data Pegawai
@@ -230,6 +231,7 @@ export default function SyncPegawaiPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

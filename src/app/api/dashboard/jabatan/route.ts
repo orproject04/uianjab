@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
             ${biroFilterCTE}
             SELECT 
                 COUNT(*) as total_jabatan,
-                COALESCE(SUM(bezetting), 0) as total_besetting,
+                COALESCE(SUM(bezetting), 0) as total_bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as total_kebutuhan,
                 COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as total_selisih
             FROM peta_jabatan
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
             SELECT 
                 COALESCE(jenis_jabatan, 'Tidak Ditentukan') as jenis,
                 COUNT(*) as jumlah_jabatan,
-                COALESCE(SUM(bezetting), 0) as besetting,
+                COALESCE(SUM(bezetting), 0) as bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
                 COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
                     ELSE 'Daerah'
                 END as lokasi,
                 COUNT(*) as jumlah_jabatan,
-                COALESCE(SUM(bezetting), 0) as besetting,
+                COALESCE(SUM(bezetting), 0) as bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
                 COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
             SELECT 
                 COALESCE(unit_kerja, 'Tidak Ada Unit') as unit_kerja,
                 COUNT(*) as jumlah_jabatan,
-                COALESCE(SUM(bezetting), 0) as besetting,
+                COALESCE(SUM(bezetting), 0) as bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
                 COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
@@ -141,21 +141,19 @@ export async function GET(req: NextRequest) {
         const byBiroResult = await pool.query(byBiroQuery, params);
         const byBiro = byBiroResult.rows;
 
-        // Query untuk breakdown by nama_jabatan di peta_jabatan
+        // Query untuk breakdown by nama_jabatan di peta_jabatan (tanpa grouping)
         const byNamaJabatanQuery = `
             ${biroFilterCTE}
             SELECT 
                 COALESCE(nama_jabatan, 'Tidak Ada Nama') as nama_jabatan,
+                COALESCE(unit_kerja, 'Tidak Ada Unit') as unit_kerja,
                 COALESCE(jenis_jabatan, 'Tidak Ditentukan') as jenis_jabatan,
-                COUNT(*) as jumlah_jabatan,
-                COALESCE(SUM(bezetting), 0) as besetting,
-                COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
+                bezetting,
+                kebutuhan_pegawai as kebutuhan,
+                (bezetting - kebutuhan_pegawai) as selisih
             FROM peta_jabatan
             ${whereClause}
-            GROUP BY nama_jabatan, jenis_jabatan
             ORDER BY kebutuhan DESC, nama_jabatan ASC
-            LIMIT 50
         `;
 
         const byNamaJabatanResult = await pool.query(byNamaJabatanQuery, params);
@@ -184,38 +182,38 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             summary: {
                 total_jabatan: parseInt(summary.total_jabatan),
-                total_besetting: parseInt(summary.total_besetting),
+                total_bezetting: parseInt(summary.total_bezetting),
                 total_kebutuhan: parseInt(summary.total_kebutuhan),
                 total_selisih: parseInt(summary.total_selisih),
             },
             byJenis: byJenis.map((r: any) => ({
                 jenis: r.jenis,
                 jumlah_jabatan: parseInt(r.jumlah_jabatan),
-                besetting: parseInt(r.besetting),
+                bezetting: parseInt(r.besetting),
                 kebutuhan: parseInt(r.kebutuhan),
                 selisih: parseInt(r.selisih),
             })),
             byLokasi: byLokasi.map((r: any) => ({
                 lokasi: r.lokasi,
                 jumlah_jabatan: parseInt(r.jumlah_jabatan),
-                besetting: parseInt(r.besetting),
+                bezetting: parseInt(r.besetting),
                 kebutuhan: parseInt(r.kebutuhan),
                 selisih: parseInt(r.selisih),
             })),
             byBiro: byBiro.map((r: any) => ({
                 unit_kerja: r.unit_kerja,
                 jumlah_jabatan: parseInt(r.jumlah_jabatan),
-                besetting: parseInt(r.besetting),
+                bezetting: parseInt(r.besetting),
                 kebutuhan: parseInt(r.kebutuhan),
                 selisih: parseInt(r.selisih),
             })),
             byNamaJabatan: byNamaJabatan.map((r: any) => ({
                 nama_jabatan: r.nama_jabatan,
+                unit_kerja: r.unit_kerja,
                 jenis_jabatan: r.jenis_jabatan,
-                jumlah_jabatan: parseInt(r.jumlah_jabatan),
-                besetting: parseInt(r.besetting),
-                kebutuhan: parseInt(r.kebutuhan),
-                selisih: parseInt(r.selisih),
+                bezetting: parseInt(r.bezetting) || 0,
+                kebutuhan: parseInt(r.kebutuhan) || 0,
+                selisih: parseInt(r.selisih) || 0,
             })),
             filters: {
                 biroList,
