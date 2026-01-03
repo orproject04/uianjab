@@ -6,7 +6,7 @@ import Image from "next/image";
 import {usePathname} from "next/navigation";
 
 import {useSidebar} from "../context/SidebarContext";
-import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon, PieChartIcon, DocsIcon, TaskIcon} from "../icons/index";
+import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon, PieChartIcon, DocsIcon, TaskIcon, ArrowRightIcon} from "../icons/index";
 
 import {useMe} from "@/context/MeContext";
 import {createPortal} from "react-dom";
@@ -27,6 +27,7 @@ type APIRow = {
     is_pusat?: boolean;
     jenis_jabatan?: string | null;
     jabatan_id?: string | null;
+    nama_pejabat?: string[];
 };
 
 type SubNavItem = {
@@ -228,6 +229,12 @@ const AppSidebar: React.FC = () => {
             path: "/anjab/match", 
             subItems: []
         }] : []),
+        ...(isAdmin ? [{
+            name: "Sync Pegawai", 
+            icon: <ArrowRightIcon/>, 
+            path: "/sync-pegawai", 
+            subItems: []
+        }] : []),
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
         {name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: []}
@@ -424,7 +431,7 @@ const AppSidebar: React.FC = () => {
                         const data: APIRow[] = await res.json();
                         const currentNode = data.find((r: APIRow) => r.id === node.id);
                         if (currentNode && Array.isArray(currentNode.nama_pejabat)) {
-                            setEditNamaPejabat(currentNode.nama_pejabat.filter(n => n && n.trim()));
+                            setEditNamaPejabat(currentNode.nama_pejabat.filter((n: string) => n && n.trim()));
                         } else {
                             setEditNamaPejabat([]);
                         }
