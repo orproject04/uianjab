@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMe } from '@/context/MeContext';
 import Button from '@/components/ui/button/Button';
 import { AlertIcon, CheckCircleIcon, CloseLineIcon, DownloadIcon, ArrowRightIcon } from '@/icons';
 import Swal from 'sweetalert2';
@@ -15,8 +16,37 @@ interface SyncResult {
 }
 
 export default function SyncPegawaiPage() {
+  const { isAdmin, loading: meLoading } = useMe();
   const router = useRouter();
   const [result, setResult] = useState<SyncResult | null>(null);
+
+  useEffect(() => {
+    if (!meLoading && !isAdmin) {
+      router.replace('/');
+    }
+  }, [meLoading, isAdmin, router]);
+
+  if (meLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
+          <h3 className="text-red-800 dark:text-red-200 font-semibold mb-2">Akses Ditolak</h3>
+          <p className="text-red-600 dark:text-red-300 text-sm">Halaman ini hanya dapat diakses oleh Admin</p>
+        </div>
+      </div>
+    );
+  }
 
   const startSync = async () => {
     // Show loading with SweetAlert2

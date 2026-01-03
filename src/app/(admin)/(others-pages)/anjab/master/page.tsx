@@ -30,10 +30,11 @@ export default function AnjabListPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(12); // 12 for grid (3x4), also works for list
 
-    // Redirect if not admin
+    // Redirect if not admin (show message briefly before redirect)
     useEffect(() => {
         if (!meLoading && !isAdmin) {
-            router.push("/");
+            const t = setTimeout(() => router.replace('/'), 1400);
+            return () => clearTimeout(t);
         }
     }, [isAdmin, meLoading, router]);
 
@@ -261,9 +262,15 @@ export default function AnjabListPage() {
         );
     }
 
-    // Don't render anything if not admin (redirect will happen)
     if (!isAdmin) {
-        return null;
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
+                    <h3 className="text-red-800 dark:text-red-200 font-semibold mb-2">Akses Ditolak</h3>
+                    <p className="text-red-600 dark:text-red-300 text-sm">Halaman ini hanya dapat diakses oleh Admin</p>
+                </div>
+            </div>
+        );
     }
 
     if (error) {

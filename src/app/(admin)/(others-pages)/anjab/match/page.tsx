@@ -37,7 +37,8 @@ export default function AnjabMatchPage() {
 
     useEffect(() => {
         if (!meLoading && !isAdmin) {
-            router.push("/");
+            const t = setTimeout(() => router.replace('/'), 1400);
+            return () => clearTimeout(t);
         }
     }, [isAdmin, meLoading, router]);
 
@@ -189,7 +190,16 @@ export default function AnjabMatchPage() {
         );
     }
 
-    if (!isAdmin) return null;
+    if (!isAdmin) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
+                    <h3 className="text-red-800 dark:text-red-200 font-semibold mb-2">Akses Ditolak</h3>
+                    <p className="text-red-600 dark:text-red-300 text-sm">Halaman ini hanya dapat diakses oleh Admin</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">

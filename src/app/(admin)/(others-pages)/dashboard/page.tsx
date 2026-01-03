@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
 import { useMe } from "@/context/MeContext";
@@ -58,6 +59,13 @@ const COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"
 
 export default function DashboardPage() {
     const { isAdmin, loading: meLoading } = useMe();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!meLoading && !isAdmin) {
+            router.replace("/");
+        }
+    }, [meLoading, isAdmin, router]);
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

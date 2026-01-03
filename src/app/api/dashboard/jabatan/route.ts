@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
-import { getUserFromReq } from "@/lib/auth";
+import { getUserFromReq, hasRole } from "@/lib/auth";
 
 /**
  * GET /api/dashboard/jabatan
@@ -11,12 +11,19 @@ import { getUserFromReq } from "@/lib/auth";
  */
 export async function GET(req: NextRequest) {
     try {
-        // AUTH - Check if user is authenticated and has admin role
+        // AUTH - Check if user is authenticated and is admin
         const user = getUserFromReq(req);
         if (!user) {
             return NextResponse.json(
                 { error: "Unauthorized, Silakan login kembali" },
                 { status: 401 }
+            );
+        }
+
+        if (!hasRole(user, ["admin"])) {
+            return NextResponse.json(
+                { error: "Forbidden, hanya admin yang dapat mengakses data ini" },
+                { status: 403 }
             );
         }
 

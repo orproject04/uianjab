@@ -1,7 +1,7 @@
 // src/app/api/anjab/match/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
-import { getUserFromReq } from "@/lib/auth";
+import { getUserFromReq, hasRole } from "@/lib/auth";
 
 /**
  * Endpoint untuk mencari anjab master yang paling cocok dengan nama jabatan
@@ -14,6 +14,13 @@ export async function GET(req: NextRequest) {
             return NextResponse.json(
                 { error: "Unauthorized" },
                 { status: 401 }
+            );
+        }
+
+        if (!hasRole(user, "admin")) {
+            return NextResponse.json(
+                { error: "Forbidden" },
+                { status: 403 }
             );
         }
 
