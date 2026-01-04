@@ -812,11 +812,11 @@ export default function DashboardPage() {
                     </table>
                 </div>
 
-                <div className="p-4 sm:p-6 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="py-5 px-4 sm:p-6 border-t border-gray-100 dark:border-gray-700 flex flex-col items-center sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-left">
                         Menampilkan {displayedNamaJabatan.length === 0 ? 0 : (currentPageItems.length)} dari {displayedNamaJabatan.length} jabatan
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 w-full justify-center sm:w-auto sm:justify-start px-2 sm:px-0">
                         <button
                             onClick={() => setCurrentPage(1)}
                             disabled={currentPage <= 1}
