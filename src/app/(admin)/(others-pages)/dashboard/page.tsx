@@ -55,6 +55,14 @@ type DashboardData = {
     };
 };
 
+type SummaryCardProps = {
+    title: string;
+    value: number;
+    icon: string;
+    color: string;
+    subtitle?: string;
+};
+
 const COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
 export default function DashboardPage() {
@@ -83,8 +91,14 @@ export default function DashboardPage() {
 
     // Responsive YAxis width: mobile -> 150, desktop -> 220
     const [yAxisWidth, setYAxisWidth] = useState<number>(220);
+    // Responsive chart height: mobile smaller to avoid huge vertical overflow
+    const [chartHeight, setChartHeight] = useState<number>(400);
     useEffect(() => {
-        const setW = () => setYAxisWidth(typeof window !== 'undefined' && window.innerWidth < 640 ? 150 : 220);
+        const setW = () => {
+            const w = typeof window !== 'undefined' ? window.innerWidth : 1024;
+            setYAxisWidth(w < 640 ? 150 : 220);
+            setChartHeight(w < 640 ? 260 : 400);
+        };
         setW();
         window.addEventListener('resize', setW);
         return () => window.removeEventListener('resize', setW);
@@ -414,7 +428,7 @@ export default function DashboardPage() {
     };
 
     return (
-        <div className="space-y-6 pb-8 overflow-x-hidden px-4 sm:px-0">
+        <div className="space-y-6 pb-8 px-4 sm:px-0">
             <style jsx global>{`
                 :root {
                     --select-bg: white;
@@ -435,7 +449,7 @@ export default function DashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-3 mt-6 mb-2">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
@@ -583,7 +597,7 @@ export default function DashboardPage() {
             {/* Jabatan Breakdown Cards */}
             <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
@@ -630,7 +644,7 @@ export default function DashboardPage() {
                                     </div>
                                 </div>
                                 <div
-                                    className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shadow-sm"
+                                    className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm"
                                     style={{ backgroundColor: `${COLORS[index % COLORS.length]}20`, color: COLORS[index % COLORS.length] }}
                                 >
                                     {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "⚙️" : "📋"}
@@ -672,19 +686,21 @@ export default function DashboardPage() {
             {/* Total Per Nama Jabatan (moved up) */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
                 <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-800">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                            </svg>
-                        </div>
-                        <div className="flex-1">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Total Jabatan
-                                </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Total Jabatan berdasarkan selisih kebutuhan pegawai</p>
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
+                                        Total Jabatan
+                                    </h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Jabatan berdasarkan selisih kebutuhan pegawai</p>
+                                </div>
                             </div>
-                        <div className="ml-3 w-full sm:w-48">
+                            <div className="w-full sm:w-48 mt-2 sm:mt-0 sm:ml-auto">
                             <label className="sr-only">Cari Nama Jabatan</label>
                             <input
                                 value={searchNama}
@@ -695,8 +711,8 @@ export default function DashboardPage() {
                         </div>
                     </div>
                 </div>
-                <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                    <table className="w-full table-fixed">
+                <div className="overflow-x-auto max-h-[60vh] sm:max-h-[600px] overflow-y-auto">
+                    <table className="w-full table-auto min-w-[720px]">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
                         <tr>
                             <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-14">
@@ -872,19 +888,19 @@ export default function DashboardPage() {
             {/* Chart Row 2: Top Biro */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
                             Top 10 Jabatan dengan Kelebihan Pegawai Terbanyak
                         </h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting melebihi kebutuhan pegawai</p>
                     </div>
                 </div>
-                        <ResponsiveContainer width="100%" height={400}>
+                        <ResponsiveContainer width="100%" height={chartHeight}>
                         <BarChart data={topPositive} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis type="number" tick={{ fontSize: 12 }} />
@@ -925,19 +941,19 @@ export default function DashboardPage() {
             {/* Top Jabatan (Selisih Negatif) */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                         </svg>
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
                             Top 10 Jabatan dengan Kekurangan Pegawai Terbanyak
                         </h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
                     </div>
                 </div>
-                        <ResponsiveContainer width="100%" height={400}>
+                        <ResponsiveContainer width="100%" height={chartHeight}>
                         <BarChart data={topNegative} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis type="number" tick={{ fontSize: 12 }} domain={[0, 'dataMax']} />
@@ -983,19 +999,8 @@ export default function DashboardPage() {
     );
 }
 
-function SummaryCard({
-                         title,
-                         value,
-                         icon,
-                         color,
-                         subtitle,
-                     }: {
-    title: string;
-    value: number;
-    icon: string;
-    color: string;
-    subtitle?: string;
-}) {
+function SummaryCard(props: SummaryCardProps) {
+    const { title, value, icon, color, subtitle } = props;
     const gradientClasses: Record<string, string> = {
         "bg-blue-500": "from-blue-500 to-blue-600",
         "bg-green-500": "from-green-500 to-green-600",
@@ -1006,20 +1011,24 @@ function SummaryCard({
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="flex items-start justify-between mb-4">
-                <div className={`w-12 h-12 bg-gradient-to-br ${gradientClasses[color] || "from-gray-500 to-gray-600"} rounded-xl flex items-center justify-center text-2xl shadow-lg`}>
+            <div className="flex items-center justify-center mb-4 sm:flex-col sm:items-start sm:justify-start">
+                <div className={`w-12 h-12 flex-shrink-0 bg-gradient-to-br ${gradientClasses[color] || "from-gray-500 to-gray-600"} rounded-xl flex items-center justify-center text-2xl shadow-lg`}>
                     {icon}
                 </div>
-                {subtitle && (
-                    <span className="text-xs px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full font-medium">
-                        {subtitle}
-                    </span>
-                )}
+                <div className="ml-2 flex-1 sm:ml-0 sm:mt-3 flex flex-col items-center sm:items-start pr-2">
+                    <div className="w-full flex items-center justify-center sm:justify-between">
+                        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 text-center sm:text-left">{title}</h3>
+                        {subtitle && (
+                            <span className="text-xs px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full font-medium ml-2">
+                                {subtitle}
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight mt-1 text-center sm:text-left">
+                        {(value ?? 0).toLocaleString("id-ID")}
+                    </p>
+                </div>
             </div>
-            <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{title}</h3>
-            <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-                {(value ?? 0).toLocaleString("id-ID")}
-            </p>
         </div>
     );
 }

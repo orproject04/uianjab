@@ -12,6 +12,7 @@ import {useMe} from "@/context/MeContext";
 import {createPortal} from "react-dom";
 import Swal from "sweetalert2";
 import {apiFetch} from "@/lib/apiFetch";
+import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import {CustomSelect} from "@/components/form/CustomSelect";
 import {sanitizeForAlert} from '@/lib/sanitize';
 
@@ -181,16 +182,14 @@ const AppSidebar: React.FC = () => {
     const loadData = useCallback(async () => {
         setLoadingAnjab(true);
         setAnjabError(null);
-        try {
-            const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
-            if (!res.ok) throw new Error(`Gagal memuat Anjab (${res.status})`);
-            const flat: APIRow[] = await res.json();
-            setAnjabSubs(buildTreeFromFlat(flat));
-        } catch (e: any) {
-            setAnjabError(e?.message || "Gagal memuat Anjab");
-        } finally {
-            setLoadingAnjab(false);
-        }
+            try {
+                const flat: APIRow[] = await getPetaJabatan();
+                setAnjabSubs(buildTreeFromFlat(flat));
+            } catch (e: any) {
+                setAnjabError(e?.message || "Gagal memuat Anjab");
+            } finally {
+                setLoadingAnjab(false);
+            }
     }, []);
 
     useEffect(() => {

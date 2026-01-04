@@ -4,6 +4,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import dynamic from "next/dynamic";
 import {useRouter} from "next/navigation";
 import {apiFetch} from "@/lib/apiFetch";
+import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import type {RawNodeDatum, CustomNodeElementProps} from "react-d3-tree";
 
 const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), {ssr: false});
@@ -319,9 +320,7 @@ export default function PetaJabatanClient() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await apiFetch("/api/peta-jabatan", {cache: "no-store"});
-      if (!res.ok) throw new Error(`Gagal mengambil data (${res.status})`);
-      const data: APIRow[] = await res.json();
+      const data: APIRow[] = await getPetaJabatan();
       setAllRows(data);
 
       // Restore state from sessionStorage after data loaded

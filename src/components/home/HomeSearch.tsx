@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
+import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import { APIRow, SearchItem, buildItemsFromFlat as libBuildItemsFromFlat } from "@/lib/search";
 
 export default function HomeSearch() {
@@ -29,9 +30,7 @@ export default function HomeSearch() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await apiFetch("/api/peta-jabatan", { cache: "no-store" });
-      if (!res.ok) throw new Error(`Failed to load peta jabatan (${res.status})`);
-      const flat: APIRow[] = await res.json();
+      const flat: APIRow[] = await getPetaJabatan();
       setAllItems(buildItemsFromFlat(flat));
     } catch (e: any) {
       setErr(e?.message || "Failed to load data");
