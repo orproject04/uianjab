@@ -36,6 +36,10 @@ export interface SyncResult {
   totalUpdated: number;
   unmatchedRecords: UnmatchedRecord[];
   errors: string[];
+  logFilePaths?: {
+    json?: string;
+    csv?: string;
+  };
 }
 
 export interface UnmatchedRecord {
@@ -282,7 +286,8 @@ export async function syncPegawaiToPetaJabatan(
     // Step 5: Write unmatched records to log file
     if (result.unmatchedRecords.length > 0) {
       if (onProgress) onProgress(92, 100, 'Menulis log unmatched records...');
-      await writeUnmatchedLog(result.unmatchedRecords);
+      const logPaths = await writeUnmatchedLog(result.unmatchedRecords);
+      result.logFilePaths = logPaths;
     }
     
     if (onProgress) onProgress(100, 100, 'Selesai!');
@@ -297,38 +302,87 @@ export async function syncPegawaiToPetaJabatan(
 /**
  * Write unmatched records to log file
  */
-async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<void> {
-  const storageDir = join(process.cwd(), 'storage', 'sync-logs');
+async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: string; csv?: string }> {
+  const result: { json?: string; csv?: string } = {};
   
-  // Create directory if not exists
   try {
-    await mkdir(storageDir, { recursive: true });
-  } catch (error) {
-    // Directory might already exist
+    // Allow overriding storage directory via env var (absolute path recommended for AWS)
+    const storageDir = process.env.SYNC_LOGS_DIR
+      ? process.env.SYNC_LOGS_DIR
+      : join(process.cwd(), 'storage', 'sync-logs');
+    
+    console.log('[SYNC_LOG] Environment check:', {
+      cwd: process.cwd(),
+      SYNC_LOGS_DIR: process.env.SYNC_LOGS_DIR || '(not set)',
+      resolvedStorageDir: storageDir,
+      recordCount: records.length,
+    });
+    
+    // Create directory if not exists
+    try {
+      await mkdir(storageDir, { recursive: true });
+      console.log('[SYNC_LOG] Directory ensured:', storageDir);
+    } catch (mkdirError: any) {
+      console.error('[SYNC_LOG] Failed to create directory:', {
+        path: storageDir,
+        error: mkdirError.message,
+        code: mkdirError.code,
+      });
+      throw new Error(`Cannot create log directory: ${mkdirError.message}`);
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `unmatched-pegawai-${timestamp}.json`;
+    const filepath = join(storageDir, filename);
+    
+    const logData = {
+      timestamp: new Date().toISOString(),
+      total_unmatched: records.length,
+      records: records,
+    };
+    
+    // Write JSON file
+    try {
+      await writeFile(filepath, JSON.stringify(logData, null, 2), 'utf-8');
+      console.log('[SYNC_LOG] ✓ JSON file written successfully:', filepath);
+      result.json = filepath;
+    } catch (writeError: any) {
+      console.error('[SYNC_LOG] Failed to write JSON file:', {
+        path: filepath,
+        error: writeError.message,
+        code: writeError.code,
+      });
+      throw new Error(`Cannot write JSON log: ${writeError.message}`);
+    }
+    
+    // Also create a CSV version for easier viewing
+    const csvFilename = `unmatched-pegawai-${timestamp}.csv`;
+    const csvFilepath = join(storageDir, csvFilename);
+    
+    const csvLines = [
+      'NIP,Nama,Jabatan,Unit Organisasi,Alasan',
+      ...records.map(r => 
+        `"${r.nip}","${r.name}","${r.jabatan_name}","${r.unit_organisasi_name}","${r.reason}"`
+      ),
+    ];
+    
+    try {
+      await writeFile(csvFilepath, csvLines.join('\n'), 'utf-8');
+      console.log('[SYNC_LOG] ✓ CSV file written successfully:', csvFilepath);
+      result.csv = csvFilepath;
+    } catch (writeError: any) {
+      console.error('[SYNC_LOG] Failed to write CSV file:', {
+        path: csvFilepath,
+        error: writeError.message,
+        code: writeError.code,
+      });
+      // CSV is optional, don't throw
+    }
+    
+    return result;
+  } catch (error: any) {
+    console.error('[SYNC_LOG] Fatal error in writeUnmatchedLog:', error);
+    // Return empty result instead of throwing to not break sync flow
+    return {};
   }
-  
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `unmatched-pegawai-${timestamp}.json`;
-  const filepath = join(storageDir, filename);
-  
-  const logData = {
-    timestamp: new Date().toISOString(),
-    total_unmatched: records.length,
-    records: records,
-  };
-  
-  await writeFile(filepath, JSON.stringify(logData, null, 2), 'utf-8');
-  
-  // Also create a CSV version for easier viewing
-  const csvFilename = `unmatched-pegawai-${timestamp}.csv`;
-  const csvFilepath = join(storageDir, csvFilename);
-  
-  const csvLines = [
-    'NIP,Nama,Jabatan,Unit Organisasi,Alasan',
-    ...records.map(r => 
-      `"${r.nip}","${r.name}","${r.jabatan_name}","${r.unit_organisasi_name}","${r.reason}"`
-    ),
-  ];
-  
-  await writeFile(csvFilepath, csvLines.join('\n'), 'utf-8');
 }

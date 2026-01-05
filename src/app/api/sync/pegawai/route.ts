@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
         totalUpdated: result.totalUpdated,
         totalUnmatched: result.unmatchedRecords.length,
         errors: result.errors,
+        logFilePaths: result.logFilePaths,
       },
     });
     
@@ -96,6 +97,7 @@ export async function GET(req: NextRequest) {
               totalUpdated: syncResult.totalUpdated,
               totalUnmatched: syncResult.unmatchedRecords.length,
               errors: syncResult.errors,
+              logFilePaths: syncResult.logFilePaths,
             },
           });
           controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));

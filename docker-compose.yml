@@ -37,11 +37,13 @@ services:
       - PYTHON_BIN=/usr/bin/python3
       - SOFFICE_BIN=/usr/bin/soffice
       - SOFFICE_DIR=/usr/bin
+      - SYNC_LOGS_DIR=/app/storage/sync-logs
       # - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium   # aktifkan jika perlu
     ports:
       - "8087:8087"
     volumes:
       - ./storage/pdf-cache:/app/storage/pdf-cache
+      - ./storage/sync-logs:/app/storage/sync-logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
