@@ -134,7 +134,7 @@ export default function DashboardPage() {
 
     if (meLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center min-h-screen no-print">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
@@ -156,7 +156,7 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center min-h-screen no-print">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat data dashboard...</p>
@@ -324,6 +324,66 @@ export default function DashboardPage() {
         }
     }
 
+    // Prepare and trigger print without popup
+    function handlePrintTotalJabatan() {
+        try {
+            // Use the full filtered & sorted dataset (not only current page)
+            const rows = getSortedByNama().filter((it: any) => {
+                if (!searchNama) return true;
+                return String(it.nama_jabatan || '').toLowerCase().includes(searchNama.toLowerCase());
+            });
+
+            const filterLines: string[] = [];
+            if (selectedBiro?.value) filterLines.push(`Biro: ${selectedBiro.label}`);
+            if (selectedJenis?.value) filterLines.push(`Jenis: ${selectedJenis.label}`);
+            if (selectedLokasi?.value) filterLines.push(`Lokasi: ${selectedLokasi.label}`);
+            if (searchNama) filterLines.push(`Cari: ${searchNama}`);
+
+            // Build printable HTML with optimized structure
+            let html = `<div style="font-family:Arial,sans-serif;padding:20px;">`;
+            html += `<h2 style="margin:0 0 10px 0;font-size:18px;font-weight:bold;">Total Jabatan</h2>`;
+            if (filterLines.length > 0) {
+                html += `<p style="margin:0 0 15px 0;font-size:12px;"><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
+            }
+            html += `<table style="border-collapse:collapse;width:100%;font-size:10px;border:1px solid #000;"><thead><tr style="background:#f0f0f0;">`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">No</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:left;">Jabatan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:left;">Unit Kerja</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:right;">Bezetting</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:right;">Kebutuhan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:right;">Selisih</th>`;
+            html += `</tr></thead><tbody>`;
+            rows.forEach((r: any, i: number) => {
+                const bez = Number(r.bezetting ?? 0).toLocaleString('id-ID');
+                const keb = Number(r.kebutuhan ?? 0).toLocaleString('id-ID');
+                const sel = Number(r.selisih ?? 0).toLocaleString('id-ID');
+                const nama = String(r.nama_jabatan || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const unit = String(r.unit_kerja || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += `<tr><td style="border:1px solid #000;padding:4px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:4px;">${nama}</td><td style="border:1px solid #000;padding:4px;">${unit}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${bez}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${keb}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${sel}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+            html += `<p style="margin:15px 0 0 0;font-size:9px;color:#666;">Generated: ${new Date().toLocaleString('id-ID')}</p>`;
+            html += `</div>`;
+
+            // Insert into hidden print container
+            const printContainer = document.getElementById('print-container');
+            if (printContainer) {
+                printContainer.innerHTML = html;
+                // Add small delay to ensure DOM is rendered before printing
+                setTimeout(() => {
+                    window.print();
+                    // Clear content after print to avoid showing during loading
+                    setTimeout(() => {
+                        if (printContainer) printContainer.innerHTML = '';
+                    }, 500);
+                }, 50);
+            }
+        } catch (err) {
+            console.error('Print failed', err);
+            alert('Gagal memulai print.');
+        }
+    }
+
     
 
     
@@ -428,8 +488,45 @@ export default function DashboardPage() {
     };
 
     return (
-        <div className="space-y-6 pb-8 px-4 sm:px-0">
+        <>
+            {/* Hidden print container */}
+            <div id="print-container" className="print-only" style={{ display: 'none', visibility: 'hidden', position: 'absolute', left: '-9999px', top: '-9999px' }}></div>
+            
             <style jsx global>{`
+                #print-container {
+                    display: none !important;
+                    visibility: hidden !important;
+                    position: absolute !important;
+                    left: -9999px !important;
+                    top: -9999px !important;
+                }
+                
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+                    .no-print,
+                    .no-print * {
+                        display: none !important;
+                        visibility: hidden !important;
+                    }
+                    #print-container {
+                        display: block !important;
+                        visibility: visible !important;
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100%;
+                    }
+                    #print-container * {
+                        visibility: visible;
+                    }
+                    @page {
+                        margin: 1cm;
+                        size: A4;
+                    }
+                }
+                
                 :root {
                     --select-bg: white;
                     --select-border: #d1d5db;
@@ -445,6 +542,8 @@ export default function DashboardPage() {
                     --select-placeholder: #9ca3af;
                 }
             `}</style>
+
+        <div className="space-y-6 pb-8 px-4 sm:px-0">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -700,19 +799,26 @@ export default function DashboardPage() {
                                     <p className="text-xs text-gray-500 dark:text-gray-400">Total Jabatan berdasarkan selisih kebutuhan pegawai</p>
                                 </div>
                             </div>
-                            <div className="w-full sm:w-48 mt-2 sm:mt-0 sm:ml-auto">
+                            <div className="flex items-center gap-2 mt-2 sm:mt-0 sm:ml-auto w-full sm:w-auto sm:max-w-md">
                             <label className="sr-only">Cari Nama Jabatan</label>
                             <input
                                 value={searchNama}
                                 onChange={(e) => { setSearchNama(e.target.value); setCurrentPage(1); }}
                                 placeholder="Cari nama jabatan..."
-                                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                                className="flex-1 sm:w-80 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                             />
+                            <button
+                                onClick={() => handlePrintTotalJabatan()}
+                                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors flex-shrink-0"
+                                title="Print tabel Total Jabatan"
+                            >
+                                Print
+                            </button>
                         </div>
                     </div>
                 </div>
                 <div className="overflow-x-auto max-h-[60vh] sm:max-h-[600px] overflow-y-auto">
-                    <table className="w-full table-auto min-w-[720px]">
+                    <table id="total-jabatan-table" className="w-full table-auto min-w-[720px]">
                         <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
                         <tr>
                             <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-14">
@@ -996,6 +1102,7 @@ export default function DashboardPage() {
             {/* Modal untuk detail jenis jabatan */}
             {/* modal removed — jenis cards use the Jenis filter now */}
         </div>
+        </>
     );
 }
 
