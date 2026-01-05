@@ -273,7 +273,7 @@ CREATE TABLE IF NOT EXISTS peta_jabatan (
   kebutuhan_pegawai int  NOT NULL DEFAULT 0,
   is_pusat          boolean NOT NULL DEFAULT true,
   jenis_jabatan     text NOT NULL DEFAULT 'JABATAN PELAKSANA',
-  nama_pejabat      text[] NOT NULL DEFAULT '{}',
+  pejabat           jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT uq_so_parent_slug UNIQUE (parent_id, slug)

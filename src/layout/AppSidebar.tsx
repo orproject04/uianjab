@@ -16,6 +16,12 @@ import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import {CustomSelect} from "@/components/form/CustomSelect";
 import {sanitizeForAlert} from '@/lib/sanitize';
 
+type PegawaiInfo = {
+    name: string;
+    nip: string;
+    role: string;
+};
+
 // Tipe API dan Internal tetap sama
 type APIRow = {
     id: string;
@@ -28,7 +34,7 @@ type APIRow = {
     is_pusat?: boolean;
     jenis_jabatan?: string | null;
     jabatan_id?: string | null;
-    nama_pejabat?: string[];
+    pejabat?: PegawaiInfo[];
 };
 
 type SubNavItem = {
@@ -423,14 +429,18 @@ const AppSidebar: React.FC = () => {
                 setEditIsPusat(currentIsPusat);
                 setEditJenisJabatan(currentJenisJabatan || "");
 
-                // Fetch nama_pejabat dari API
+                // Fetch pejabat dari API
                 try {
                     const res = await apiFetch(`/api/peta-jabatan?root_id=${node.id}`, {cache: "no-store"});
                     if (res.ok) {
                         const data: APIRow[] = await res.json();
                         const currentNode = data.find((r: APIRow) => r.id === node.id);
-                        if (currentNode && Array.isArray(currentNode.nama_pejabat)) {
-                            setEditNamaPejabat(currentNode.nama_pejabat.filter((n: string) => n && n.trim()));
+                        if (currentNode && Array.isArray(currentNode.pejabat)) {
+                            // Extract just the names from the new format [{name, nip, role}]
+                            const names = currentNode.pejabat
+                                .map((p: PegawaiInfo) => p.name)
+                                .filter((n: string) => n && n.trim());
+                            setEditNamaPejabat(names);
                         } else {
                             setEditNamaPejabat([]);
                         }
@@ -470,12 +480,12 @@ const AppSidebar: React.FC = () => {
     const is_pusat = editIsPusat === "true";
         const jenis_jabatan = editJenisJabatan || null;
         
-        // Filter dan trim nama_pejabat, remove empty strings
-        const nama_pejabat = editNamaPejabat
+        // Filter dan trim pejabat, remove empty strings
+        const pejabat = editNamaPejabat
             .map(n => n.trim())
             .filter(n => n.length > 0);
 
-        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, nama_pejabat};
+        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, pejabat};
         if (editOrder.trim() !== "") {
             const parsed = Number(editOrder);
             if (!Number.isFinite(parsed)) {

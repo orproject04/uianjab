@@ -166,12 +166,12 @@ export async function fetchAllPegawaiData(
 }
 
 /**
- * Clear all nama_pejabat in peta_jabatan table
+ * Clear all pejabat in peta_jabatan table
  */
 export async function clearAllNamaPejabat(): Promise<void> {
   await pool.query(`
     UPDATE peta_jabatan 
-    SET nama_pejabat = ARRAY[]::text[],
+    SET pejabat = '[]'::jsonb,
         bezetting = 0
   `);
 }
@@ -245,16 +245,34 @@ export async function syncPegawaiToPetaJabatan(
         
         if (rows.length > 0) {
           // Match found - update each matching row
-          const namaPejabat = pegawaiList.map(p => p.name);
+          // Store as JSONB array with structure: {name, nip, role}
+          const namaPejabat = pegawaiList.map(p => {
+            // Determine role from json.kedudukanPnsNama field
+            let role = 'PNS'; // Default to PNS
+            
+            if (p.json && typeof p.json === 'object' && 'kedudukanPnsNama' in p.json) {
+              const kedudukanPnsNama = String(p.json.kedudukanPnsNama || '').trim();
+              // If kedudukanPnsNama contains "PPPK", set role as PPPK
+              if (/PPPK/i.test(kedudukanPnsNama)) {
+                role = 'PPPK';
+              }
+            }
+            
+            return {
+              name: p.name,
+              nip: p.nip,
+              role: role
+            };
+          });
           const bezetting = pegawaiList.length;
           
           for (const row of rows) {
             await pool.query(
               `UPDATE peta_jabatan 
-               SET nama_pejabat = $1,
+               SET pejabat = $1::jsonb,
                    bezetting = $2
                WHERE id = $3`,
-              [namaPejabat, bezetting, row.id]
+              [JSON.stringify(namaPejabat), bezetting, row.id]
             );
             result.totalUpdated++;
           }

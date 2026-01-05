@@ -83,26 +83,45 @@ export async function PATCH(
             );
         }
 
-        // ✅ NEW: nama_pejabat (array string|skip)
-        const hasNamaPejabat = Object.prototype.hasOwnProperty.call(body, "nama_pejabat");
-        let nama_pejabat: string[] | undefined = undefined;
+        // ✅ NEW: pejabat (array of objects with {name, nip, role} | skip)
+        const hasPejabat = Object.prototype.hasOwnProperty.call(body, "pejabat");
+        let pejabat: any[] | undefined = undefined;
         let bezetting: number | undefined = undefined;
         
-        if (hasNamaPejabat) {
-            if (Array.isArray(body.nama_pejabat)) {
-                // Filter empty strings and trim
-                nama_pejabat = body.nama_pejabat
-                    .filter((n: any) => typeof n === "string" && n.trim().length > 0)
-                    .map((n: string) => n.trim());
+        if (hasPejabat) {
+            if (Array.isArray(body.pejabat)) {
+                // Support both old format (string[]) and new format ({name, nip, role}[])
+                pejabat = body.pejabat
+                    .filter((n: any) => {
+                        if (typeof n === "string") return n.trim().length > 0;
+                        if (typeof n === "object" && n !== null) return n.name && n.name.trim().length > 0;
+                        return false;
+                    })
+                    .map((n: any) => {
+                        if (typeof n === "string") {
+                            // Convert old format to new format
+                            return {
+                                name: n.trim(),
+                                nip: "",
+                                role: "PNS"
+                            };
+                        }
+                        // Already in new format
+                        return {
+                            name: String(n.name || "").trim(),
+                            nip: String(n.nip || "").trim(),
+                            role: String(n.role || "PNS").trim()
+                        };
+                    });
                 
                 // Auto-update bezetting berdasarkan jumlah nama
-                bezetting = nama_pejabat.length;
-            } else if (body.nama_pejabat === null) {
-                nama_pejabat = [];
+                bezetting = pejabat.length;
+            } else if (body.pejabat === null) {
+                pejabat = [];
                 bezetting = 0;
             } else {
                 return NextResponse.json(
-                    {error: "nama_pejabat harus array atau null"},
+                    {error: "pejabat harus array atau null"},
                     {status: 400}
                 );
             }
@@ -254,9 +273,10 @@ export async function PATCH(
         setIf("is_pusat", is_pusat);
         setIf("jenis_jabatan", jenis_jabatan);
         
-        // Update nama_pejabat dan bezetting
-        if (hasNamaPejabat) {
-            setIf("nama_pejabat", nama_pejabat);
+        // Update pejabat dan bezetting
+        if (hasPejabat) {
+            // Convert to JSON string for jsonb column
+            setIf("pejabat", pejabat ? JSON.stringify(pejabat) : '[]');
             setIf("bezetting", bezetting);
         }
 

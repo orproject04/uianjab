@@ -10,6 +10,12 @@ import type {RawNodeDatum, CustomNodeElementProps} from "react-d3-tree";
 const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), {ssr: false});
 
 // ---- Types dari backend
+type PegawaiInfo = {
+  name: string;
+  nip: string;
+  role: string;
+};
+
 type APIRow = {
   id: string;
   parent_id: string | null;
@@ -23,7 +29,7 @@ type APIRow = {
   is_pusat?: boolean;
   jenis_jabatan: string | null;
   kelas_jabatan?: string | null;
-  nama_pejabat?: string | string[] | null;
+  pejabat?: PegawaiInfo[];
 };
 
 // ---- Node internal + ghost
@@ -36,7 +42,7 @@ type D3Node = {
   bezetting: number | null;
   kebutuhan_pegawai: number | null;
   kelas_jabatan: string | null;
-  nama_pejabat?: string | string[] | null;
+  pejabat?: PegawaiInfo[];
   children: D3Node[];
   _ghost?: boolean;
 
@@ -546,7 +552,7 @@ export default function PetaJabatanClient() {
           bezetting: null,
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
-          nama_pejabat: null,
+          pejabat: [],
           _ghost: true,
           children: [result],
         };
@@ -565,7 +571,7 @@ export default function PetaJabatanClient() {
         bezetting: n.bezetting ?? null,
         kebutuhan_pegawai: n.kebutuhan_pegawai ?? null,
         kelas_jabatan: n.kelas_jabatan ?? null,
-        nama_pejabat: n.nama_pejabat ?? null,
+        pejabat: n.pejabat ?? [],
         children: [],
       };
 
@@ -587,7 +593,7 @@ export default function PetaJabatanClient() {
           bezetting: null,
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
-          nama_pejabat: null,
+          pejabat: [],
           children: [],
           _syntheticSimple: true,
           _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
@@ -605,7 +611,7 @@ export default function PetaJabatanClient() {
           bezetting: null,
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
-          nama_pejabat: null,
+          pejabat: [],
           children: [],
           _syntheticSimple: true,
           _syntheticLabel: "KANTOR DPD RI DI IBU KOTA PROVINSI",
@@ -623,7 +629,7 @@ export default function PetaJabatanClient() {
           bezetting: null,
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
-          nama_pejabat: null,
+          pejabat: [],
           children: [],
           _syntheticSimple: true,
           _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
@@ -693,7 +699,7 @@ export default function PetaJabatanClient() {
         bezetting: n.bezetting,
         kebutuhan_pegawai: n.kebutuhan_pegawai,
         kelas_jabatan: n.kelas_jabatan,
-        nama_pejabat: n.nama_pejabat ?? null,
+        pejabat: n.pejabat ?? [],
         syntheticSimple: n._syntheticSimple === true,
         syntheticLabel: n._syntheticLabel || null,
       } as any,
@@ -943,9 +949,9 @@ export default function PetaJabatanClient() {
     const keb: number = attrs.kebutuhan_pegawai ?? 0;
     const sel: number = bez - keb;
 
-    const namesArr: string[] = Array.isArray(attrs.nama_pejabat)
-        ? (attrs.nama_pejabat as string[])
-        : attrs.nama_pejabat ? [attrs.nama_pejabat as string] : [];
+    const namesArr: string[] = Array.isArray(attrs.pejabat)
+        ? (attrs.pejabat as PegawaiInfo[]).map(p => p.name)
+        : [];
     const namaPejabatText = namesArr.join(", ");
 
     const labelGapTop = bp.isMobile ? 10 : 12;

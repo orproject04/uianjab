@@ -90,6 +90,38 @@ export async function GET(req: NextRequest) {
         const summaryResult = await pool.query(summaryQuery, params);
         const summary = summaryResult.rows[0];
 
+        // Query untuk breakdown PNS vs PPPK dari pejabat jsonb
+        const roleBreakdownQuery = `
+            ${biroFilterCTE}
+            SELECT 
+                pegawai->>'role' as role,
+                COUNT(*) as count
+            FROM peta_jabatan,
+                jsonb_array_elements(COALESCE(pejabat, '[]'::jsonb)) as pegawai
+            ${whereClause}
+            GROUP BY pegawai->>'role'
+        `;
+
+        const roleBreakdownResult = await pool.query(roleBreakdownQuery, params);
+        const roleBreakdown = {
+            pns: 0,
+            pppk: 0
+        };
+        
+        for (const row of roleBreakdownResult.rows) {
+            const role = (row.role || 'PNS').toUpperCase();
+            const count = parseInt(row.count || '0', 10);
+            if (role === 'PPPK') {
+                roleBreakdown.pppk += count;
+            } else {
+                roleBreakdown.pns += count;
+            }
+        }
+
+        // Add role breakdown to summary - ensure they are numbers
+        summary.bezetting_pns = parseInt(String(roleBreakdown.pns), 10);
+        summary.bezetting_pppk = parseInt(String(roleBreakdown.pppk), 10);
+
         // Query untuk breakdown by jenis_jabatan di peta_jabatan
         const byJenisQuery = `
             ${biroFilterCTE}
@@ -192,6 +224,8 @@ export async function GET(req: NextRequest) {
                 total_bezetting: Number(summary.total_bezetting ?? 0),
                 total_kebutuhan: Number(summary.total_kebutuhan ?? 0),
                 total_selisih: Number(summary.total_selisih ?? 0),
+                bezetting_pns: Number(summary.bezetting_pns ?? 0),
+                bezetting_pppk: Number(summary.bezetting_pppk ?? 0),
             },
             byJenis: byJenis.map((r: any) => ({
                 jenis: r.jenis,

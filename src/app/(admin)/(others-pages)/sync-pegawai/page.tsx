@@ -170,7 +170,7 @@ export default function SyncPegawaiPage() {
         <div className="text-sm text-yellow-800 dark:text-yellow-200">
           <p className="font-semibold">Perhatian:</p>
           <ul className="mt-1 list-inside list-disc space-y-1">
-            <li>Proses ini akan menghapus semua data pegawai yang ada di kolom nama_pejabat</li>
+            <li>Proses ini akan menghapus semua data pegawai yang ada di kolom pejabat</li>
             <li>Data akan diganti dengan data terbaru dari API eksternal</li>
             <li>Proses dapat memakan waktu beberapa menit tergantung jumlah data</li>
             <li>Data yang tidak cocok akan dicatat dalam file log</li>

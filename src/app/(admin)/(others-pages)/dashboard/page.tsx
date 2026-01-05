@@ -21,6 +21,8 @@ type SummaryData = {
     total_bezetting: number;
     total_kebutuhan: number;
     total_selisih: number;
+    bezetting_pns: number;
+    bezetting_pppk: number;
 };
 
 type BreakdownItem = {
@@ -34,12 +36,18 @@ type BreakdownItem = {
     selisih: number;
 };
 
+type PegawaiInfo = {
+    name: string;
+    nip: string;
+    role: string;
+};
+
 type PetaJabatanItem = {
     id: number;
     nama_jabatan: string;
     unit_kerja: string;
     jenis_jabatan: string;
-    nama_pejabat: string[];
+    pejabat: PegawaiInfo[];
     bezetting: number;
     kebutuhan_pegawai: number;
 };
@@ -61,6 +69,7 @@ type SummaryCardProps = {
     icon: string;
     color: string;
     subtitle?: string;
+    breakdown?: { label: string; value: number }[];
 };
 
 const COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
@@ -124,6 +133,15 @@ export default function DashboardPage() {
                 throw new Error(msg);
             }
             const json = await res.json();
+            console.log('[DEBUG] Dashboard data received:', {
+                summary: json.summary,
+                bezetting_pns: json.summary?.bezetting_pns,
+                bezetting_pppk: json.summary?.bezetting_pppk,
+                types: {
+                    bezetting_pns: typeof json.summary?.bezetting_pns,
+                    bezetting_pppk: typeof json.summary?.bezetting_pppk
+                }
+            });
             setData(json);
         } catch (e: any) {
             setError(e.message || "Gagal memuat data");
@@ -347,20 +365,36 @@ export default function DashboardPage() {
             }
             html += `<table style="border-collapse:collapse;width:100%;font-size:10px;border:1px solid #000;"><thead><tr style="background:#f0f0f0;">`;
             html += `<th style="border:1px solid #000;padding:6px;text-align:center;">No</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:left;">Jabatan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:left;">Unit Kerja</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:right;">Bezetting</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:right;">Kebutuhan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:right;">Selisih</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Jabatan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Unit Kerja</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Bezetting</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Kebutuhan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Selisih</th>`;
             html += `</tr></thead><tbody>`;
+            let totalBezetting = 0;
+            let totalKebutuhan = 0;
+            let totalSelisih = 0;
+            
             rows.forEach((r: any, i: number) => {
-                const bez = Number(r.bezetting ?? 0).toLocaleString('id-ID');
-                const keb = Number(r.kebutuhan ?? 0).toLocaleString('id-ID');
-                const sel = Number(r.selisih ?? 0).toLocaleString('id-ID');
+                const bezVal = Number(r.bezetting ?? 0);
+                const kebVal = Number(r.kebutuhan ?? 0);
+                const selVal = Number(r.selisih ?? 0);
+                
+                totalBezetting += bezVal;
+                totalKebutuhan += kebVal;
+                totalSelisih += selVal;
+                
+                const bez = bezVal.toLocaleString('id-ID');
+                const keb = kebVal.toLocaleString('id-ID');
+                const sel = selVal.toLocaleString('id-ID');
                 const nama = String(r.nama_jabatan || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const unit = String(r.unit_kerja || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 html += `<tr><td style="border:1px solid #000;padding:4px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:4px;">${nama}</td><td style="border:1px solid #000;padding:4px;">${unit}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${bez}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${keb}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${sel}</td></tr>`;
             });
+            
+            // Add totals row
+            html += `<tr style="background:#f0f0f0;font-weight:bold;"><td colspan="3" style="border:1px solid #000;padding:6px;text-align:center;">TOTAL</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalBezetting.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalKebutuhan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalSelisih.toLocaleString('id-ID')}</td></tr>`;
+            
             html += `</tbody></table>`;
             html += `<p style="margin:15px 0 0 0;font-size:9px;color:#666;">Generated: ${new Date().toLocaleString('id-ID')}</p>`;
             html += `</div>`;
@@ -668,28 +702,28 @@ export default function DashboardPage() {
                     value={summary.total_jabatan}
                     icon="📊"
                     color="bg-blue-500"
-                    subtitle=""
                 />
                 <SummaryCard
                     title="Bezetting"
                     value={summary.total_bezetting}
                     icon="👥"
                     color="bg-green-500"
-                    subtitle=""
+                    breakdown={[
+                        { label: 'PNS', value: summary.bezetting_pns || 0 },
+                        { label: 'PPPK', value: summary.bezetting_pppk || 0 }
+                    ]}
                 />
                 <SummaryCard
                     title="Kebutuhan"
                     value={summary.total_kebutuhan}
                     icon="🎯"
                     color="bg-purple-500"
-                    subtitle=""
                 />
                 <SummaryCard
                     title="Selisih"
                     value={summary.total_selisih}
                     icon={summary.total_selisih >= 0 ? "📈" : "📉"}
                     color={summary.total_selisih >= 0 ? "bg-orange-500" : "bg-red-500"}
-                    subtitle={summary.total_selisih >= 0 ? "" : ""}
                 />
             </div>
 
@@ -1107,7 +1141,7 @@ export default function DashboardPage() {
 }
 
 function SummaryCard(props: SummaryCardProps) {
-    const { title, value, icon, color, subtitle } = props;
+    const { title, value, icon, color, subtitle, breakdown } = props;
     const gradientClasses: Record<string, string> = {
         "bg-blue-500": "from-blue-500 to-blue-600",
         "bg-green-500": "from-green-500 to-green-600",
@@ -1118,22 +1152,32 @@ function SummaryCard(props: SummaryCardProps) {
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="flex items-center justify-center mb-4 sm:flex-col sm:items-start sm:justify-start">
+            <div className="flex items-start gap-4">
                 <div className={`w-12 h-12 flex-shrink-0 bg-gradient-to-br ${gradientClasses[color] || "from-gray-500 to-gray-600"} rounded-xl flex items-center justify-center text-2xl shadow-lg`}>
                     {icon}
                 </div>
-                <div className="ml-2 flex-1 sm:ml-0 sm:mt-3 flex flex-col items-center sm:items-start pr-2">
-                    <div className="w-full flex items-center justify-center sm:justify-between">
-                        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 text-center sm:text-left">{title}</h3>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</h3>
                         {subtitle && (
-                            <span className="text-xs px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full font-medium ml-2">
+                            <span className="text-xs px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full font-medium">
                                 {subtitle}
                             </span>
                         )}
                     </div>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight mt-1 text-center sm:text-left">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
                         {(value ?? 0).toLocaleString("id-ID")}
                     </p>
+                    {breakdown && breakdown.length > 0 && (
+                        <div className="space-y-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            {breakdown.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{item.label}</span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{item.value.toLocaleString('id-ID')}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

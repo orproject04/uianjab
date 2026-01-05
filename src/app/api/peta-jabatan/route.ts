@@ -6,6 +6,12 @@ import {z} from "zod";
 import { handleCorsOptions, addCorsHeaders } from "@/lib/cors";
 
 // --- UPDATE tipe Row (letakkan di atas, menggantikan tipe Row lama)
+type PegawaiInfo = {
+    name: string;
+    nip: string;
+    role: string;
+};
+
 type Row = {
     id: string;
     parent_id: string | null;
@@ -19,7 +25,7 @@ type Row = {
     is_pusat: boolean;
     jenis_jabatan: string | null;
     kelas_jabatan: string | null;
-    nama_pejabat: string[];
+    pejabat: PegawaiInfo[];
     jabatan_id: string | null;
 };
 
@@ -81,7 +87,7 @@ export async function GET(req: NextRequest) {
                     pj.jenis_jabatan,
                     pj.jabatan_id,
                     j.kelas_jabatan,
-                    COALESCE(pj.nama_pejabat, ARRAY[]::text[]) AS nama_pejabat
+                    COALESCE(pj.pejabat, '[]'::jsonb) AS pejabat
                  FROM peta_jabatan pj
                  LEFT JOIN jabatan j ON pj.jabatan_id = j.id
                  WHERE pj.jabatan_id = $1::uuid
@@ -108,7 +114,7 @@ export async function GET(req: NextRequest) {
         t.jenis_jabatan,
         t.jabatan_id,
         j.kelas_jabatan,
-        t.nama_pejabat
+        t.pejabat
       FROM tree t
       LEFT JOIN jabatan j
         ON t.jabatan_id = j.id
@@ -138,7 +144,7 @@ export async function GET(req: NextRequest) {
             is_pusat,
             jenis_jabatan,
             jabatan_id,
-            COALESCE(nama_pejabat, ARRAY[]::text[]) AS nama_pejabat,
+            COALESCE(pejabat, '[]'::jsonb) AS pejabat,
             ARRAY[
               lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
             ]::text[] AS sort_path
@@ -160,7 +166,7 @@ export async function GET(req: NextRequest) {
             c.is_pusat,
             c.jenis_jabatan,
             c.jabatan_id,
-            COALESCE(c.nama_pejabat, ARRAY[]::text[]),
+            COALESCE(c.pejabat, '[]'::jsonb),
             t.sort_path || (
               lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
             )
@@ -192,7 +198,7 @@ export async function GET(req: NextRequest) {
           is_pusat,
           jenis_jabatan,
           jabatan_id,
-          COALESCE(nama_pejabat, ARRAY[]::text[]) AS nama_pejabat,
+          COALESCE(pejabat, '[]'::jsonb) AS pejabat,
           ARRAY[
             lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
           ]::text[] AS sort_path
@@ -214,7 +220,7 @@ export async function GET(req: NextRequest) {
           c.is_pusat,
           c.jenis_jabatan,
           c.jabatan_id,
-          COALESCE(c.nama_pejabat, ARRAY[]::text[]),
+          COALESCE(c.pejabat, '[]'::jsonb),
           t.sort_path || (
             lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
           )
