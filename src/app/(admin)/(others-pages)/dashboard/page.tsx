@@ -8,6 +8,7 @@ import { useMe } from "@/context/MeContext";
 import {
     BarChart,
     Bar,
+    Cell,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -438,8 +439,8 @@ export default function DashboardPage() {
         // only show the Nama Jabatan part on the axis.
         const labelSource = raw.includes(' — ') ? raw.split(' — ')[0] : raw;
 
-        // Max characters per line (try to break on spaces)
-        const maxLen = 26;
+        // Max characters per line (try to break on spaces) — increased to allow longer words
+        const maxLen = 36;
         const words = String(labelSource).split(/\s+/);
         const lines: string[] = [];
         let current = "";
@@ -453,21 +454,24 @@ export default function DashboardPage() {
         }
         if (current) lines.push(current);
 
-        // Limit to 3 lines, ellipsize the last line
-        if (lines.length > 3) {
-            const first = lines.slice(0, 2);
-                let last = lines.slice(2).join(" ");
+        // Limit to 4 lines, ellipsize the last line if still too long
+        if (lines.length > 4) {
+            const first = lines.slice(0, 3);
+            let last = lines.slice(3).join(" ");
             if (last.length > maxLen) last = last.slice(0, maxLen - 3) + "...";
             lines.length = 0; lines.push(...first, last);
         }
 
-        // Render with tspans; align to end so labels sit left of axis ticks
-        const anchorX = x - 8; // slight padding from axis line
+        // Render with tspans; center the multi-line label around the tick (so text sits centered
+        // vertically relative to the grid line). Compute a start offset based on line gap.
+        const anchorX = x - 4; // slight padding from axis line
+        const lineGap = 11; // px between lines
+        // Use SVG dominantBaseline='middle' so the whole text block centers on the tick y coordinate.
+        // First tspan stays at dy=0, subsequent lines shift by lineGap.
         return (
-            <text x={anchorX} y={y} textAnchor="end" fontSize={11} fill="#374151">
+            <text x={anchorX} y={y} textAnchor="end" fontSize={10} fill="#374151" dominantBaseline="middle">
                 {lines.map((ln, i) => (
-                    // first line offset slightly up, others stacked below
-                    <tspan key={i} x={anchorX} dy={i === 0 ? -8 : 10}>
+                    <tspan key={i} x={anchorX} dy={i === 0 ? 0 : lineGap}>
                         {ln}
                     </tspan>
                 ))}
@@ -698,7 +702,7 @@ export default function DashboardPage() {
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <SummaryCard
-                    title="Total Jabatan"
+                    title="Total Jenis Jabatan"
                     value={summary.total_jabatan}
                     icon="📊"
                     color="bg-blue-500"
@@ -752,9 +756,22 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {sortedByJenis.map((item, index) => {
-                        // Hitung jumlah jabatan untuk jenis ini dari byNamaJabatan
-                        const jumlahJabatan = byNamaJabatan.filter(j => j.jenis_jabatan === item.jenis).length;
-                        
+                        // Use API-provided deduped jumlah_jabatan when available;
+                        // fallback to deduping by nama_jabatan in byNamaJabatan
+                        const jumlahJabatan = Number((item as any).jumlah_jabatan ?? (() => {
+                            const set = new Set<string>();
+                            for (const j of byNamaJabatan) {
+                                if ((j.jenis_jabatan || '') === (item.jenis || '')) {
+                                    const name = String(j.nama_jabatan || '').trim().toLowerCase();
+                                    if (name) set.add(name);
+                                }
+                            }
+                            return set.size;
+                        })());
+
+                        // Split jenis on '/' to show secondary label on a second line
+                        const jenisParts = String(item.jenis || '').split('/').map(s => s.trim()).filter(Boolean);
+
                         return (
                         <div key={index} className="relative">
                         <button
@@ -767,7 +784,12 @@ export default function DashboardPage() {
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex-1">
                                     <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
-                                        {item.jenis}
+                                        {jenisParts[0]}
+                                        {jenisParts.length > 1 && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                {jenisParts.slice(1).join(' / ')}
+                                            </div>
+                                        )}
                                     </h4>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -1025,7 +1047,70 @@ export default function DashboardPage() {
 
             </div>
 
-            {/* Chart Row 2: Top Biro */}
+                        {/* New: Top Biro (Agregat) - placed after Top Negative chart */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">Rekapitulasi Tiap Biro</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Selisih Bezetting dengan Kebutuhan tiap Biro</p>
+                    </div>
+                </div>
+                {/* Increase chart height proportionally to number of rows so long labels have room */}
+                {(() => {
+                    const rows = (byBiro || []).length || 0;
+                    const dynamic = Math.max(chartHeight, Math.min(520, rows * 40));
+                    return (
+                        <ResponsiveContainer width="100%" height={dynamic}>
+                            <BarChart data={(byBiro || []).slice().sort((a: any, b: any) => (a.selisih ?? 0) - (b.selisih ?? 0)).map((b: any) => ({ ...b, display_label: b.unit_kerja }))} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e6ffed" />
+                                <XAxis type="number" tick={{ fontSize: 12 }} />
+                                <YAxis dataKey="display_label" type="category" width={yAxisWidth} tick={renderYAxisTick} interval={0} />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(240, 255, 244, 0.97)',
+                                        border: '1px solid #d1fae5',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
+                                    }}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            const p = payload[0].payload;
+                                            const s = Number(p.selisih ?? 0);
+                                            const selisihCls = s > 0
+                                                ? 'text-red-600 dark:text-red-400'
+                                                : s < 0
+                                                    ? 'text-yellow-600 dark:text-yellow-400'
+                                                    : 'text-green-600 dark:text-green-400';
+                                            return (
+                                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                                                    <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{p.unit_kerja}</p>
+                                                    <p className="text-xs text-green-600 dark:text-green-400">Bezetting: {p.bezetting}</p>
+                                                    <p className="text-xs text-purple-600 dark:text-purple-400">Kebutuhan: {p.kebutuhan}</p>
+                                                    <p className={`text-xs ${selisihCls} font-semibold`}>Selisih: {s > 0 ? '+' : ''}{p.selisih}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                <Bar dataKey="selisih" name="Selisih" radius={[0, 8, 8, 0]}>
+                                    {(byBiro || []).map((entry: any, idx: number) => (
+                                        <Cell key={`cell-biro-${idx}`} fill={entry.selisih > 0 ? '#ef4444' : entry.selisih < 0 ? '#f59e0b' : '#9ca3af'} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    );
+                })()}
+            </div>
+
+            {/* Top Jabatan (Selisih Positif) */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg">
@@ -1087,13 +1172,11 @@ export default function DashboardPage() {
                         </svg>
                     </div>
                     <div>
-                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
-                            Top 10 Jabatan dengan Kekurangan Pegawai Terbanyak
-                        </h3>
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">Top 10 Jabatan dengan Kekurangan Pegawai Terbanyak</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
                     </div>
                 </div>
-                        <ResponsiveContainer width="100%" height={chartHeight}>
+                    <ResponsiveContainer width="100%" height={chartHeight}>
                         <BarChart data={topNegative} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis type="number" tick={{ fontSize: 12 }} domain={[0, 'dataMax']} />
@@ -1131,10 +1214,6 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
             </div>
 
-            
-
-            {/* Modal untuk detail jenis jabatan */}
-            {/* modal removed — jenis cards use the Jenis filter now */}
         </div>
         </>
     );
