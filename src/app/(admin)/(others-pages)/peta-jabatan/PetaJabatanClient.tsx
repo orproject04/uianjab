@@ -1,13 +1,13 @@
 'use client';
 
-import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import {useRouter} from "next/navigation";
-import {apiFetch} from "@/lib/apiFetch";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/apiFetch";
 import { getPetaJabatan } from '@/lib/getPetaJabatan';
-import type {RawNodeDatum, CustomNodeElementProps} from "react-d3-tree";
+import type { RawNodeDatum, CustomNodeElementProps } from "react-d3-tree";
 
-const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), {ssr: false});
+const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), { ssr: false });
 
 // ---- Types dari backend
 type PegawaiInfo = {
@@ -189,8 +189,8 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
 
 /* ===== Segmented (tab kecil) ===== */
 function Segmented<T extends string>({
-                                       value, onChange, options, size = "md",
-                                     }: {
+  value, onChange, options, size = "md",
+}: {
   value: T;
   onChange: (v: T) => void;
   options: { label: string; value: T }[];
@@ -198,22 +198,22 @@ function Segmented<T extends string>({
 }) {
   const pad = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm";
   return (
-      <div className="inline-flex rounded-lg border bg-white p-0.5">
-        {options.map((opt) => {
-          const active = value === opt.value;
-          return (
-              <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => onChange(opt.value)}
-                  className={`${pad} rounded-md transition ${active ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
-                  aria-pressed={active}
-              >
-                {opt.label}
-              </button>
-          );
-        })}
-      </div>
+    <div className="inline-flex rounded-lg border bg-white p-0.5">
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`${pad} rounded-md transition ${active ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+            aria-pressed={active}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -224,7 +224,7 @@ type FungsionalOpt = "STRUKTURAL" | "FUNGSIONAL";
 export default function PetaJabatanClient() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerSize, setContainerSize] = useState({w: 0, h: 0});
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
   const [allRows, setAllRows] = useState<APIRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -367,7 +367,7 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver(([entry]) => {
-      if (entry?.contentRect) setContainerSize({w: entry.contentRect.width, h: entry.contentRect.height});
+      if (entry?.contentRect) setContainerSize({ w: entry.contentRect.width, h: entry.contentRect.height });
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();
@@ -391,13 +391,13 @@ export default function PetaJabatanClient() {
     };
   }, []);
 
-  const enterFullscreen = async () => { 
+  const enterFullscreen = async () => {
     if (!containerRef.current) return;
     try {
       // Try standard Fullscreen API
       if (containerRef.current.requestFullscreen) {
         await containerRef.current.requestFullscreen();
-      } 
+      }
       // Safari support
       else if ((containerRef.current as any).webkitRequestFullscreen) {
         await (containerRef.current as any).webkitRequestFullscreen();
@@ -410,8 +410,8 @@ export default function PetaJabatanClient() {
       console.error('Fullscreen error:', e);
     }
   };
-  
-  const exitFullscreen = async () => { 
+
+  const exitFullscreen = async () => {
     try {
       if (document.exitFullscreen && document.fullscreenElement) {
         await document.exitFullscreen();
@@ -436,7 +436,7 @@ export default function PetaJabatanClient() {
   // Reset collapse state ONLY when scope changes (PUSAT <-> DAERAH)
   useEffect(() => {
     if (rows.length === 0) return;
-    
+
     // Reset and collapse all when scope changes
     const map: Record<string, boolean> = {};
     for (const r of rows) map[r.id] = true;
@@ -514,11 +514,11 @@ export default function PetaJabatanClient() {
   // Adjusted for 14-inch laptops (~1366px width)
   const bp = useMemo(() => {
     const w = containerSize.w || (typeof window !== "undefined" ? window.innerWidth : 0);
-    return { 
-      isMobile: w < 640, 
+    return {
+      isMobile: w < 640,
       isTablet: w >= 640 && w < 1366, // Extended tablet range to cover 14-inch laptops
-      isDesktop: w >= 1366, 
-      w 
+      isDesktop: w >= 1366,
+      w
     };
   }, [containerSize.w]);
 
@@ -534,8 +534,8 @@ export default function PetaJabatanClient() {
     }
     for (const [k, arr] of byParent.entries()) {
       arr.sort((a, b) =>
-          (a.order_index ?? 0) - (b.order_index ?? 0) ||
-          a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
+        (a.order_index ?? 0) - (b.order_index ?? 0) ||
+        a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
       );
       byParent.set(k, arr);
     }
@@ -581,8 +581,8 @@ export default function PetaJabatanClient() {
       // ESELON II → KJF (E3; Inspektur/Inspektorat → E4)
       if (syntheticFlags.addKJFforEselonII && (n.jenis_jabatan || "").toUpperCase() === "ESELON II") {
         const isInspektorat =
-            /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
-            /(inspektur|inspektorat)/i.test(n.slug || "");
+          /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
+          /(inspektur|inspektorat)/i.test(n.slug || "");
         const kjfLevel = (syntheticFlags.kjfForInspekturAsE4 && isInspektorat) ? "ESELON IV" : "ESELON III";
         synthetic.push({
           _id: `synthetic-kjf:${n.id}`,
@@ -660,11 +660,11 @@ export default function PetaJabatanClient() {
   const filteredRoots: D3Node[] = useMemo(() => {
     if (!lcFilter) return roots;
     const match = (n: D3Node) =>
-        (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
-        (n._slug || "").toLowerCase().includes(lcFilter);
+      (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
+      (n._slug || "").toLowerCase().includes(lcFilter);
     const walk = (n: D3Node): D3Node | null => {
       const kids = n.children.map(walk).filter(Boolean) as D3Node[];
-      if (match(n) || kids.length) return {...n, children: kids};
+      if (match(n) || kids.length) return { ...n, children: kids };
       return null;
     };
     return roots.map(walk).filter(Boolean) as D3Node[];
@@ -708,8 +708,8 @@ export default function PetaJabatanClient() {
   };
 
   const rd3Data: RawNodeDatum[] = useMemo(
-      () => filteredRoots.map(toRD3),
-      [filteredRoots, collapseMap]
+    () => filteredRoots.map(toRD3),
+    [filteredRoots, collapseMap]
   );
 
   const toggleByDatum = useCallback((nodeDatum: CustomNodeElementProps["nodeDatum"], e?: React.MouseEvent<SVGGElement>) => {
@@ -719,10 +719,10 @@ export default function PetaJabatanClient() {
     setCollapseMap(prev => {
       const currentlyCollapsed = !!prev[attrs.id];
       if (currentlyCollapsed) {
-        return {...prev, [attrs.id]: false};
+        return { ...prev, [attrs.id]: false };
       } else {
         const ids = collectIds(nodeDatum);
-        const newMap = {...prev};
+        const newMap = { ...prev };
         ids.forEach(id => { newMap[id] = true; });
         return newMap;
       }
@@ -735,10 +735,10 @@ export default function PetaJabatanClient() {
   const padX = bp.isMobile ? 14 : 16;
   const padY = bp.isMobile ? 12 : 14;
 
-  const titleFontPx = bp.isMobile ? 10 : bp.isTablet ? 11 : 12;
-  const approxCharPx = 5;
-  const usableTitleW = cardW - 8 * padX;
-  const maxTitleChars = Math.max(25, Math.floor(usableTitleW / approxCharPx));
+  const titleFontPx = bp.isMobile ? 11 : bp.isTablet ? 12 : 13;
+  const approxCharPx = 8; // Increased from 5 to account for uppercase font width
+  const usableTitleW = cardW - (bp.isMobile ? 80 : 100); // Leave room for the toggle button on the right
+  const maxTitleChars = Math.max(20, Math.floor(usableTitleW / approxCharPx));
 
   const boxW = bp.isMobile ? 28 : 32;
   const boxH = bp.isMobile ? 22 : 24;
@@ -827,7 +827,7 @@ export default function PetaJabatanClient() {
 
   // Calculate translate to center on last clicked node
   const translate = useMemo(() => {
-    const defaultTranslate = {x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110};
+    const defaultTranslate = { x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110 };
 
     if (!lastClickedPath || rd3Data.length === 0 || !containerSize.w) {
       return defaultTranslate;
@@ -885,51 +885,51 @@ export default function PetaJabatanClient() {
       const label: string = attrs.syntheticLabel || (nodeDatum.name || "");
       const isCollapsed = !!attrs.isCollapsed;
       const hasChildren = !!attrs.hasChildren;
-      
+
       // Wrap text for long labels
       const maxCharsPerLine = bp.isMobile ? 25 : bp.isTablet ? 35 : 45;
       const labelLines = wrapText(label, maxCharsPerLine);
       const lineHeight = bp.isMobile ? 18 : 20;
       const H = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
-      
+
       const xLeft = -W / 2;
       const yTop = -H / 2;
       const centerY = 0;
 
       return (
-          <g>
-            <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
-                  fill="#F3E8FF" strokeWidth={1}
-                  style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
-            
-            {/* Multi-line text for synthetic labels */}
-            {labelLines.map((line, i) => (
-                <text 
-                    key={i}
-                    x={0} 
-                    y={centerY - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
-                    textAnchor="middle" 
-                    alignmentBaseline="middle"
-                    fill="#111827" 
-                    style={{ 
-                      fontSize: bp.isMobile ? "10px" : bp.isTablet ? "11px" : "12px", 
-                      fontWeight: 600 
-                    }}
-                >
-                  {String(line).toUpperCase()}
-                </text>
-            ))}
+        <g>
+          <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
+            fill="#F3E8FF" strokeWidth={1}
+            style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
 
-            {hasChildren && (
-                <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
-                   onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
-                  <rect width={bp.isMobile ? 16 : 18} height={bp.isMobile ? 16 : 18} rx={5} ry={5}
-                        fill="#fff" stroke="#c4c4c4" strokeWidth={1} />
-                  <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
-                        transform={isCollapsed ? "" : "rotate(90 9 9)"} />
-                </g>
-            )}
-          </g>
+          {/* Multi-line text for synthetic labels */}
+          {labelLines.map((line, i) => (
+            <text
+              key={i}
+              x={0}
+              y={centerY - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
+              textAnchor="middle"
+              alignmentBaseline="middle"
+              fill="#111827"
+              style={{
+                fontSize: bp.isMobile ? "10px" : bp.isTablet ? "11px" : "12px",
+                fontWeight: 600
+              }}
+            >
+              {String(line).toUpperCase()}
+            </text>
+          ))}
+
+          {hasChildren && (
+            <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
+              onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
+              <rect width={bp.isMobile ? 16 : 18} height={bp.isMobile ? 16 : 18} rx={5} ry={5}
+                fill="#fff" stroke="#c4c4c4" strokeWidth={1} />
+              <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
+                transform={isCollapsed ? "" : "rotate(90 9 9)"} />
+            </g>
+          )}
+        </g>
       );
     }
 
@@ -950,8 +950,8 @@ export default function PetaJabatanClient() {
     const sel: number = bez - keb;
 
     const namesArr: string[] = Array.isArray(attrs.pejabat)
-        ? (attrs.pejabat as PegawaiInfo[]).map(p => p.name)
-        : [];
+      ? (attrs.pejabat as PegawaiInfo[]).map(p => p.name)
+      : [];
     const namaPejabatText = namesArr.join(", ");
 
     const labelGapTop = bp.isMobile ? 10 : 12;
@@ -961,13 +961,13 @@ export default function PetaJabatanClient() {
     // Hitung tinggi untuk multiple boxes (setiap nama punya kotak sendiri)
     const namesCount = namesArr.length;
     const boxGapVertical = bp.isMobile ? 6 : 8; // Jarak antar kotak
-    const totalNamesHeight = namesCount > 0 
-        ? (textFieldH * namesCount) + (boxGapVertical * (namesCount - 1))
-        : textFieldH;
+    const totalNamesHeight = namesCount > 0
+      ? (textFieldH * namesCount) + (boxGapVertical * (namesCount - 1))
+      : textFieldH;
 
     // Hitung tinggi base card (dengan 1 nama field)
     const baseCardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
-    
+
     // Hitung tinggi card sebenarnya dengan semua nama
     const cardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY;
 
@@ -987,13 +987,13 @@ export default function PetaJabatanClient() {
     const boxesStartX = -metricsTotalW / 2;
 
     const metricBox = (x: number, y: number, value: string, color = "#111827") => (
-        <g>
-          <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#e5e7eb" strokeWidth={1}/>
-          <text x={x + boxW / 2} y={y + boxH / 2} textAnchor="middle" alignmentBaseline="central"
-                fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
-            {value}
-          </text>
-        </g>
+      <g>
+        <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#e5e7eb" strokeWidth={1} />
+        <text x={x + boxW / 2} y={y + boxH / 2} textAnchor="middle" alignmentBaseline="central"
+          fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
+          {value}
+        </text>
+      </g>
     );
 
     const pathStr: string = attrs.pathStr || "";
@@ -1002,7 +1002,7 @@ export default function PetaJabatanClient() {
     const handleJabatanClick = async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       // Exit fullscreen before opening new tab (for better UX)
       if (isFullscreen || document.fullscreenElement || (document as any).webkitFullscreenElement) {
         try {
@@ -1013,13 +1013,13 @@ export default function PetaJabatanClient() {
           console.log('Exit fullscreen before navigation:', err);
         }
       }
-      
+
       // Save to sessionStorage for highlighting only
       sessionStorage.setItem('petaJabatan_lastClickedPath', pathStr);
-      
+
       // Open in new tab and focus on it
       window.open(href, '_blank', 'noopener,noreferrer');
-      
+
       // Force re-render to update highlight WITHOUT triggering useEffect
       setHighlightUpdate(prev => prev + 1);
     };
@@ -1055,368 +1055,368 @@ export default function PetaJabatanClient() {
     }
 
     return (
-        <g>
-          {/* KARTU - Clickable except toggle button */}
-          <rect x={xLeft} y={yTop} width={cardW} height={cardH}
-                rx={8} ry={8} fill="#ffffff"
-                stroke={borderColor}
-                strokeWidth={borderWidth}
-                style={{ filter: shadowFilter, cursor: 'pointer' }}
-                onClick={handleJabatanClick} />
+      <g>
+        {/* KARTU - Clickable except toggle button */}
+        <rect x={xLeft} y={yTop} width={cardW} height={cardH}
+          rx={8} ry={8} fill="#ffffff"
+          stroke={borderColor}
+          strokeWidth={borderWidth}
+          style={{ filter: shadowFilter, cursor: 'pointer' }}
+          onClick={handleJabatanClick} />
 
-          {/* HEADER UNGU */}
-          <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
-                rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1}
-                style={{ cursor: 'pointer', pointerEvents: 'none' }} />
+        {/* HEADER UNGU */}
+        <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
+          rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1}
+          style={{ cursor: 'pointer', pointerEvents: 'none' }} />
 
-          {/* JUDUL */}
-          <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
-            {titleLines.map((line, i) => (
-                <text key={i} x={centerX} y={yTitleStart + i * lineH}
-                      textAnchor="middle" alignmentBaseline="hanging"
-                      fill="#111827" strokeWidth={1}
-                      style={{ fontSize: `${titleFontPx}px`, fontWeight: 500, opacity: 0.85, color: "#152E6D"}}>
-                  {line}
-                </text>
-            ))}
-          </g>
+        {/* JUDUL */}
+        <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+          {titleLines.map((line, i) => (
+            <text key={i} x={centerX} y={yTitleStart + i * lineH}
+              textAnchor="middle" alignmentBaseline="hanging"
+              fill="#111827" strokeWidth={1}
+              style={{ fontSize: `${titleFontPx}px`, fontWeight: 500, opacity: 0.85, color: "#152E6D" }}>
+              {line}
+            </text>
+          ))}
+        </g>
 
-          {/* KELAS JABATAN */}
-          <text x={centerX} y={yKelas} textAnchor="middle" alignmentBaseline="hanging"
-                strokeWidth={1} fill="#6b7280"
-                style={{ fontSize: bp.isMobile ? "10px" : "11px", fontWeight: 50, opacity: 0.5, pointerEvents: 'none' }}>
-            {`Kelas Jabatan : ${kelas || "-"}`}
-          </text>
+        {/* KELAS JABATAN */}
+        <text x={centerX} y={yKelas} textAnchor="middle" alignmentBaseline="hanging"
+          strokeWidth={1} fill="#6b7280"
+          style={{ fontSize: bp.isMobile ? "10px" : "11px", fontWeight: 50, opacity: 0.5, pointerEvents: 'none' }}>
+          {`Kelas Jabatan : ${kelas || "-"}`}
+        </text>
 
-          {/* LABEL B K ± */}
-          <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>B</text>
-          <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>K</text>
-          <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-                fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>±</text>
+        {/* LABEL B K ± */}
+        <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+          fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>B</text>
+        <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+          fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>K</text>
+        <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+          fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>±</text>
 
-          {/* KOTAK ANGKA */}
-          <g style={{ pointerEvents: 'none' }}>
-            {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
-            {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
-            {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
-          </g>
+        {/* KOTAK ANGKA */}
+        <g style={{ pointerEvents: 'none' }}>
+          {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
+          {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
+          {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
+        </g>
 
-          {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
-          <g style={{ pointerEvents: 'none' }}>
-            {namesArr.length > 0 ? (
-                namesArr.map((name, idx) => {
-                  const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
-                  const textAlign = namesArr.length === 1 ? "middle" : "start";
-                  const textX = namesArr.length === 1 ? centerX : xLeft + padX + 10;
-                  
-                  return (
-                      <g key={idx}>
-                        {/* Kotak untuk setiap nama */}
-                        <rect x={xLeft + padX} y={yBoxStart}
-                              width={cardW - padX * 2} height={textFieldH}
-                              rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
-                        {/* Text nama */}
-                        <text x={textX} y={yBoxStart + textFieldH / 2}
-                              textAnchor={textAlign} alignmentBaseline="central"
-                              fill="#111827" strokeWidth={1}
-                              style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
-                          {name}
-                        </text>
-                      </g>
-                  );
-                })
-            ) : (
-                // Jika tidak ada nama, tampilkan kotak kosong
-                <rect x={xLeft + padX} y={yBoxes + boxH + (bp.isMobile ? 10 : 12)}
-                      width={cardW - padX * 2} height={textFieldH}
-                      rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
-            )}
-          </g>
+        {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
+        <g style={{ pointerEvents: 'none' }}>
+          {namesArr.length > 0 ? (
+            namesArr.map((name, idx) => {
+              const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
+              const textAlign = namesArr.length === 1 ? "middle" : "start";
+              const textX = namesArr.length === 1 ? centerX : xLeft + padX + 10;
 
-          {/* Tombol panah/play */}
-          {hasChildren && (
-              <g className="p-4" transform={`translate(${xLeft + cardW - (bp.isMobile ? 28 : 32)}, ${yTop + 10})`}
-                 onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
-                <rect width={bp.isMobile ? 20 : 22} height={bp.isMobile ? 20 : 22}
-                      rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" />
-                <path d="M8 6 L16 11 L8 16 Z" fill="#6b7280"
-                      transform={isCollapsed ? "" : "rotate(90 11 11)"} />
-              </g>
+              return (
+                <g key={idx}>
+                  {/* Kotak untuk setiap nama */}
+                  <rect x={xLeft + padX} y={yBoxStart}
+                    width={cardW - padX * 2} height={textFieldH}
+                    rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
+                  {/* Text nama */}
+                  <text x={textX} y={yBoxStart + textFieldH / 2}
+                    textAnchor={textAlign} alignmentBaseline="central"
+                    fill="#111827" strokeWidth={1}
+                    style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
+                    {name}
+                  </text>
+                </g>
+              );
+            })
+          ) : (
+            // Jika tidak ada nama, tampilkan kotak kosong
+            <rect x={xLeft + padX} y={yBoxes + boxH + (bp.isMobile ? 10 : 12)}
+              width={cardW - padX * 2} height={textFieldH}
+              rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
           )}
         </g>
+
+        {/* Tombol panah/play */}
+        {hasChildren && (
+          <g className="p-2" transform={`translate(${xLeft + cardW - (bp.isMobile ? 48 : 52)}, ${yTop + 10})`}
+            onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
+            <rect width={bp.isMobile ? 30 : 32} height={bp.isMobile ? 30 : 32}
+              rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" />
+            <path d="M10 9 L22 16 L10 23 Z" fill="#6b7280"
+              transform={isCollapsed ? "" : "rotate(90 16 16)"} />
+          </g>
+        )}
+      </g>
     );
   }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen]);
 
   return (
-      <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
-        {/* ===== TOP BAR (mobile seperti screenshot, desktop seperti semula) ===== */}
-        {bp.isMobile ? (
-            <div className="flex flex-col gap-2">
-              {/* Baris 1: Search + Reset */}
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <input
-                    placeholder="Cari Jabatan"
-                    value={filterText}
-                    onChange={(e) => setFilterText(e.target.value)}
-                    className="px-3 py-2 rounded border text-sm"
-                />
-                <button
-                    onClick={() => {
-                      // Clear only peta jabatan specific sessionStorage keys
-                      sessionStorage.removeItem('petaJabatan_filterText');
-                      sessionStorage.removeItem('petaJabatan_lastClickedPath');
-                      sessionStorage.removeItem('petaJabatan_collapseMap');
-                      sessionStorage.removeItem('petaJabatan_scope');
-                      sessionStorage.removeItem('petaJabatan_fungsionalMode');
-                      sessionStorage.removeItem('petaJabatan_returnFromAnjab');
+    <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
+      {/* ===== TOP BAR (mobile seperti screenshot, desktop seperti semula) ===== */}
+      {bp.isMobile ? (
+        <div className="flex flex-col gap-2">
+          {/* Baris 1: Search + Reset */}
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input
+              placeholder="Cari Jabatan"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="px-3 py-2 rounded border text-sm"
+            />
+            <button
+              onClick={() => {
+                // Clear only peta jabatan specific sessionStorage keys
+                sessionStorage.removeItem('petaJabatan_filterText');
+                sessionStorage.removeItem('petaJabatan_lastClickedPath');
+                sessionStorage.removeItem('petaJabatan_collapseMap');
+                sessionStorage.removeItem('petaJabatan_scope');
+                sessionStorage.removeItem('petaJabatan_fungsionalMode');
+                sessionStorage.removeItem('petaJabatan_returnFromAnjab');
 
-                      // Reset all state to defaults
-                      setFilterText("");
-                      setLastClickedPath(null);
-                      setSearchMatches([]);
-                      setCurrentMatchIndex(0);
-                      setScope("PUSAT");
-                      setFungsionalMode("STRUKTURAL");
-                      hasFocusedOnce.current = false;
+                // Reset all state to defaults
+                setFilterText("");
+                setLastClickedPath(null);
+                setSearchMatches([]);
+                setCurrentMatchIndex(0);
+                setScope("PUSAT");
+                setFungsionalMode("STRUKTURAL");
+                hasFocusedOnce.current = false;
 
-                      // Force reload the data to ensure clean state
-                      load();
-                    }}
-                    className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
-                >
-                  Reset
-                </button>
-              </div>
-              {/* Search Results Navigation Mobile */}
-              {searchMatches.length > 0 && (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                // Force reload the data to ensure clean state
+                load();
+              }}
+              className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+            >
+              Reset
+            </button>
+          </div>
+          {/* Search Results Navigation Mobile */}
+          {searchMatches.length > 0 && (
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               <span className="text-sm text-green-700 font-medium">
                 {searchMatches.length} hasil ({currentMatchIndex + 1}/{searchMatches.length})
               </span>
-                    {searchMatches.length > 1 && (
-                        <div className="flex gap-1">
-                          <button
-                              onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
-                              className="p-1 hover:bg-green-100 rounded transition-colors"
-                              title="Sebelumnya"
-                          >
-                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                            </svg>
-                          </button>
-                          <button
-                              onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
-                              className="p-1 hover:bg-green-100 rounded transition-colors"
-                              title="Berikutnya"
-                          >
-                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </button>
-                        </div>
-                    )}
-                  </div>
-              )}
-              {/* Baris 2: Reload & Fullscreen full-width */}
-              <button
-                  onClick={load}
-                  disabled={loading}
-                  className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
-              >
-                {loading ? "Memuat…" : "Reload"}
-              </button>
-              {!isFullscreen ? (
+              {searchMatches.length > 1 && (
+                <div className="flex gap-1">
                   <button
-                      onClick={enterFullscreen}
-                      className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                    onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
+                    className="p-1 hover:bg-green-100 rounded transition-colors"
+                    title="Sebelumnya"
                   >
-                    Fullscreen
+                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
                   </button>
-              ) : (
                   <button
-                      onClick={exitFullscreen}
-                      className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
+                    onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
+                    className="p-1 hover:bg-green-100 rounded transition-colors"
+                    title="Berikutnya"
                   >
-                    Exit Fullscreen
+                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
+                </div>
               )}
             </div>
-        ) : (
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-2xl font-semibold">Peta Jabatan</h1>
-              <div className="flex items-center gap-2">
-                <input
-                    placeholder="Cari Jabatan"
-                    value={filterText}
-                    onChange={(e) => setFilterText(e.target.value)}
-                    className="px-3 py-2 rounded border text-sm w-[320px]"
-                />
-                <button
-                    onClick={() => {
-                      // Clear only peta jabatan specific sessionStorage keys
-                      sessionStorage.removeItem('petaJabatan_filterText');
-                      sessionStorage.removeItem('petaJabatan_lastClickedPath');
-                      sessionStorage.removeItem('petaJabatan_collapseMap');
-                      sessionStorage.removeItem('petaJabatan_scope');
-                      sessionStorage.removeItem('petaJabatan_fungsionalMode');
-                      sessionStorage.removeItem('petaJabatan_returnFromAnjab');
-
-                      // Reset all state to defaults
-                      setFilterText("");
-                      setLastClickedPath(null);
-                      setSearchMatches([]);
-                      setCurrentMatchIndex(0);
-                      setScope("PUSAT");
-                      setFungsionalMode("STRUKTURAL");
-                      hasFocusedOnce.current = false;
-
-                      // Force reload the data to ensure clean state
-                      load();
-                    }}
-                    className="px-2 py-2 rounded border text-sm hover:bg-gray-50"
-                >
-                  Reset
-                </button>
-                {!isFullscreen ? (
-                    <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
-                      Fullscreen
-                    </button>
-                ) : (
-                    <button onClick={exitFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
-                      Exit Fullscreen
-                    </button>
-                )}
-              </div>
-            </div>
-        )}
-
-        {/* ===== BARIS FILTER (Wilayah/Jenis di bawah) ===== */}
-        <div className="mt-2 flex flex-wrap items-center gap-3 sm:gap-4">
+          )}
+          {/* Baris 2: Reload & Fullscreen full-width */}
+          <button
+            onClick={load}
+            disabled={loading}
+            className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            {loading ? "Memuat…" : "Reload"}
+          </button>
+          {!isFullscreen ? (
+            <button
+              onClick={enterFullscreen}
+              className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
+            >
+              Fullscreen
+            </button>
+          ) : (
+            <button
+              onClick={exitFullscreen}
+              className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
+            >
+              Exit Fullscreen
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold">Peta Jabatan</h1>
           <div className="flex items-center gap-2">
-            <Segmented
-                value={scope}
-                onChange={setScope}
-                options={[{label: "Pusat", value: "PUSAT"}, {label: "Daerah", value: "DAERAH"}]}
-                size={bp.isMobile ? "sm" : "md"}
+            <input
+              placeholder="Cari Jabatan"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="px-3 py-2 rounded border text-sm w-[320px]"
             />
-            <Segmented
-                value={fungsionalMode}
-                onChange={setFungsionalMode}
-                options={[{label: "Struktural", value: "STRUKTURAL"}, {label: "Fungsional", value: "FUNGSIONAL"}]}
-                size={bp.isMobile ? "sm" : "md"}
-            />
-          </div>
+            <button
+              onClick={() => {
+                // Clear only peta jabatan specific sessionStorage keys
+                sessionStorage.removeItem('petaJabatan_filterText');
+                sessionStorage.removeItem('petaJabatan_lastClickedPath');
+                sessionStorage.removeItem('petaJabatan_collapseMap');
+                sessionStorage.removeItem('petaJabatan_scope');
+                sessionStorage.removeItem('petaJabatan_fungsionalMode');
+                sessionStorage.removeItem('petaJabatan_returnFromAnjab');
 
-          {/* Search Results Navigation */}
-          {searchMatches.length > 0 && (
-              <div className="flex items-center gap-2 ml-auto bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                // Reset all state to defaults
+                setFilterText("");
+                setLastClickedPath(null);
+                setSearchMatches([]);
+                setCurrentMatchIndex(0);
+                setScope("PUSAT");
+                setFungsionalMode("STRUKTURAL");
+                hasFocusedOnce.current = false;
+
+                // Force reload the data to ensure clean state
+                load();
+              }}
+              className="px-2 py-2 rounded border text-sm hover:bg-gray-50"
+            >
+              Reset
+            </button>
+            {!isFullscreen ? (
+              <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
+                Fullscreen
+              </button>
+            ) : (
+              <button onClick={exitFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
+                Exit Fullscreen
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== BARIS FILTER (Wilayah/Jenis di bawah) ===== */}
+      <div className="mt-2 flex flex-wrap items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2">
+          <Segmented
+            value={scope}
+            onChange={setScope}
+            options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
+            size={bp.isMobile ? "sm" : "md"}
+          />
+          <Segmented
+            value={fungsionalMode}
+            onChange={setFungsionalMode}
+            options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
+            size={bp.isMobile ? "sm" : "md"}
+          />
+        </div>
+
+        {/* Search Results Navigation */}
+        {searchMatches.length > 0 && (
+          <div className="flex items-center gap-2 ml-auto bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
             <span className="text-sm text-green-700 font-medium">
               {searchMatches.length} hasil ditemukan
             </span>
-                {searchMatches.length > 1 && (
-                    <>
+            {searchMatches.length > 1 && (
+              <>
                 <span className="text-xs text-green-600">
                   ({currentMatchIndex + 1}/{searchMatches.length})
                 </span>
-                      <div className="flex gap-1">
-                        <button
-                            onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
-                            className="p-1 hover:bg-green-100 rounded transition-colors"
-                            title="Hasil sebelumnya"
-                        >
-                          <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                        <button
-                            onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
-                            className="p-1 hover:bg-green-100 rounded transition-colors"
-                            title="Hasil berikutnya"
-                        >
-                          <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-                    </>
-                )}
-              </div>
-          )}
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
+                    className="p-1 hover:bg-green-100 rounded transition-colors"
+                    title="Hasil sebelumnya"
+                  >
+                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
+                    className="p-1 hover:bg-green-100 rounded transition-colors"
+                    title="Hasil berikutnya"
+                  >
+                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {err && <div className="text-sm text-red-600">{err}</div>}
+
+      {/* Info card untuk panduan singkat */}
+      {!loading && rd3Data.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="space-y-1 text-blue-900">
+              <p className="font-medium">Tips Navigasi:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-xs">
+                <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
+                <li>Drag background untuk menggeser tampilan</li>
+                <li>Klik panah di card untuk expand/collapse cabang</li>
+                {bp.isMobile && <li className="text-orange-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
+              </ul>
+            </div>
+          </div>
         </div>
+      )}
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
-
-        {/* Info card untuk panduan singkat */}
-        {!loading && rd3Data.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-            <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="space-y-1 text-blue-900">
-                <p className="font-medium">Tips Navigasi:</p>
-                <ul className="list-disc list-inside space-y-0.5 text-xs">
-                  <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
-                  <li>Drag background untuk menggeser tampilan</li>
-                  <li>Klik panah di card untuk expand/collapse cabang</li>
-                  {bp.isMobile && <li className="text-orange-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
-                </ul>
-              </div>
+      <div
+        ref={containerRef}
+        style={{
+          width: "100%",
+          height: (isFullscreen ? "100vh" : (bp.isMobile ? "80vh" : "70vh")),
+          border: "1px solid #e5e7eb",
+          background: "#fff",
+          overflow: "auto",
+          position: "relative"
+        }}
+        className="rounded custom-scrollbar"
+      >
+        {/* Loading indicator */}
+        {loading && (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center space-y-2">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+              <p className="text-sm text-gray-600">Memuat peta jabatan...</p>
             </div>
           </div>
         )}
 
-        <div
-            ref={containerRef}
-            style={{
-              width: "100%", 
-              height: (isFullscreen ? "100vh" : (bp.isMobile ? "80vh" : "70vh")), 
-              border: "1px solid #e5e7eb", 
-              background: "#fff",
-              overflow: "auto",
-              position: "relative"
-            }}
-            className="rounded custom-scrollbar"
-        >
-          {/* Loading indicator */}
-          {loading && (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-                <p className="text-sm text-gray-600">Memuat peta jabatan...</p>
-              </div>
+        {/* Render Tree hanya jika ada data valid */}
+        {!loading && typeof window !== "undefined" && rd3Data.length > 0 ? (
+          <>
+            <Tree
+              data={rd3Data}
+              orientation="vertical"
+              translate={translate}
+              zoomable
+              collapsible={false}
+              zoom={zoomLevel}
+              pathFunc="step"
+              nodeSize={nodeSize}
+              separation={separation}
+              transitionDuration={bp.isMobile ? 200 : 300}
+              scaleExtent={{ min: 0.1, max: 2 }}
+              renderCustomNodeElement={renderNode}
+              enableLegacyTransitions={false}
+            />
+          </>
+        ) : (
+          !loading && (
+            <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+              {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter/cari."}
             </div>
-          )}
-          
-          {/* Render Tree hanya jika ada data valid */}
-          {!loading && typeof window !== "undefined" && rd3Data.length > 0 ? (
-              <>
-                <Tree
-                    data={rd3Data}
-                    orientation="vertical"
-                    translate={translate}
-                    zoomable
-                    collapsible={false}
-                    zoom={zoomLevel}
-                    pathFunc="step"
-                    nodeSize={nodeSize}
-                    separation={separation}
-                    transitionDuration={bp.isMobile ? 200 : 300}
-                    scaleExtent={{ min: 0.1, max: 2 }}
-                    renderCustomNodeElement={renderNode}
-                    enableLegacyTransitions={false}
-                />
-              </>
-          ) : (
-              !loading && (
-                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
-                    {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter/cari."}
-                  </div>
-              )
-          )}
-        </div>
+          )
+        )}
       </div>
+    </div>
   );
 }

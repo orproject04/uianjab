@@ -205,6 +205,8 @@ export default function AnjabListPage() {
             // Fetch PDF with credentials
             const response = await apiFetch(`/api/anjab/${id}/pdf`, {
                 method: 'GET',
+                cache: 'no-store',
+                headers: { Accept: 'application/pdf' },
             });
             
             if (!response.ok) {
