@@ -71,17 +71,17 @@ function wrapText(s: string, maxChars = 32): string[] {
 
 function rankJenis(j: string | null | undefined): number {
   const t = (j || "").trim().toUpperCase();
-  switch (t) {
-    case "ESELON I / JPT Madya": return 1;
-    case "ESELON II / JPT Pratama": return 2;
-    case "ESELON III / Administrator": return 3;
-    case "ESELON IV / Pengawas": return 4;
-    case "JABATAN FUNGSIONAL": return 5;
-    case "JABATAN PELAKSANA": return 6;
-    case "PEGAWAI DPK": return 7;
-    case "PEGAWAI CLTN": return 8;
-    default: return 99;
-  }
+  if (!t) return 99;
+  // More tolerant matching using word boundaries to catch variations
+  if (/\bESELON\s*I\b/.test(t)) return 1;
+  if (/\bESELON\s*II\b/.test(t)) return 2;
+  if (/\bESELON\s*III\b/.test(t)) return 3;
+  if (/\bESELON\s*IV\b/.test(t)) return 4;
+  if (/JABATAN\s+FUNGSIONAL/.test(t)) return 5;
+  if (/JABATAN\s+PELAKSANA/.test(t)) return 6;
+  if (/PEGAWAI\s+DPK/.test(t)) return 7;
+  if (/PEGAWAI\s+CLTN/.test(t)) return 8;
+  return 99;
 }
 
 // Turunkan Inspektorat bila anak langsung SETJEN
@@ -138,7 +138,14 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
     return false;
   };
 
-  const jenisEq = (r: APIRow, s: string) => ((r.jenis_jabatan || "").toUpperCase() === s.toUpperCase());
+  const jenisEq = (r: APIRow, s: string) => {
+    const val = (r.jenis_jabatan || "").toUpperCase();
+    const target = (s || "").toUpperCase();
+    if (!val || !target) return false;
+    if (val === target) return true;
+    if (val.startsWith(target)) return true; // accept 'ESELON II / ...'
+    return false;
+  };
   const jenisRankLE = (r: APIRow, n: number) => rankJenis(r.jenis_jabatan) <= n;
 
   // 1) Pusat + Struktural
@@ -1157,8 +1164,9 @@ export default function PetaJabatanClient() {
           {namesArr.length > 0 ? (
             namesArr.map((name, idx) => {
               const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
-              const textAlign = namesArr.length === 1 ? "middle" : "start";
-              const textX = namesArr.length === 1 ? centerX : xLeft + padX + 10;
+              const isEselonCentered = rankJenis(attrs.jenis) <= 4;
+              const textAlign = isEselonCentered ? "middle" : "start";
+              const textX = isEselonCentered ? centerX : xLeft + padX + 10;
 
               return (
                 <g key={idx}>
