@@ -72,10 +72,10 @@ function wrapText(s: string, maxChars = 32): string[] {
 function rankJenis(j: string | null | undefined): number {
   const t = (j || "").trim().toUpperCase();
   switch (t) {
-    case "ESELON I": return 1;
-    case "ESELON II": return 2;
-    case "ESELON III": return 3;
-    case "ESELON IV": return 4;
+    case "ESELON I / JPT Madya": return 1;
+    case "ESELON II / JPT Pratama": return 2;
+    case "ESELON III / Administrator": return 3;
+    case "ESELON IV / Pengawas": return 4;
     case "JABATAN FUNGSIONAL": return 5;
     case "JABATAN PELAKSANA": return 6;
     case "PEGAWAI DPK": return 7;
@@ -749,7 +749,7 @@ export default function PetaJabatanClient() {
     // Reduced horizontal spacing for better fit on smaller screens
     const x = cardW + (bp.isMobile ? 60 : bp.isTablet ? 80 : 100);
     // Increased vertical spacing to prevent cramping
-    const y = bp.isMobile ? 220 : bp.isTablet ? 250 : 280;
+    const y = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
     return { x, y };
   }, [cardW, bp.isMobile, bp.isTablet]);
 
