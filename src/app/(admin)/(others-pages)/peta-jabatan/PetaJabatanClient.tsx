@@ -679,12 +679,58 @@ export default function PetaJabatanClient() {
     return ids;
   }
 
+  // -------- Responsive sizing tokens (card, fonts, node gap) --------
+  // Optimized for 14-inch laptops and mobile devices
+  const cardW = bp.isMobile ? 280 : bp.isTablet ? 340 : 400;
+  const padX = bp.isMobile ? 14 : 16;
+  const padY = bp.isMobile ? 12 : 14;
+
+  const titleFontPx = bp.isMobile ? 11 : bp.isTablet ? 12 : 13;
+  const approxCharPx = 8; // Increased from 5 to account for uppercase font width
+  const usableTitleW = cardW - (bp.isMobile ? 80 : 100); // Leave room for the toggle button on the right
+  const maxTitleChars = Math.max(20, Math.floor(usableTitleW / approxCharPx));
+
+  const boxW = bp.isMobile ? 28 : 32;
+  const boxH = bp.isMobile ? 22 : 24;
+  const boxGap = 8;
+  const labelGapTop = bp.isMobile ? 10 : 12;
+  const gapAfterBoxes = bp.isMobile ? 12 : 14;
+  const textFieldH = bp.isMobile ? 24 : 28;
+
+  const nodeSize = useMemo(() => {
+    // Reduced horizontal spacing for better fit on smaller screens
+    const x = cardW + (bp.isMobile ? 60 : bp.isTablet ? 80 : 100);
+    // Increased vertical spacing to prevent cramping
+    const y = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
+    return { x, y };
+  }, [cardW, bp.isMobile, bp.isTablet]);
+
+  // Lower zoom for better overview on 14-inch laptops
+  const initialZoom = bp.isMobile ? 0.45 : bp.isTablet ? 0.55 : 0.65;
+  // Balanced separation - not too cramped, not too wide
+  const separation = { siblings: bp.isMobile ? 1.15 : 1.25, nonSiblings: bp.isMobile ? 1.25 : 1.35 };
+
   const toRD3 = (n: D3Node): RawNodeDatum => {
     const id = n._id;
     const isGhost = !!n._ghost;
     const hasChildren = n.children.length > 0;
     const isCollapsed = !isGhost && !!collapseMap[id];
     const pathStr = n._path.join("/");
+    // Pre-compute visual sizing info so we can align sibling top edges
+    const title = String(n.nama_jabatan || "").toUpperCase();
+    const titleLines = wrapText(title, maxTitleChars);
+    const lineH = bp.isMobile ? 24 : bp.isTablet ? 26 : 28;
+    const kelasHLocal = bp.isMobile ? 16 : bp.isTablet ? 18 : 20;
+    const headerH = Math.max(bp.isMobile ? 36 : bp.isTablet ? 40 : 44, titleLines.length * lineH + 8) + kelasHLocal + 10;
+
+    const namesArrLocal: string[] = Array.isArray(n.pejabat) ? (n.pejabat as PegawaiInfo[]).map(p => p.name) : [];
+    const namesCountLocal = namesArrLocal.length;
+    const boxGapVerticalLocal = bp.isMobile ? 6 : 8;
+    const totalNamesHeightLocal = namesCountLocal > 0
+      ? (textFieldH * namesCountLocal) + (boxGapVerticalLocal * (namesCountLocal - 1))
+      : textFieldH;
+
+    const baseCardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
 
     return {
       name: n.nama_jabatan,
@@ -702,15 +748,44 @@ export default function PetaJabatanClient() {
         pejabat: n.pejabat ?? [],
         syntheticSimple: n._syntheticSimple === true,
         syntheticLabel: n._syntheticLabel || null,
+        // sizing hints
+        _titleLines: titleLines.length,
+        baseCardH,
       } as any,
       children: isCollapsed ? [] : n.children.map(toRD3),
     };
   };
 
-  const rd3Data: RawNodeDatum[] = useMemo(
-    () => filteredRoots.map(toRD3),
-    [filteredRoots, collapseMap]
-  );
+  const rd3Data: RawNodeDatum[] = useMemo(() => {
+    const data = filteredRoots.map(toRD3);
+
+    // collect all nodes and compute sibling max baseCardH
+    const all: RawNodeDatum[] = [];
+    const collect = (n: RawNodeDatum, parentId: string | null) => {
+      const attrs = n.attributes as any;
+      attrs.parentId = parentId;
+      all.push(n);
+      if (n.children) n.children.forEach((c: RawNodeDatum) => collect(c, attrs.id || null));
+    };
+    data.forEach(d => collect(d, null));
+
+    const byParent = new Map<string | null, RawNodeDatum[]>();
+    for (const n of all) {
+      const p = (n.attributes as any).parentId ?? null;
+      const arr = byParent.get(p) || [];
+      arr.push(n);
+      byParent.set(p, arr);
+    }
+
+    for (const [p, arr] of byParent.entries()) {
+      const maxBase = Math.max(...arr.map(a => (a.attributes as any).baseCardH || 0));
+      for (const a of arr) {
+        (a.attributes as any).siblingMaxBaseCardH = maxBase;
+      }
+    }
+
+    return data;
+  }, [filteredRoots, collapseMap, bp.isMobile, bp.isTablet]);
 
   const toggleByDatum = useCallback((nodeDatum: CustomNodeElementProps["nodeDatum"], e?: React.MouseEvent<SVGGElement>) => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -729,34 +804,7 @@ export default function PetaJabatanClient() {
     });
   }, []);
 
-  // -------- Responsive sizing tokens (card, fonts, node gap) --------
-  // Optimized for 14-inch laptops and mobile devices
-  const cardW = bp.isMobile ? 280 : bp.isTablet ? 340 : 400;
-  const padX = bp.isMobile ? 14 : 16;
-  const padY = bp.isMobile ? 12 : 14;
-
-  const titleFontPx = bp.isMobile ? 11 : bp.isTablet ? 12 : 13;
-  const approxCharPx = 8; // Increased from 5 to account for uppercase font width
-  const usableTitleW = cardW - (bp.isMobile ? 80 : 100); // Leave room for the toggle button on the right
-  const maxTitleChars = Math.max(20, Math.floor(usableTitleW / approxCharPx));
-
-  const boxW = bp.isMobile ? 28 : 32;
-  const boxH = bp.isMobile ? 22 : 24;
-  const boxGap = 8;
-  const textFieldH = bp.isMobile ? 24 : 28;
-
-  const nodeSize = useMemo(() => {
-    // Reduced horizontal spacing for better fit on smaller screens
-    const x = cardW + (bp.isMobile ? 60 : bp.isTablet ? 80 : 100);
-    // Increased vertical spacing to prevent cramping
-    const y = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
-    return { x, y };
-  }, [cardW, bp.isMobile, bp.isTablet]);
-
-  // Lower zoom for better overview on 14-inch laptops
-  const initialZoom = bp.isMobile ? 0.45 : bp.isTablet ? 0.55 : 0.65;
-  // Balanced separation - not too cramped, not too wide
-  const separation = { siblings: bp.isMobile ? 1.15 : 1.25, nonSiblings: bp.isMobile ? 1.25 : 1.35 };
+  
 
   // Function to calculate subtree width (for proper horizontal positioning)
   const calculateSubtreeWidth = useCallback((node: RawNodeDatum): number => {
@@ -972,8 +1020,9 @@ export default function PetaJabatanClient() {
     const cardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY;
 
     const xLeft = -cardW / 2;
-    // Gunakan base height untuk positioning agar tidak naik, tapi card tetap memanjang
-    const yTop = -baseCardH / 2;
+    // Use sibling max baseCardH (if available) so sibling top edges align. Fallback to local baseCardH.
+    const siblingMaxBase = (attrs && attrs.siblingMaxBaseCardH) ? attrs.siblingMaxBaseCardH : baseCardH;
+    const yTop = -siblingMaxBase / 2;
 
     const yHeaderTop = yTop + padY;
     const centerX = 0;
