@@ -14,8 +14,7 @@ export default function HomePage() {
   const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const { me } = useMe();
-  const isAdmin = me?.role === "admin";
+  const { me, isAdmin } = useMe();
   const displayName =
     me?.full_name?.trim() ||
     (me?.email ? me.email.split("@")[0] : "User");
@@ -110,15 +109,17 @@ export default function HomePage() {
                 Silahkan pilih menu untuk memulai pengelolaan data.
               </p>
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => handleNavigate("/dashboard")}
-                  className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
-                >
-                  Buka Dashboard
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleNavigate("/dashboard")}
+                    className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+                  >
+                    Buka Dashboard
+                  </button>
+                )}
                 <button
                   onClick={() => handleNavigate("/peta-jabatan")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200"
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200"
                 >
                   Lihat Peta Jabatan
                 </button>
@@ -168,7 +169,7 @@ export default function HomePage() {
               </div>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-gray-900 px-4 py-2.5 text-sm font-semibold shadow hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-white"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-gray-900 px-4 py-2.5 text-sm font-semibold shadow hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-white"
               >
                 Buka Form Tambah
               </button>
