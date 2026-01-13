@@ -1081,8 +1081,8 @@ export default function DashboardPage() {
                                                 const selisihCls = s > 0
                                                     ? 'text-blue-light-600 dark:text-blue-light-400'
                                                     : s < 0
-                                                        ? 'text-brand-600 dark:text-brand-400'
-                                                        : 'text-brand-600 dark:text-brand-400';
+                                                        ? 'text-orange-600 dark:text-orange-400'
+                                                        : 'text-orange-600 dark:text-orange-400';
                                                 return (
                                                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                                                         <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{p.unit_kerja}</p>
@@ -1146,7 +1146,7 @@ export default function DashboardPage() {
                                                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
                                                 <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
                                                 <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-blue-light-600 dark:text-blue-light-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
@@ -1196,7 +1196,7 @@ export default function DashboardPage() {
                                                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
                                                 <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
                                                 <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-brand-600 dark:text-brand-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
