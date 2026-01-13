@@ -53,7 +53,7 @@ export default function AnjabMatchPage() {
             const petaRes = await apiFetch("/api/peta-jabatan/unmatched", {
                 method: "GET",
             });
-            
+
             // Load master anjab
             const anjabRes = await apiFetch("/api/anjab/list", {
                 method: "GET",
@@ -62,7 +62,7 @@ export default function AnjabMatchPage() {
             if (petaRes.ok && anjabRes.ok) {
                 const petaData = await petaRes.json();
                 const anjabData = await anjabRes.json();
-                
+
                 setPetaJabatanList(petaData || []);
                 setMasterAnjabList(anjabData || []);
 
@@ -70,7 +70,7 @@ export default function AnjabMatchPage() {
                 await generateSuggestions(petaData, anjabData);
             }
         } catch (error) {
-            } finally {
+        } finally {
             setLoading(false);
         }
     };
@@ -80,7 +80,7 @@ export default function AnjabMatchPage() {
             const res = await apiFetch("/api/anjab/match-suggestions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     peta_jabatan: petaList.map(p => ({ id: p.id, nama: p.nama_jabatan })),
                     master_anjab: anjabList.map(a => ({ id: a.id, nama: a.nama_jabatan }))
                 }),
@@ -91,12 +91,12 @@ export default function AnjabMatchPage() {
                 setSuggestions(data.suggestions || []);
             }
         } catch (error) {
-            }
+        }
     };
 
     const handleAutoMatch = async () => {
         const perfectMatches = suggestions.filter(s => s.similarity === 1.0);
-        
+
         if (perfectMatches.length === 0) {
             await Swal.fire({
                 icon: "info",
@@ -105,7 +105,7 @@ export default function AnjabMatchPage() {
             });
             return;
         }
-        
+
         const result = await Swal.fire({
             title: "Auto Match Anjab?",
             html: `Sistem akan otomatis memasangkan <b>${perfectMatches.length}</b> peta jabatan dengan master anjab yang cocok 100%.<br/><br/>Proses ini dapat diubah nanti.`,
@@ -174,7 +174,7 @@ export default function AnjabMatchPage() {
                 loadData();
             }
         } catch (error) {
-            } finally {
+        } finally {
             setProcessing(false);
         }
     };
@@ -183,7 +183,7 @@ export default function AnjabMatchPage() {
         return (
             <div className="pt-16 min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
                 </div>
             </div>
@@ -202,8 +202,8 @@ export default function AnjabMatchPage() {
     }
 
     return (
-        <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">
-            <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="space-y-6 pb-8 pt-6">
+            <div className="">
                 <div className="mb-4 sm:mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
                         Match Peta Jabatan dengan Master Anjab
@@ -227,13 +227,13 @@ export default function AnjabMatchPage() {
                             </div>
                             <div>
                                 <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Saran</div>
-                                <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">{suggestions.length}</div>
+                                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{suggestions.length}</div>
                             </div>
                         </div>
                         <button
                             onClick={handleAutoMatch}
                             disabled={processing || suggestions.length === 0}
-                            className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-600 text-white text-sm sm:text-base rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+                            className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-brand-600 text-white text-sm sm:text-base rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                         >
                             <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -251,7 +251,7 @@ export default function AnjabMatchPage() {
                             Saran Matching ({suggestions.length})
                         </h2>
                     </div>
-                    
+
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[640px]">
                             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -287,13 +287,12 @@ export default function AnjabMatchPage() {
                                                 {sug.anjab_nama}
                                             </td>
                                             <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                                                <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                    sug.similarity > 0.8 
-                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                        : sug.similarity > 0.5
+                                                <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${sug.similarity > 0.8
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                    : sug.similarity > 0.5
                                                         ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                }`}>
+                                                        : 'bg-gray-50 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                    }`}>
                                                     {Math.round(sug.similarity * 100)}%
                                                 </span>
                                             </td>
@@ -301,7 +300,7 @@ export default function AnjabMatchPage() {
                                                 <button
                                                     onClick={() => handleManualMatch(sug.peta_id, sug.anjab_id)}
                                                     disabled={processing}
-                                                    className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                                    className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-white bg-brand-600 rounded hover:bg-brand-700 transition-colors disabled:opacity-50"
                                                 >
                                                     <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

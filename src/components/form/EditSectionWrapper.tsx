@@ -21,7 +21,7 @@ export default function EditSectionWrapper({
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-4">
                     {icon && (
-                        <div className="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center">
                             {icon}
                         </div>
                     )}
@@ -76,7 +76,7 @@ export function FormSection({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between text-lg font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                className="w-full flex items-center justify-between text-lg font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
             >
                 <span>{title}</span>
                 <svg

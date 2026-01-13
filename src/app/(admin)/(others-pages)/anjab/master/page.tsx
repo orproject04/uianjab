@@ -1,11 +1,11 @@
 "use client";
 
-import React, {useEffect, useState} from "react";
-import {apiFetch} from "@/lib/apiFetch";
-import {useRouter} from "next/navigation";
-import {slugToTitle} from "@/lib/text-utils";
+import React, { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/apiFetch";
+import { useRouter } from "next/navigation";
+import { slugToTitle } from "@/lib/text-utils";
 import WordAnjab from "@/components/form/form-elements/WordAnjab";
-import {useMe} from "@/context/MeContext";
+import { useMe } from "@/context/MeContext";
 import Swal from "sweetalert2";
 
 type Jabatan = {
@@ -18,7 +18,7 @@ type Jabatan = {
 
 export default function AnjabListPage() {
     const router = useRouter();
-    const {isAdmin, loading: meLoading} = useMe();
+    const { isAdmin, loading: meLoading } = useMe();
     const [jabatanList, setJabatanList] = useState<Jabatan[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
@@ -48,7 +48,7 @@ export default function AnjabListPage() {
                 method: "GET",
                 cache: "no-store",
             });
-            
+
             if (res.ok) {
                 const data = await res.json();
                 setJabatanList(data || []);
@@ -64,7 +64,7 @@ export default function AnjabListPage() {
         }
     };
 
-    const filteredJabatan = jabatanList.filter(j => 
+    const filteredJabatan = jabatanList.filter(j =>
         j.nama_jabatan?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -78,16 +78,16 @@ export default function AnjabListPage() {
         // Primary sort by kelas_jabatan
         const getRomanValue = (str: string) => {
             if (!str || str.trim() === '') return 0; // Empty values go to end
-            
+
             const romanOrder: { [key: string]: number } = {
                 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
                 'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10,
                 'XI': 11, 'XII': 12, 'XIII': 13, 'XIV': 14, 'XV': 15,
                 'XVI': 16, 'XVII': 17
             };
-            
+
             const strUpper = String(str).toUpperCase().trim();
-            
+
             // Try to find Roman numeral pattern - could be "KELAS IX", "IX", "9", etc
             // First try exact match with Roman numerals
             for (const [roman, value] of Object.entries(romanOrder)) {
@@ -95,13 +95,13 @@ export default function AnjabListPage() {
                     return value;
                 }
             }
-            
+
             // Try regex pattern to find Roman numerals
             const match = strUpper.match(/\b(XVII|XVI|XV|XIV|XIII|XII|XI|IX|VIII|VII|VI|IV|V|III|II|I)\b/);
             if (match && romanOrder[match[1]]) {
                 return romanOrder[match[1]];
             }
-            
+
             // Try to extract numeric value (e.g., "9" -> IX)
             const numMatch = strUpper.match(/\b(\d+)\b/);
             if (numMatch) {
@@ -110,7 +110,7 @@ export default function AnjabListPage() {
                     return num;
                 }
             }
-            
+
             return 0; // Unknown values go to end
         };
 
@@ -142,7 +142,7 @@ export default function AnjabListPage() {
         // Tertiary sort: always by nama_jabatan (ascending)
         const aNama = (a.nama_jabatan || "").toLowerCase();
         const bNama = (b.nama_jabatan || "").toLowerCase();
-        
+
         if (aNama < bNama) return -1;
         if (aNama > bNama) return 1;
         return 0;
@@ -200,7 +200,7 @@ export default function AnjabListPage() {
 
     const handlePreviewPDF = async (id: string, namaJabatan: string, e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent card click
-        
+
         try {
             // Fetch PDF with credentials
             const response = await apiFetch(`/api/anjab/${id}/pdf`, {
@@ -208,7 +208,7 @@ export default function AnjabListPage() {
                 cache: 'no-store',
                 headers: { Accept: 'application/pdf' },
             });
-            
+
             if (!response.ok) {
                 // Try to parse error as JSON first
                 const contentType = response.headers.get('content-type');
@@ -218,19 +218,19 @@ export default function AnjabListPage() {
                 } else {
                     alert(`Gagal memuat PDF (${response.status})`);
                 }
-                
+
                 // If 401, redirect to login
                 if (response.status === 401) {
                     window.location.href = '/auth/signin';
                 }
                 return;
             }
-            
+
             // Convert to blob and open in new tab
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             const newWindow = window.open(url, '_blank');
-            
+
             // Clean up the URL after window opens
             if (newWindow) {
                 newWindow.onload = () => {
@@ -246,7 +246,7 @@ export default function AnjabListPage() {
         return (
             <div className="pt-16 min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat data...</p>
                 </div>
             </div>
@@ -257,7 +257,7 @@ export default function AnjabListPage() {
         return (
             <div className="pt-16 min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
                 </div>
             </div>
@@ -281,9 +281,9 @@ export default function AnjabListPage() {
                 <div className="text-center">
                     <div className="text-red-500 text-xl mb-4">Error</div>
                     <p className="text-gray-600 dark:text-gray-400">{error}</p>
-                    <button 
+                    <button
                         onClick={loadJabatan}
-                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="mt-4 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
                     >
                         Coba Lagi
                     </button>
@@ -293,8 +293,8 @@ export default function AnjabListPage() {
     }
 
     return (
-        <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">
-            <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="space-y-6 pb-8 pt-6">
+            <div className="">
                 {/* Header */}
                 <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex-1">
@@ -305,7 +305,7 @@ export default function AnjabListPage() {
                             Kelola dokumen analisis jabatan Anda
                         </p>
                     </div>
-                    
+
                     {/* Clear Cache Button */}
                     <button
                         onClick={async () => {
@@ -319,14 +319,14 @@ export default function AnjabListPage() {
                                 confirmButtonColor: '#dc2626',
                                 cancelButtonColor: '#6b7280',
                             });
-                            
+
                             if (!result.isConfirmed) return;
-                            
+
                             try {
                                 const res = await apiFetch('/api/anjab/clear-cache', {
                                     method: 'POST',
                                 });
-                                
+
                                 if (res.ok) {
                                     const data = await res.json();
                                     await Swal.fire({
@@ -385,7 +385,7 @@ export default function AnjabListPage() {
                             <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
                                 <button
                                     onClick={() => setViewMode("grid")}
-                                    className={`p-2 ${viewMode === "grid" ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}
+                                    className={`p-2 ${viewMode === "grid" ? "bg-brand-500 text-white" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}
                                     title="Grid view"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,7 +394,7 @@ export default function AnjabListPage() {
                                 </button>
                                 <button
                                     onClick={() => setViewMode("list")}
-                                    className={`p-2 ${viewMode === "list" ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}
+                                    className={`p-2 ${viewMode === "list" ? "bg-brand-500 text-white" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}
                                     title="List view"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,7 +406,7 @@ export default function AnjabListPage() {
                             {/* Upload Button */}
                             <button
                                 onClick={handleUpload}
-                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
+                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-light-500 text-white rounded-lg hover:bg-blue-light-700 transition-colors whitespace-nowrap"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -417,7 +417,7 @@ export default function AnjabListPage() {
                             {/* Create New Button */}
                             <button
                                 onClick={handleCreateNew}
-                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors whitespace-nowrap"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -432,8 +432,8 @@ export default function AnjabListPage() {
                 {showUploadSection && (
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
-                                <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="p-2 bg-blue-light-100 dark:bg-blue-light-900/30 rounded">
+                                <svg className="w-6 h-6 text-blue-light-600 dark:text-blue-light-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
                             </div>
@@ -468,266 +468,264 @@ export default function AnjabListPage() {
                             {searchQuery ? "Tidak ada hasil" : "Belum ada anjab"}
                         </h3>
                         <p className="text-gray-600 dark:text-gray-400">
-                            {searchQuery 
-                                ? "Coba ubah kata kunci pencarian Anda" 
+                            {searchQuery
+                                ? "Coba ubah kata kunci pencarian Anda"
                                 : "Mulai dengan membuat anjab baru atau upload dokumen"}
                         </p>
                     </div>
                 ) : viewMode === "grid" ? (
                     /* Grid View */
                     <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {paginatedJabatan.map((jabatan) => (
-                            <div
-                                key={jabatan.id}
-                                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-blue-400 dark:hover:border-blue-500 transition-all group flex flex-col overflow-hidden"
-                            >
-                                <div 
-                                    onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
-                                    className="p-5 cursor-pointer flex-1 flex flex-col"
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {paginatedJabatan.map((jabatan) => (
+                                <div
+                                    key={jabatan.id}
+                                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-brand-500 dark:hover:border-brand-400 transition-all group flex flex-col overflow-hidden"
                                 >
-                                    <div className="flex-1 mb-3">
-                                        <h3 className="font-semibold text-sm text-gray-900 dark:text-white leading-snug line-clamp-4 min-h-[4.5rem]" title={slugToTitle(jabatan.nama_jabatan).toUpperCase()}>
-                                            {slugToTitle(jabatan.nama_jabatan).toUpperCase()}
-                                        </h3>
-                                    </div>
-                                    <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-700">
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span className="truncate">{formatDate(jabatan.updated_at)}</span>
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                {/* Action buttons */}
-                                <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex gap-2 bg-gradient-to-b from-gray-50/80 to-gray-100/80 dark:from-gray-800/50 dark:to-gray-900/50 backdrop-blur-sm">
-                                    <button
+                                    <div
                                         onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
-                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-purple-600 dark:text-purple-400 bg-white/80 dark:bg-gray-800/80 border border-purple-200 dark:border-purple-700/50 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 transition-all backdrop-blur-sm"
-                                        title="Preview PDF"
+                                        className="p-5 cursor-pointer flex-1 flex flex-col"
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                        </svg>
-                                        <span>PDF</span>
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleViewJabatan(jabatan.id); }}
-                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 rounded-lg hover:from-blue-700 hover:to-blue-600 dark:hover:from-blue-600 dark:hover:to-blue-700 shadow-sm hover:shadow transition-all"
-                                        title="Edit Anjab"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                        <span>Edit</span>
-                                    </button>
+                                        <div className="flex-1 mb-3">
+                                            <h3 className="font-semibold text-sm text-gray-900 dark:text-white leading-snug line-clamp-4 min-h-[4.5rem]" title={slugToTitle(jabatan.nama_jabatan).toUpperCase()}>
+                                                {slugToTitle(jabatan.nama_jabatan).toUpperCase()}
+                                            </h3>
+                                        </div>
+                                        <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-700">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span className="truncate">{formatDate(jabatan.updated_at)}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Action buttons */}
+                                    <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex gap-2 bg-gradient-to-b from-gray-50/80 to-gray-100/80 dark:from-gray-800/50 dark:to-gray-900/50 backdrop-blur-sm">
+                                        <button
+                                            onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
+                                            className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-white/80 dark:bg-gray-800/80 border border-brand-200 dark:border-brand-700/50 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/30 hover:border-brand-300 dark:hover:border-brand-600 transition-all backdrop-blur-sm"
+                                            title="Preview PDF"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            <span>PDF</span>
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleViewJabatan(jabatan.id); }}
+                                            className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-brand-600 to-brand-500 dark:from-brand-500 dark:to-brand-600 rounded-lg hover:from-brand-700 hover:to-brand-600 dark:hover:from-brand-600 dark:hover:to-brand-700 shadow-sm hover:shadow transition-all"
+                                            title="Edit Anjab"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                            <span>Edit</span>
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                    
-                    {/* Pagination Controls for Grid */}
-                    {totalPages > 1 && (
-                        <div className="mt-6 mb-6 sm:mb-0 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
-                            <div className="w-full sm:w-auto text-center sm:text-left text-sm text-gray-600 dark:text-gray-400">
-                                Halaman {currentPage} dari {totalPages} ({sortedJabatan.length} total)
-                            </div>
-                            <div className="flex items-center gap-2 justify-center sm:justify-end">
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                    disabled={currentPage === 1}
-                                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                </button>
-                                
-                                <div className="flex items-center gap-1 overflow-x-auto py-1 whitespace-nowrap">
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                                        .filter(page => {
-                                            // Show first page, last page, current page, and pages around current
-                                            if (page === 1 || page === totalPages) return true;
-                                            if (page >= currentPage - 1 && page <= currentPage + 1) return true;
-                                            return false;
-                                        })
-                                        .map((page, idx, arr) => (
-                                            <React.Fragment key={page}>
-                                                {idx > 0 && arr[idx - 1] !== page - 1 && (
-                                                    <span className="px-2 text-gray-400">...</span>
-                                                )}
-                                                <button
-                                                    onClick={() => setCurrentPage(page)}
-                                                    className={`flex-none min-w-[44px] px-3 py-2 text-sm text-center rounded-lg transition-colors ${
-                                                        currentPage === page
-                                                            ? 'bg-blue-600 text-white'
-                                                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                                    }`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            </React.Fragment>
-                                        ))
-                                    }
-                                </div>
-                                
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                </button>
-                            </div>
+                            ))}
                         </div>
-                    )}
+
+                        {/* Pagination Controls for Grid */}
+                        {totalPages > 1 && (
+                            <div className="mt-6 mb-6 sm:mb-0 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
+                                <div className="w-full sm:w-auto text-center sm:text-left text-sm text-gray-600 dark:text-gray-400">
+                                    Halaman {currentPage} dari {totalPages} ({sortedJabatan.length} total)
+                                </div>
+                                <div className="flex items-center gap-2 justify-center sm:justify-end">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+
+                                    <div className="flex items-center gap-1 overflow-x-auto py-1 whitespace-nowrap">
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                            .filter(page => {
+                                                // Show first page, last page, current page, and pages around current
+                                                if (page === 1 || page === totalPages) return true;
+                                                if (page >= currentPage - 1 && page <= currentPage + 1) return true;
+                                                return false;
+                                            })
+                                            .map((page, idx, arr) => (
+                                                <React.Fragment key={page}>
+                                                    {idx > 0 && arr[idx - 1] !== page - 1 && (
+                                                        <span className="px-2 text-gray-400">...</span>
+                                                    )}
+                                                    <button
+                                                        onClick={() => setCurrentPage(page)}
+                                                        className={`flex-none min-w-[44px] px-3 py-2 text-sm text-center rounded-lg transition-colors ${currentPage === page
+                                                            ? 'bg-brand-600 text-white'
+                                                            : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                            }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                </React.Fragment>
+                                            ))
+                                        }
+                                    </div>
+
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </>
                 ) : (
                     /* List View */
                     <>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[640px]">
-                                <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                                    <tr>
-                                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            <span>Nama Jabatan</span>
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            <span>Kelas</span>
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            <span>Dibuat</span>
-                                        </th>
-                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Aksi
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {paginatedJabatan.map((jabatan) => (
-                                        <tr
-                                            key={jabatan.id}
-                                            className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                        >
-                                            <td className="px-6 py-4">
-                                                <div 
-                                                    onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
-                                                    className="flex items-center gap-3 cursor-pointer"
-                                                >
-                                                    <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 rounded">
-                                                        <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                        </svg>
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <span className="text-sm font-medium text-gray-900 dark:text-white block" title={slugToTitle(jabatan.nama_jabatan).toUpperCase()}>
-                                                            {slugToTitle(jabatan.nama_jabatan).toUpperCase()}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            
-                                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                                {jabatan.kelas_jabatan || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                {formatDate(jabatan.created_at)}
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                                                        title="Preview PDF"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                        </svg>
-                                                        PDF
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleViewJabatan(jabatan.id)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                                                        title="Edit Anjab"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                        </svg>
-                                                        Edit
-                                                    </button>
-                                                </div>
-                                            </td>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[640px]">
+                                    <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                                        <tr>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                <span>Nama Jabatan</span>
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                <span>Kelas</span>
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                <span>Dibuat</span>
+                                            </th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                Aksi
+                                            </th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    
-                    {/* Pagination Controls for List */}
-                    {totalPages > 1 && (
-                        <div className="mt-6 mb-6 sm:mb-0 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
-                            <div className="w-full sm:w-auto text-center sm:text-left text-sm text-gray-600 dark:text-gray-400">
-                                Halaman {currentPage} dari {totalPages} ({sortedJabatan.length} total)
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {paginatedJabatan.map((jabatan) => (
+                                            <tr
+                                                key={jabatan.id}
+                                                className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <div
+                                                        onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
+                                                        className="flex items-center gap-3 cursor-pointer"
+                                                    >
+                                                        <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 rounded">
+                                                            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <span className="text-sm font-medium text-gray-900 dark:text-white block" title={slugToTitle(jabatan.nama_jabatan).toUpperCase()}>
+                                                                {slugToTitle(jabatan.nama_jabatan).toUpperCase()}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                                    {jabatan.kelas_jabatan || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                    {formatDate(jabatan.created_at)}
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button
+                                                            onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                                                            title="Preview PDF"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                            </svg>
+                                                            PDF
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleViewJabatan(jabatan.id)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                                            title="Edit Anjab"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                            Edit
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                            <div className="flex items-center gap-2 justify-center sm:justify-end">
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                    disabled={currentPage === 1}
-                                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                </button>
-                                
-                                <div className="flex items-center gap-1 overflow-x-auto py-1 whitespace-nowrap">
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                                        .filter(page => {
-                                            // Show first page, last page, current page, and pages around current
-                                            if (page === 1 || page === totalPages) return true;
-                                            if (page >= currentPage - 1 && page <= currentPage + 1) return true;
-                                            return false;
-                                        })
-                                        .map((page, idx, arr) => (
-                                            <React.Fragment key={page}>
-                                                {idx > 0 && arr[idx - 1] !== page - 1 && (
-                                                    <span className="px-2 text-gray-400">...</span>
-                                                )}
-                                                <button
-                                                    onClick={() => setCurrentPage(page)}
-                                                    className={`flex-none min-w-[44px] px-3 py-2 text-sm text-center rounded-lg transition-colors ${
-                                                        currentPage === page
+                        </div>
+
+                        {/* Pagination Controls for List */}
+                        {totalPages > 1 && (
+                            <div className="mt-6 mb-6 sm:mb-0 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
+                                <div className="w-full sm:w-auto text-center sm:text-left text-sm text-gray-600 dark:text-gray-400">
+                                    Halaman {currentPage} dari {totalPages} ({sortedJabatan.length} total)
+                                </div>
+                                <div className="flex items-center gap-2 justify-center sm:justify-end">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+
+                                    <div className="flex items-center gap-1 overflow-x-auto py-1 whitespace-nowrap">
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                            .filter(page => {
+                                                // Show first page, last page, current page, and pages around current
+                                                if (page === 1 || page === totalPages) return true;
+                                                if (page >= currentPage - 1 && page <= currentPage + 1) return true;
+                                                return false;
+                                            })
+                                            .map((page, idx, arr) => (
+                                                <React.Fragment key={page}>
+                                                    {idx > 0 && arr[idx - 1] !== page - 1 && (
+                                                        <span className="px-2 text-gray-400">...</span>
+                                                    )}
+                                                    <button
+                                                        onClick={() => setCurrentPage(page)}
+                                                        className={`flex-none min-w-[44px] px-3 py-2 text-sm text-center rounded-lg transition-colors ${currentPage === page
                                                             ? 'bg-blue-600 text-white'
                                                             : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                                    }`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            </React.Fragment>
-                                        ))
-                                    }
+                                                            }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                </React.Fragment>
+                                            ))
+                                        }
+                                    </div>
+
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
                                 </div>
-                                
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                </button>
                             </div>
-                        </div>
-                    )}
+                        )}
                     </>
                 )}
             </div>

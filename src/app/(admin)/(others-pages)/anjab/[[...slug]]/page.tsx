@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import {useParams, useRouter} from "next/navigation";
-import React, {useEffect, useMemo, useState} from "react";
-import {apiFetch} from "@/lib/apiFetch";
+import { useParams, useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/apiFetch";
 import Button from "@/components/ui/button/Button";
 import AnjabBreadcrumb from "@/components/common/AnjabBreadcrumb";
 import JabatanInfoCard from "@/components/common/JabatanInfoCard";
-import {titleCase, slugToTitle} from "@/lib/text-utils";
+import { titleCase, slugToTitle } from "@/lib/text-utils";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 
@@ -47,7 +47,7 @@ export default function InformasiJabatanPage() {
         let alive = true;
         (async () => {
             try {
-                const r = await apiFetch("/api/auth/me", {method: "GET", cache: "no-store"});
+                const r = await apiFetch("/api/auth/me", { method: "GET", cache: "no-store" });
                 if (!alive) return;
                 if (r.ok) {
                     const j = await r.json();
@@ -123,7 +123,7 @@ export default function InformasiJabatanPage() {
         (async () => {
             if (!id || !isAdmin) return; // <— hanya admin
             try {
-                const res = await apiFetch(`/api/anjab/${encodedId}/uuid`, {method: "GET", cache: "no-store"});
+                const res = await apiFetch(`/api/anjab/${encodedId}/uuid`, { method: "GET", cache: "no-store" });
                 if (!res.ok) return;
                 const data = await res.json();
                 const createdId = data?.id ?? null;
@@ -168,7 +168,7 @@ export default function InformasiJabatanPage() {
                     method: "GET",
                     cache: "no-store",
                     // (opsional) pastikan Accept PDF
-                    headers: {Accept: "application/pdf"},
+                    headers: { Accept: "application/pdf" },
                 });
 
                 if (!alive) return;
@@ -323,11 +323,10 @@ export default function InformasiJabatanPage() {
                     <nav className="flex space-x-8">
                         <button
                             onClick={() => setActiveTab("info")}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                                activeTab === "info"
-                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                    : "border-transparent text-gray-500"
-                            }`}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "info"
+                                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                : "border-transparent text-gray-500"
+                                }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -338,11 +337,10 @@ export default function InformasiJabatanPage() {
                         </button>
                         <button
                             onClick={() => setActiveTab("pdf")}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                                activeTab === "pdf"
-                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                    : "border-transparent text-gray-500"
-                            }`}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "pdf"
+                                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                : "border-transparent text-gray-500"
+                                }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -364,7 +362,7 @@ export default function InformasiJabatanPage() {
                     {activeTab === "pdf" && (
                         <div className="flex items-center justify-center h-96">
                             <div className="text-center space-y-3">
-                                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                                 <p className="text-gray-500">Loading PDF...</p>
                             </div>
                         </div>
@@ -391,11 +389,10 @@ export default function InformasiJabatanPage() {
                         <nav className="flex space-x-8">
                             <button
                                 onClick={() => setActiveTab("info")}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                                    activeTab === "info"
-                                        ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                        : "border-transparent text-gray-500"
-                                }`}
+                                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "info"
+                                    ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                    : "border-transparent text-gray-500"
+                                    }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,11 +403,10 @@ export default function InformasiJabatanPage() {
                             </button>
                             <button
                                 onClick={() => setActiveTab("pdf")}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                                    activeTab === "pdf"
-                                        ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                        : "border-transparent text-gray-500"
-                                }`}
+                                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "pdf"
+                                    ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                    : "border-transparent text-gray-500"
+                                    }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -463,11 +459,10 @@ export default function InformasiJabatanPage() {
                     <nav className="flex space-x-8">
                         <button
                             onClick={() => setActiveTab("info")}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                                activeTab === "info"
-                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                    : "border-transparent text-gray-500"
-                            }`}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "info"
+                                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                : "border-transparent text-gray-500"
+                                }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -478,11 +473,10 @@ export default function InformasiJabatanPage() {
                         </button>
                         <button
                             onClick={() => setActiveTab("pdf")}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                                activeTab === "pdf"
-                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                    : "border-transparent text-gray-500"
-                            }`}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "pdf"
+                                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                : "border-transparent text-gray-500"
+                                }`}
                             disabled
                         >
                             <div className="flex items-center gap-2 opacity-50">
@@ -523,9 +517,9 @@ export default function InformasiJabatanPage() {
 
     // === OK → tampilkan dengan sistem tab
     return (
-        <div className="pt-16">
+        <div className="pt-6">
             {/* Breadcrumb */}
-            <div className="px-4 sm:px-6 py-3 border-b border-gray-200">
+            <div className="border-b border-gray-200">
                 <AnjabBreadcrumb currentId={id} currentTitle={slugToTitle(id)} rawSlug={rawSlug} />
             </div>
 
@@ -535,11 +529,10 @@ export default function InformasiJabatanPage() {
                     <nav className="flex space-x-4 sm:space-x-8 min-w-max">
                         <button
                             onClick={() => setActiveTab("info")}
-                            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                                activeTab === "info"
-                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-                            }`}
+                            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === "info"
+                                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-brand-100 dark:text-gray-400 dark:hover:text-brand-100"
+                                }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -551,11 +544,10 @@ export default function InformasiJabatanPage() {
                         </button>
                         <button
                             onClick={() => setActiveTab("pdf")}
-                            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                                activeTab === "pdf"
-                                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-                            }`}
+                            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === "pdf"
+                                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-brand-100 dark:text-gray-400 dark:hover:text-brand-100"
+                                }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -590,7 +582,7 @@ export default function InformasiJabatanPage() {
 
             {/* Tab Content */}
             {activeTab === "info" && (
-                <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-[calc(100dvh-200px)]">
+                <div className="p-6 min-h-[calc(100dvh-200px)]">
                     <div className="max-w-4xl mx-auto">
                         {/* Jabatan Info Card */}
                         <JabatanInfoCard currentId={id} />

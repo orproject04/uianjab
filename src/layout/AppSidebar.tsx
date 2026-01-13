@@ -742,7 +742,7 @@ const AppSidebar: React.FC = () => {
         
         // Wait for DOM to update and submenu animations to complete
         const timer = setTimeout(() => {
-            const activeLink = document.querySelector('aside a.bg-purple-50.text-purple-700') as HTMLElement;
+            const activeLink = document.querySelector('aside a.bg-brand-50.text-brand-700') as HTMLElement;
             if (activeLink) {
                 const nav = activeLink.closest('nav') as HTMLElement;
                 if (nav) {
@@ -853,7 +853,7 @@ const AppSidebar: React.FC = () => {
                                     setOpen(false);
                                     await openEditModal(node);
                                 }}
-                                className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                                className="w-full text-left px-3 py-2 hover:bg-brand-50 hover:text-brand-700 transition-colors"
                             >
                                 Edit Jabatan
                             </button>
@@ -867,7 +867,7 @@ const AppSidebar: React.FC = () => {
                                     setOpen(false);
                                     openAddModal(node);
                                 }}
-                                className="w-full text-left px-3 py-2 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                                className="w-full text-left px-3 py-2 hover:bg-brand-50 hover:text-brand-700 transition-colors"
                             >
                                 Tambah Jabatan
                             </button>
@@ -909,7 +909,7 @@ const AppSidebar: React.FC = () => {
                                         href={href}
                                         className={`relative z-0 flex-1 min-w-0 block px-3 py-2 rounded-md text-sm transition-colors ${
                                             isExactActive(subItem.path)
-                                                ? "bg-purple-50 text-purple-700 font-medium"
+                                                ? "bg-brand-50 text-brand-700 font-medium"
                                                 : "text-gray-700 hover:bg-gray-50"
                                         }`}
                                         title={`${subItem.name}${subItem.unit_kerja ? ' - ' + subItem.unit_kerja : ''}`}
@@ -946,7 +946,7 @@ const AppSidebar: React.FC = () => {
                                     href={href}
                                     className={`relative z-0 flex-1 min-w-0 block px-3 py-2 rounded-md text-sm transition-colors ${
                                         isExactActive(subItem.path)
-                                            ? "bg-purple-50 text-purple-700 font-medium"
+                                            ? "bg-brand-50 text-brand-700 font-medium"
                                             : "text-gray-700 hover:bg-gray-50"
                                     }`}
                                     title={`${subItem.name}${subItem.unit_kerja ? ' - ' + subItem.unit_kerja : ''}`}
@@ -990,7 +990,7 @@ const AppSidebar: React.FC = () => {
                                     }
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
                                         openSubmenu?.type === menuType && openSubmenu.index === index
-                                            ? "bg-purple-50 text-purple-700 font-medium"
+                                            ? "bg-brand-50 text-brand-700 font-medium"
                                             : "text-gray-700 hover:bg-gray-50"
                                     } ${!isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"}`}
                                 >
@@ -1004,7 +1004,7 @@ const AppSidebar: React.FC = () => {
                                             </span>
                                             <ChevronDownIcon
                                                 className={`w-4 h-4 flex-shrink-0 transition-transform duration-300 ${
-                                                    openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-purple-600" : ""
+                                                    openSubmenu?.type === menuType && openSubmenu.index === index ? "rotate-180 text-brand-600" : ""
                                                 }`}
                                             />
                                         </>
@@ -1029,7 +1029,7 @@ const AppSidebar: React.FC = () => {
                                 href={nav.path || "/"}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
                                     isExactActive(nav.path)
-                                        ? "bg-purple-50 text-purple-700 font-medium"
+                                        ? "bg-brand-50 text-brand-700 font-medium"
                                         : "text-gray-700 hover:bg-gray-50"
                                 } ${!isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"}`}
                             >
@@ -1120,8 +1120,8 @@ const AppSidebar: React.FC = () => {
                                 />
                                 <div className="mt-3 text-center">
                                     <h1 className="text-lg font-bold text-gray-900 dark:text-white">PANDAWA</h1>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Portal Anjab dan ABK</p>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400">Berbasis Web Terintegrasi</p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Pengelolaan Analisis Jabatan dan Analisis</p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">Beban Kerja Berbasis Web Aparatur</p>
                                 </div>
                             </>
                         ) : (
@@ -1280,7 +1280,7 @@ const AppSidebar: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => setEditNamaPejabat([...editNamaPejabat, ""])}
-                                            className="w-full px-3 py-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors text-sm font-medium"
+                                            className="w-full px-3 py-2 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 transition-colors text-sm font-medium"
                                         >
                                             + Tambah Pejabat
                                         </button>
@@ -1319,7 +1319,7 @@ const AppSidebar: React.FC = () => {
                                 Batal
                             </button>
                             <button
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 disabled={saving}
                                 onClick={submitEdit}
                             >
@@ -1359,7 +1359,7 @@ const AppSidebar: React.FC = () => {
                                 {/* Anjab Match Indicator */}
                                 {checkingMatch && (
                                     <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                                        <svg className="animate-spin h-4 w-4 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <svg className="animate-spin h-4 w-4 text-brand-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
@@ -1424,8 +1424,8 @@ const AppSidebar: React.FC = () => {
                                                     }}
                                                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all ${
                                                         selectedAnjabId === sug.id
-                                                            ? 'bg-purple-600 border-2 border-purple-700 text-white font-semibold shadow-md'
-                                                            : 'bg-white border-2 border-gray-300 text-gray-800 hover:border-purple-400 hover:bg-purple-50 hover:shadow'
+                                                            ? 'bg-brand-600 border-2 border-brand-700 text-white font-semibold shadow-md'
+                                                            : 'bg-white border-2 border-gray-300 text-gray-800 hover:border-brand-400 hover:bg-brand-50 hover:shadow'
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between gap-2">
@@ -1433,7 +1433,7 @@ const AppSidebar: React.FC = () => {
                                                             <div className={`font-medium ${selectedAnjabId === sug.id ? 'text-white' : 'text-gray-900'}`}>
                                                                 {sug.nama_jabatan}
                                                             </div>
-                                                            <div className={`text-xs mt-1 ${selectedAnjabId === sug.id ? 'text-purple-100' : 'text-gray-600'}`}>
+                                                            <div className={`text-xs mt-1 ${selectedAnjabId === sug.id ? 'text-brand-100' : 'text-gray-600'}`}>
                                                                 Kemiripan: {(sug.similarity * 100).toFixed(0)}%
                                                             </div>
                                                         </div>
@@ -1460,7 +1460,7 @@ const AppSidebar: React.FC = () => {
                                                         onClick={() => {
                                                             setSelectedAnjabId(null);
                                                         }}
-                                                        className="text-xs text-purple-700 hover:text-purple-900 underline font-medium"
+                                                        className="text-xs text-brand-700 hover:text-brand-900 underline font-medium"
                                                     >
                                                         Batal
                                                     </button>
@@ -1552,7 +1552,7 @@ const AppSidebar: React.FC = () => {
                                 Batal
                             </button>
                             <button
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 disabled={adding}
                                 onClick={submitAdd}
                             >

@@ -30,13 +30,30 @@ export async function POST(req: NextRequest) {
             [user.id, token, exp]
         );
 
-        const link = `${process.env.APP_URL}/api/auth/verify?token=${token}`;
-        await sendMail(email, "Verifikasi Email Akun Anjab", `
-      <p>Halo,</p>
-      <p>Silakan verifikasi email kamu dengan klik tautan berikut:</p>
-      <p><a href="${link}">${link}</a></p>
-      <p>Link berlaku 24 jam.</p>
-    `);
+        const verificationUrl = `${process.env.APP_URL || "http://localhost:3000"}/api/auth/verify?token=${token}`;
+    
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Verifikasi Email Anda</h2>
+        <p>Terima kasih telah mendaftar! Silakan klik tombol di bawah untuk memverifikasi email Anda:</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" 
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Verifikasi Email
+          </a>
+        </div>
+        
+        <p>Atau salin dan tempel link berikut ke browser Anda:</p>
+        <p style="word-break: break-all; color: #666;">
+          <a href="${verificationUrl}">${verificationUrl}</a>
+        </p>
+        
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">
+          Link ini akan kadaluarsa dalam 24 jam. Jika Anda tidak meminta verifikasi ini, abaikan email ini.
+        </p>
+      </div>
+    `;
 
         return Response.json({ ok: true, data: { id: user.id, email: user.email } }, { status: 201 });
     } catch {

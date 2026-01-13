@@ -50,8 +50,16 @@ export async function POST(req: NextRequest) {
             email,
             "Reset Password Anjab",
             `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <p>Kamu meminta reset password.</p>
-        <p>Klik tautan berikut (berlaku 30 menit): <a href="${link}">${link}</a></p>
+        <p>Klik tautan berikut (berlaku 30 menit):
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${link}" 
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        </p>
         <p>Abaikan jika kamu tidak merasa meminta.</p>
       `
         );

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     );
 
     // Send verification email
-    const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${process.env.APP_URL || "http://localhost:3000"}/api/auth/verify?token=${verificationToken}`;
     
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

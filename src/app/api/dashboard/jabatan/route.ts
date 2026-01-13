@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
                     -- Base case: node dengan unit_kerja yang match
                     SELECT id, parent_id, unit_kerja, nama_jabatan
                     FROM peta_jabatan
-                    WHERE unit_kerja ILIKE $${paramIndex}
+                    -- Use exact, case-insensitive match so "Persidangan I" does not also match "Persidangan II"
+                    WHERE lower(trim(unit_kerja)) = lower(trim($${paramIndex}))
                     
                     UNION ALL
                     
@@ -54,7 +55,8 @@ export async function GET(req: NextRequest) {
                     INNER JOIN unit_tree ut ON p.parent_id = ut.id
                 )
             `;
-            params.push(`%${biroFilter}%`);
+            // No wildcard to avoid pulling sibling units with similar names (e.g., I vs II)
+            params.push(biroFilter);
             paramIndex++;
             whereConditions.push(`id IN (SELECT id FROM unit_tree)`);
         }

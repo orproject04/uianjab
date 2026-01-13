@@ -40,47 +40,47 @@
   --color-current: currentColor;
   --color-transparent: transparent;
   --color-white: #ffffff;
-  --color-black: #101828;
+  --color-black: #373D3A;
 
-  --color-brand-25: #f2f7ff;
-  --color-brand-50: #ecf3ff;
-  --color-brand-100: #dde9ff;
-  --color-brand-200: #E9CDFE;
-  --color-brand-300: #CF90FD;
-  --color-brand-400: #BD65FC;
-  --color-brand-500: #9810FA;
-  --color-brand-600: #870EDE;
-  --color-brand-700: #5B039A;
-  --color-brand-800: #252dae;
-  --color-brand-900: #262e89;
-  --color-brand-950: #1F0B6B;
+  --color-brand-25: #f5faf0;
+  --color-brand-50: #F6FBEF;
+  --color-brand-100: #d4edb8;
+  --color-brand-200: #C4E0A0;
+  --color-brand-300: #8FC54A;
+  --color-brand-400: #80C15D;
+  --color-brand-500: #6DB980;
+  --color-brand-600: #5a9a69;
+  --color-brand-700: #487b53;
+  --color-brand-800: #3a6343;
+  --color-brand-900: #2d4d34;
+  --color-brand-950: #373D3A;
 
-  --color-blue-light-25: #f5fbff;
-  --color-blue-light-50: #f0f9ff;
-  --color-blue-light-200: #b9e6fe;
+  --color-blue-light-25: #f0f9fd;
+  --color-blue-light-50: #e6f5fb;
+  --color-blue-light-200: #C0E3F3;
   /* header height moved to :root below (keeps @theme block pure custom properties) */
-  --color-blue-light-300: #7cd4fd;
-  --color-blue-light-400: #36bffa;
-  --color-blue-light-500: #0ba5ec;
-  --color-blue-light-600: #0086c9;
-  --color-blue-light-700: #026aa2;
-  --color-blue-light-800: #065986;
-  --color-blue-light-900: #0b4a6f;
-  --color-blue-light-950: #062c41;
+  --color-blue-light-300: #83C7E8;
+  --color-blue-light-400: #48ADBC;
+  --color-blue-light-500: #3CA8CD;
+  --color-blue-light-600: #48ADBC;
+  --color-blue-light-700: #257893;
+  --color-blue-light-800: #1d5f76;
+  --color-blue-light-900: #164859;
+  --color-blue-light-950: #373D3A;
 
   --color-gray-25: #fcfcfd;
   --color-gray-50: #f9fafb;
-  --color-gray-100: #f2f4f7;
-  --color-gray-200: #e4e7ec;
-  --color-gray-300: #d0d5dd;
-  --color-gray-400: #98a2b3;
-  --color-gray-500: #667085;
-  --color-gray-600: #475467;
-  --color-gray-700: #344054;
-  --color-gray-800: #1d2939;
-  --color-gray-900: #101828;
-  --color-gray-950: #0c111d;
-  --color-gray-dark: #1a2231;
+  --color-gray-100: #e8eae8;
+  --color-gray-200: #d4d7d4;
+  --color-gray-300: #b5bab5;
+  --color-gray-400: #8a918a;
+  --color-gray-500: #6a716a;
+  --color-gray-600: #545a54;
+  --color-gray-700: #454a45;
+  --color-gray-800: #3d423d;
+  --color-gray-900: #373D3A;
+  --color-gray-950: #2a2e2b;
+  --color-gray-dark: #373D3A;
 
   --color-orange-25: #fffaf5;
   --color-orange-50: #fff6ed;
@@ -95,18 +95,18 @@
   --color-orange-900: #7e2410;
   --color-orange-950: #511c10;
 
-  --color-success-25: #f6fef9;
-  --color-success-50: #ecfdf3;
-  --color-success-100: #d1fadf;
-  --color-success-200: #a6f4c5;
-  --color-success-300: #6ce9a6;
-  --color-success-400: #32d583;
-  --color-success-500: #12b76a;
-  --color-success-600: #039855;
-  --color-success-700: #027a48;
-  --color-success-800: #05603a;
-  --color-success-900: #054f31;
-  --color-success-950: #053321;
+  --color-success-25: #f5faf0;
+  --color-success-50: #e8f5d9;
+  --color-success-100: #C4E0A0;
+  --color-success-200: #8FC54A;
+  --color-success-300: #80C15D;
+  --color-success-400: #6DB980;
+  --color-success-500: #5a9a69;
+  --color-success-600: #487b53;
+  --color-success-700: #3a6343;
+  --color-success-800: #2d4d34;
+  --color-success-900: #254029;
+  --color-success-950: #1d321f;
 
   --color-error-25: #fffbfa;
   --color-error-50: #fef3f2;
@@ -199,7 +199,7 @@
     cursor: pointer;
   }
   body {
-    @apply relative font-normal font-outfit z-1 bg-gray-50;
+    @apply relative font-normal font-outfit z-1 bg-gray-25;
   }
 }
 

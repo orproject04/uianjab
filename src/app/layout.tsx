@@ -8,7 +8,7 @@ import { icons } from 'lucide-react';
 
 export const metadata = {
   icons: {
-    icon: '/images/favicon.ico',
+    icon: '/images/pandawafav.ico',
     },
   };
 

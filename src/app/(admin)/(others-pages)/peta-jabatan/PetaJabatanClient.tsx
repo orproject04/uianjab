@@ -213,7 +213,7 @@ function Segmented<T extends string>({
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`${pad} rounded-md transition ${active ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+            className={`${pad} rounded-md transition ${active ? "bg-brand-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
             aria-pressed={active}
           >
             {opt.label}
@@ -811,7 +811,7 @@ export default function PetaJabatanClient() {
     });
   }, []);
 
-  
+
 
   // Function to calculate subtree width (for proper horizontal positioning)
   const calculateSubtreeWidth = useCallback((node: RawNodeDatum): number => {
@@ -954,7 +954,7 @@ export default function PetaJabatanClient() {
       return (
         <g>
           <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
-            fill="#F3E8FF" strokeWidth={1}
+            fill="#E8F5D9" stroke="#6DB980" strokeWidth={1}
             style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
 
           {/* Multi-line text for synthetic labels */}
@@ -1089,7 +1089,7 @@ export default function PetaJabatanClient() {
     const isCurrentMatch = isSearchMatch && searchMatches[currentMatchIndex] === attrs.id;
 
     // Determine border style based on state
-    let borderColor = "#8200DB"; // default purple
+    let borderColor = "#6DB980"; // default purple
     let borderWidth = 1;
     let shadowFilter = "drop-shadow(0 2px 3px rgba(0,0,0,0.08))";
 
@@ -1120,9 +1120,9 @@ export default function PetaJabatanClient() {
           style={{ filter: shadowFilter, cursor: 'pointer' }}
           onClick={handleJabatanClick} />
 
-        {/* HEADER UNGU */}
+        {/* HEADER*/}
         <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
-          rx={10} ry={10} fill="#F3E8FF" strokeOpacity={0.15} strokeWidth={1}
+          rx={10} ry={10} fill="#E8F5D9" strokeOpacity={0.15} strokeWidth={1}
           style={{ cursor: 'pointer', pointerEvents: 'none' }} />
 
         {/* JUDUL */}
@@ -1407,12 +1407,12 @@ export default function PetaJabatanClient() {
 
       {/* Info card untuk panduan singkat */}
       {!loading && rd3Data.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+        <div className="bg-blue-50 border border-blue-light-200 rounded-lg p-3 text-sm">
           <div className="flex items-start gap-2">
-            <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-blue-light-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div className="space-y-1 text-blue-900">
+            <div className="space-y-1 text-blue-light-900">
               <p className="font-medium">Tips Navigasi:</p>
               <ul className="list-disc list-inside space-y-0.5 text-xs">
                 <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
@@ -1441,7 +1441,7 @@ export default function PetaJabatanClient() {
         {loading && (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center space-y-2">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto"></div>
               <p className="text-sm text-gray-600">Memuat peta jabatan...</p>
             </div>
           </div>

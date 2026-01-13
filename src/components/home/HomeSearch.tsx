@@ -129,7 +129,7 @@ export default function HomeSearch() {
           }}
           onKeyDown={onKeyDownInput}
           placeholder="Cari Jabatan atau Unit..."
-          className="w-full h-14 rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-lg text-gray-700 outline-none shadow-sm focus:ring-2 focus:ring-violet-400"
+          className="w-full h-14 rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-lg text-gray-700 outline-none shadow-sm focus:ring-2 focus:ring-brand-400"
         />
 
         {open && (
@@ -163,7 +163,7 @@ export default function HomeSearch() {
                       type="button"
                       onClick={() => goToItem(it)}
                       onMouseEnter={() => setActiveIdx(idx)}
-                      className={`w-full text-left px-3 py-2 text-sm ${idx === activeIdx ? 'bg-violet-50 text-violet-700' : 'hover:bg-gray-50'}`}>
+                      className={`w-full text-left px-3 py-2 text-sm ${idx === activeIdx ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50'}`}>
                       <div className="font-medium">{it.name}</div>
                       <div className="text-[11px] text-gray-500">{it.path} {it.unit_kerja ? `• ${it.unit_kerja}` : ''}</div>
                     </button>

@@ -187,7 +187,7 @@ const AppHeader: React.FC = () => {
                     }}
                     className={`w-full text-left px-3 py-2 text-sm ${
                         active
-                            ? "bg-purple-50 text-purple-700 dark:bg-white/[0.06] dark:text-white"
+                            ? "bg-brand-50 text-brand-700 dark:bg-white/[0.06] dark:text-white"
                             : "hover:bg-gray-50 dark:hover:bg-white/[0.04]"
                     }`}
                     onMouseEnter={() => {

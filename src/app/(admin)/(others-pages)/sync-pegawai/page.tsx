@@ -30,7 +30,7 @@ export default function SyncPegawaiPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
         </div>
       </div>
@@ -94,7 +94,7 @@ export default function SyncPegawaiPage() {
           const progressBar = document.getElementById('swal-progress-bar');
           const progressPercent = document.getElementById('swal-progress-percent');
           const progressMessage = document.getElementById('swal-progress-message');
-          
+
           if (progressBar) progressBar.style.width = `${data.progress}%`;
           if (progressPercent) progressPercent.textContent = `${data.progress}%`;
           if (progressMessage && data.message) progressMessage.textContent = data.message;
@@ -102,12 +102,12 @@ export default function SyncPegawaiPage() {
 
         if (data.done) {
           eventSource.close();
-          
+
           // Set result from SSE response
           if (data.result) {
             setResult(data.result);
           }
-          
+
           Swal.fire({
             icon: 'success',
             title: 'Sinkronisasi Selesai!',
@@ -137,130 +137,130 @@ export default function SyncPegawaiPage() {
   };
 
   return (
-    <div className="pt-6 min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Sinkronisasi Data Pegawai
-        </h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Sinkronkan data pegawai dari API eksternal ke database Peta Jabatan
-        </p>
-      </div>
-
-      {/* API Configuration Info */}
-      <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-        <h3 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
-          Informasi API
-        </h3>
-        <div className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
-          <p>
-            <strong>API URL:</strong>{' '}
-            {process.env.NEXT_PUBLIC_EXTERNAL_PEGAWAI_API_URL || 'https://cmb.tail91813a.ts.net/api/pegawai'}
-          </p>
-          <p>
-            <strong>Per Page:</strong> {process.env.NEXT_PUBLIC_EXTERNAL_API_PER_PAGE || '100'}
+    <div className="pt-6">
+      <div className="">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Sinkronisasi Data Pegawai
+          </h1>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Sinkronkan data pegawai dari API eksternal ke database Peta Jabatan
           </p>
         </div>
-      </div>
 
-      {/* Warning */}
-      <div className="mb-6 flex items-start gap-3 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
-        <AlertIcon className="h-5 w-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
-        <div className="text-sm text-yellow-800 dark:text-yellow-200">
-          <p className="font-semibold">Perhatian:</p>
-          <ul className="mt-1 list-inside list-disc space-y-1">
-            <li>Proses ini akan menghapus semua data pegawai yang ada di kolom pejabat</li>
-            <li>Data akan diganti dengan data terbaru dari API eksternal</li>
-            <li>Proses dapat memakan waktu beberapa menit tergantung jumlah data</li>
-            <li>Data yang tidak cocok akan dicatat dalam file log</li>
-          </ul>
+        {/* API Configuration Info */}
+        <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+          <h3 className="mb-2 font-semibold text-blue-light-900 dark:text-blue-light-100">
+            Informasi API
+          </h3>
+          <div className="space-y-1 text-sm text-blue-light-800 dark:text-blue-light-200">
+            <p>
+              <strong>API URL:</strong>{' '}
+              {process.env.NEXT_PUBLIC_EXTERNAL_PEGAWAI_API_URL || 'https://cmb.tail91813a.ts.net/api/pegawai'}
+            </p>
+            <p>
+              <strong>Per Page:</strong> {process.env.NEXT_PUBLIC_EXTERNAL_API_PER_PAGE || '100'}
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* Sync Button */}
-      <div className="mb-6">
-        <Button
-          onClick={startSync}
-          variant="primary"
-          className="w-full sm:w-auto"
-        >
-          <ArrowRightIcon className="mr-2 h-4 w-4" />
-          Mulai Sinkronisasi
-        </Button>
-      </div>
-
-      {/* Result Display */}
-      {result && (
-        <div className="space-y-4 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-          <div className="flex items-center gap-2 border-b border-gray-200 pb-4 dark:border-gray-700">
-            <CheckCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Hasil Sinkronisasi
-            </h3>
+        {/* Warning */}
+        <div className="mb-6 flex items-start gap-3 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
+          <AlertIcon className="h-6 w-6 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
+          <div className="text-sm text-yellow-800 dark:text-yellow-200">
+            <p className="font-semibold">Perhatian:</p>
+            <ul className="mt-1 list-inside list-disc space-y-1">
+              <li>Proses ini akan menghapus semua data pegawai yang ada di kolom pejabat</li>
+              <li>Data akan diganti dengan data terbaru dari API eksternal</li>
+              <li>Proses dapat memakan waktu beberapa menit tergantung jumlah data</li>
+              <li>Data yang tidak cocok akan dicatat dalam file log</li>
+            </ul>
           </div>
+        </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-              <p className="text-sm text-blue-600 dark:text-blue-400">Total Data Diambil</p>
-              <p className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
-                {result.totalFetched.toLocaleString()}
-              </p>
+        {/* Sync Button */}
+        <div className="mb-6">
+          <Button
+            onClick={startSync}
+            variant="primary"
+            className="w-full sm:w-auto"
+          >
+            <ArrowRightIcon className="mr-2 h-4 w-4" />
+            Mulai Sinkronisasi
+          </Button>
+        </div>
+
+        {/* Result Display */}
+        {result && (
+          <div className="space-y-4 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+            <div className="flex items-center gap-2 border-b border-gray-200 pb-4 dark:border-gray-700">
+              <CheckCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Hasil Sinkronisasi
+              </h3>
             </div>
 
-            <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-              <p className="text-sm text-green-600 dark:text-green-400">Data Cocok</p>
-              <p className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
-                {result.totalMatched.toLocaleString()}
-              </p>
-            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+                <p className="text-sm text-blue-600 dark:text-blue-400">Total Data Diambil</p>
+                <p className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
+                  {result.totalFetched.toLocaleString()}
+                </p>
+              </div>
 
-            <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
-              <p className="text-sm text-purple-600 dark:text-purple-400">Jabatan Diupdate</p>
-              <p className="mt-1 text-2xl font-bold text-purple-900 dark:text-purple-100">
-                {result.totalUpdated.toLocaleString()}
-              </p>
-            </div>
+              <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+                <p className="text-sm text-green-600 dark:text-green-400">Data Cocok</p>
+                <p className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
+                  {result.totalMatched.toLocaleString()}
+                </p>
+              </div>
 
-            <div className="rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
-              <p className="text-sm text-yellow-600 dark:text-yellow-400">Data Tidak Cocok</p>
-              <p className="mt-1 text-2xl font-bold text-yellow-900 dark:text-yellow-100">
-                {result.totalUnmatched.toLocaleString()}
-              </p>
-            </div>
-          </div>
+              <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
+                <p className="text-sm text-purple-600 dark:text-purple-400">Jabatan Diupdate</p>
+                <p className="mt-1 text-2xl font-bold text-purple-900 dark:text-purple-100">
+                  {result.totalUpdated.toLocaleString()}
+                </p>
+              </div>
 
-          {result.totalUnmatched > 0 && (
-            <div className="mt-4 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
-              <div className="flex items-start gap-3">
-                <DownloadIcon className="h-5 w-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
-                <div className="flex-1">
-                  <p className="font-semibold text-yellow-900 dark:text-yellow-100">
-                    Data Tidak Cocok
-                  </p>
-                  <p className="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
-                    Terdapat {result.totalUnmatched} data yang tidak cocok dengan jabatan di database.
-                    File log telah dibuat di folder <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-800">storage/sync-logs/</code>
-                  </p>
-                </div>
+              <div className="rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">Data Tidak Cocok</p>
+                <p className="mt-1 text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+                  {result.totalUnmatched.toLocaleString()}
+                </p>
               </div>
             </div>
-          )}
 
-          {result.errors.length > 0 && (
-            <div className="mt-4 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
-              <p className="font-semibold text-red-900 dark:text-red-100">Errors:</p>
-              <ul className="mt-2 space-y-1 text-sm text-red-800 dark:text-red-200">
-                {result.errors.map((err, idx) => (
-                  <li key={idx} className="list-inside list-disc">
-                    {err}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+            {result.totalUnmatched > 0 && (
+              <div className="mt-4 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
+                <div className="flex items-start gap-3">
+                  <DownloadIcon className="h-5 w-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                      Data Tidak Cocok
+                    </p>
+                    <p className="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
+                      Terdapat {result.totalUnmatched} data yang tidak cocok dengan jabatan di database.
+                      File log telah dibuat di folder <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-800">storage/sync-logs/</code>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {result.errors.length > 0 && (
+              <div className="mt-4 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
+                <p className="font-semibold text-red-900 dark:text-red-100">Errors:</p>
+                <ul className="mt-2 space-y-1 text-sm text-red-800 dark:text-red-200">
+                  {result.errors.map((err, idx) => (
+                    <li key={idx} className="list-inside list-disc">
+                      {err}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

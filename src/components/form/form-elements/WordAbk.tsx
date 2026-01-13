@@ -194,14 +194,14 @@ export default function WordAbk({id, petaJabatanId, viewerPath, acceptExt = DEFA
                 onClick={() => fileInputRef.current?.click()}
                 className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
                     isDragging
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 scale-105'
-                        : 'border-gray-300 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500'
+                        ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 scale-105'
+                        : 'border-gray-300 dark:border-gray-600 hover:border-brand-400 dark:hover:border-brand-500'
                 }`}
             >
                 {isLoading ? (
-                    <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-3"/>
+                    <Loader2 className="w-12 h-12 animate-spin text-brand-500 mb-3"/>
                 ) : (
-                    <FileJson className="w-12 h-12 text-purple-500 mb-3"/>
+                    <FileJson className="w-12 h-12 text-brand-500 mb-3"/>
                 )}
                 <p className="text-gray-700 dark:text-gray-200 font-medium text-center">
                     {isDragging ? 'Lepaskan file di sini' : 'Klik atau seret file ABK ke sini'}

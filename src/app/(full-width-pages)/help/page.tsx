@@ -29,9 +29,9 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
     return (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-lg">
             {/* Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-purple-600 to-purple-700">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-brand-600 to-brand-700">
                 <h1 className="text-2xl font-semibold text-white">Panduan Penggunaan</h1>
-                <p className="text-purple-100 mt-1">Pelajari cara menggunakan sistem manajemen jabatan dengan mudah</p>
+                <p className="text-brand-100 mt-1">Pelajari cara menggunakan sistem manajemen jabatan dengan mudah</p>
             </div>
 
             {/* Tabs */}

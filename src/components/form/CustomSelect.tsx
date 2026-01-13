@@ -143,16 +143,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                                     key={option.value}
                                     type="button"
                                     onClick={() => handleSelect(option.value)}
-                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-purple-50 transition-colors ${
+                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-50 transition-colors ${
                                         option.value === value
-                                            ? "bg-purple-100 text-purple-900 font-medium"
+                                            ? "bg-brand-100 text-brand-900 font-medium"
                                             : "text-gray-700"
                                     }`}
                                 >
                                     <div className="flex items-center justify-between">
                                         <span>{option.label}</span>
                                         {option.value === value && (
-                                            <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <svg className="w-4 h-4 text-brand-600" fill="currentColor" viewBox="0 0 20 20">
                                                 <path
                                                     fillRule="evenodd"
                                                     d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"

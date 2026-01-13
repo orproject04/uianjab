@@ -73,7 +73,7 @@ type SummaryCardProps = {
     breakdown?: { label: string; value: number }[];
 };
 
-const COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
+const COLORS = ["#8FC54A", "#80C15D", "#6DB980", "#3CA8CD", "#48ADBC", "#83C7E8"];
 
 export default function DashboardPage() {
     const { isAdmin, loading: meLoading } = useMe();
@@ -155,7 +155,7 @@ export default function DashboardPage() {
         return (
             <div className="flex items-center justify-center min-h-screen no-print">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat...</p>
                 </div>
             </div>
@@ -177,7 +177,7 @@ export default function DashboardPage() {
         return (
             <div className="flex items-center justify-center min-h-screen no-print">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-400">Memuat data dashboard...</p>
                 </div>
             </div>
@@ -586,7 +586,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-3 mt-6 mb-2">
-                            <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                            <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl flex items-center justify-center shadow-lg">
                                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
@@ -601,7 +601,7 @@ export default function DashboardPage() {
                     </div>
                     <button
                         onClick={loadData}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white rounded-xl hover:from-brand-700 hover:to-brand-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -611,16 +611,16 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-5">
-                        <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="w-8 h-8 bg-brand-100 dark:bg-brand-900/30 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                             </svg>
                         </div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filter Data</h3>
                         {(selectedBiro || selectedJenis || selectedLokasi) && (
-                            <span className="ml-auto text-xs px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-medium">
+                            <span className="ml-auto text-xs px-2.5 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full font-medium">
                                 Filter Aktif
                             </span>
                         )}
@@ -721,7 +721,7 @@ export default function DashboardPage() {
                         title="Kebutuhan"
                         value={summary.total_kebutuhan}
                         icon="🎯"
-                        color="bg-purple-500"
+                        color="bg-blue-light-500"
                     />
                     <SummaryCard
                         title="Selisih"
@@ -732,9 +732,9 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Jabatan Breakdown Cards */}
-                <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-gray-50 dark:from-gray-800 dark:to-gray-800/50 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
@@ -773,13 +773,13 @@ export default function DashboardPage() {
                             const jenisParts = String(item.jenis || '').split('/').map(s => s.trim()).filter(Boolean);
 
                             return (
-                                <div key={index} className="relative">
+                                <div key={index} className="relative group">
                                     <button
                                         onClick={() => {
                                             // Set the Jenis filter (behaves like the Jenis dropdown)
                                             setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
                                         }}
-                                        className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer text-left w-full"
+                                        className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer text-left w-full group-hover:border-brand-500 dark:group-hover:border-brand-400"
                                     >
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex-1">
@@ -802,7 +802,7 @@ export default function DashboardPage() {
                                                 className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm"
                                                 style={{ backgroundColor: `${COLORS[index % COLORS.length]}20`, color: COLORS[index % COLORS.length] }}
                                             >
-                                                {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "⚙️" : "📋"}
+                                                {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "💼" : index === 3 ? "⚙️" : index === 4 ? "📋" : "🖥️"}
                                             </div>
                                         </div>
                                         <div className="space-y-1.5">
@@ -838,11 +838,11 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Total Per Nama Jabatan (moved up) */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
-                    <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-800">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+                    <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-brand-50 to-blue-light-50 dark:from-gray-800 dark:to-gray-800">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                             <div className="flex items-center gap-3 w-full sm:w-auto">
-                                <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                                <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl flex items-center justify-center shadow-lg">
                                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                                     </svg>
@@ -864,7 +864,7 @@ export default function DashboardPage() {
                                 />
                                 <button
                                     onClick={() => handlePrintTotalJabatan()}
-                                    className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors flex-shrink-0"
+                                    className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 transition-colors flex-shrink-0"
                                     title="Print tabel Total Jabatan"
                                 >
                                     Print
@@ -874,7 +874,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="overflow-x-auto max-h-[60vh] sm:max-h-[600px] overflow-y-auto">
                         <table id="total-jabatan-table" className="w-full table-auto min-w-[720px]">
-                            <thead className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
                                 <tr>
                                     <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-14">
                                         No
@@ -926,7 +926,7 @@ export default function DashboardPage() {
                                 {currentPageItems.map((item, index) => (
                                     <tr
                                         key={index}
-                                        className={`hover:bg-indigo-50 dark:hover:bg-gray-700/50 transition-colors ${index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                        className={`hover:bg-brand-50 dark:hover:bg-gray-700/50 transition-colors ${index % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50'
                                             }`}
                                     >
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
@@ -1045,9 +1045,9 @@ export default function DashboardPage() {
                 </div>
 
                 {/* New: Top Biro (Agregat) - placed after Top Negative chart */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
                             </svg>
@@ -1079,15 +1079,15 @@ export default function DashboardPage() {
                                                 const p = payload[0].payload;
                                                 const s = Number(p.selisih ?? 0);
                                                 const selisihCls = s > 0
-                                                    ? 'text-red-600 dark:text-red-400'
+                                                    ? 'text-blue-light-600 dark:text-blue-light-400'
                                                     : s < 0
-                                                        ? 'text-yellow-600 dark:text-yellow-400'
-                                                        : 'text-green-600 dark:text-green-400';
+                                                        ? 'text-brand-600 dark:text-brand-400'
+                                                        : 'text-brand-600 dark:text-brand-400';
                                                 return (
                                                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                                                         <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{p.unit_kerja}</p>
-                                                        <p className="text-xs text-green-600 dark:text-green-400">Bezetting: {p.bezetting}</p>
-                                                        <p className="text-xs text-purple-600 dark:text-purple-400">Kebutuhan: {p.kebutuhan}</p>
+                                                        <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {p.bezetting}</p>
+                                                        <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {p.kebutuhan}</p>
                                                         <p className={`text-xs ${selisihCls} font-semibold`}>Selisih: {s > 0 ? '+' : ''}{p.selisih}</p>
                                                     </div>
                                                 );
@@ -1095,10 +1095,9 @@ export default function DashboardPage() {
                                             return null;
                                         }}
                                     />
-                                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                     <Bar dataKey="selisih" name="Selisih" radius={[0, 8, 8, 0]}>
                                         {(byBiro || []).map((entry: any, idx: number) => (
-                                            <Cell key={`cell-biro-${idx}`} fill={entry.selisih > 0 ? '#ef4444' : entry.selisih < 0 ? '#f59e0b' : '#9ca3af'} />
+                                            <Cell key={`cell-biro-${idx}`} fill={entry.selisih > 0 ? '#3CA8CD' : entry.selisih < 0 ? '#8FC54A' : '#6DB980'} />
                                         ))}
                                     </Bar>
                                 </BarChart>
@@ -1108,9 +1107,9 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Top Jabatan (Selisih Positif) */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-blue-light-500 to-blue-light-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                             </svg>
@@ -1145,25 +1144,24 @@ export default function DashboardPage() {
                                             <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                                                 <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
                                                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
-                                                <p className="text-xs text-green-600 dark:text-green-400">Bezetting: {payload[0].payload.bezetting}</p>
-                                                <p className="text-xs text-purple-600 dark:text-purple-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-red-600 dark:text-red-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
+                                                <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
+                                                <p className="text-xs text-blue-light-600 dark:text-blue-light-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
                                     return null;
                                 }}
                             />
-                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                            <Bar dataKey="selisih" fill="#ef4444" name="Selisih" radius={[0, 8, 8, 0]} />
+                            <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 8, 8, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
                 {/* Top Jabatan (Selisih Negatif) */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-400 to-brand-500 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                             </svg>
@@ -1196,17 +1194,16 @@ export default function DashboardPage() {
                                             <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                                                 <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
                                                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
-                                                <p className="text-xs text-green-600 dark:text-green-400">Bezetting: {payload[0].payload.bezetting}</p>
-                                                <p className="text-xs text-purple-600 dark:text-purple-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-yellow-600 dark:text-yellow-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
+                                                <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
+                                                <p className="text-xs text-brand-600 dark:text-brand-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
                                     return null;
                                 }}
                             />
-                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                            <Bar dataKey="abs_selisih" fill="#f59e0b" name="Selisih" radius={[0, 8, 8, 0]} />
+                            <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 8, 8, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -1221,34 +1218,33 @@ function SummaryCard(props: SummaryCardProps) {
 
     return (
         <div className="relative group h-full">
-            {/* Glass Background */}
-            <div className="absolute inset-0 bg-purple-300/10 dark:bg-purple-700/20 backdrop-blur-xl rounded-[2rem] border border-white/20 dark:border-white/10 shadow-lg transition-all duration-300 group-hover:scale-[1.02] group-hover:bg-purple-400/15" />
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-100/60 to-blue-light-100/60 dark:from-brand-800/30 dark:to-blue-light-800/30 backdrop-blur-xl rounded-[2rem] border-4 border-white dark:border-white/90 shadow-lg transition-all duration-300 group-hover:scale-[1.02] group-hover:from-brand-200/70 group-hover:to-blue-light-200/70 dark:group-hover:from-brand-700/40 dark:group-hover:to-blue-light-700/40 group-hover:shadow-xl group-hover:border-brand-500 dark:group-hover:border-brand-400" />
 
             {/* Content */}
             <div className="relative p-6 h-full flex flex-col z-10">
                 <div className="flex items-start justify-between mb-4">
-                    <div className="w-14 h-14 flex-shrink-0 bg-white/40 dark:bg-white/10 rounded-2xl flex items-center justify-center text-2xl shadow-sm backdrop-blur-md border border-white/30 text-purple-900 dark:text-purple-100 transition-transform duration-300 group-hover:rotate-6">
+                    <div className="w-14 h-14 flex-shrink-0 bg-white/50 dark:bg-white/10 rounded-2xl flex items-center justify-center text-2xl shadow-sm backdrop-blur-md border-2 border-white dark:border-white/30 text-brand-900 dark:text-brand-100 transition-all duration-300 group-hover:rotate-6 group-hover:border-brand-400 dark:group-hover:border-brand-300">
                         {icon}
                     </div>
                     {subtitle && (
-                        <span className="text-[10px] px-3 py-1 bg-white/30 dark:bg-white/10 text-purple-900 dark:text-purple-100 rounded-full font-bold uppercase tracking-wider border border-white/30 shadow-sm backdrop-blur-sm">
+                        <span className="text-[10px] px-3 py-1 bg-white/30 dark:bg-white/10 text-brand-900 dark:text-brand-100 rounded-full font-bold uppercase tracking-wider border border-white/30 shadow-sm backdrop-blur-sm">
                             {subtitle}
                         </span>
                     )}
                 </div>
 
-                <h3 className="text-base font-semibold text-purple-900/70 dark:text-purple-100/70 mb-1">{title}</h3>
+                <h3 className="text-base font-semibold text-brand-900/70 dark:text-brand-100/70 mb-1">{title}</h3>
 
-                <p className="text-3xl font-semibold text-purple-950 dark:text-white tracking-tight leading-none mb-6 drop-shadow-sm">
+                <p className="text-3xl font-semibold text-brand-950 dark:text-white tracking-tight leading-none mb-6 drop-shadow-sm">
                     {(value ?? 0).toLocaleString("id-ID")}
                 </p>
 
                 {breakdown && breakdown.length > 0 && (
-                    <div className="mt-auto pt-4 border-t border-purple-900/10 dark:border-white/10 flex items-start gap-8">
+                    <div className="mt-auto pt-4 border-t border-brand-900/10 dark:border-white/10 flex items-start gap-8">
                         {breakdown.map((item, idx) => (
                             <div key={idx} className="flex flex-col">
-                                <span className="text-xs font-semibold text-purple-900/60 dark:text-purple-100/60 uppercase tracking-wide mb-1">{item.label}</span>
-                                <span className="text-xl font-bold text-purple-900 dark:text-white leading-none">{item.value.toLocaleString('id-ID')}</span>
+                                <span className="text-xs font-semibold text-brand-900/60 dark:text-brand-100/60 uppercase tracking-wide mb-1">{item.label}</span>
+                                <span className="text-xl font-bold text-brand-900 dark:text-white leading-none">{item.value.toLocaleString('id-ID')}</span>
                             </div>
                         ))}
                     </div>

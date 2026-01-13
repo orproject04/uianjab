@@ -60,7 +60,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="bg-white dark:bg-gray-800 rounded-lg mt-6 shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="relative h-2 bg-gray-100 dark:bg-gray-700">
                     <div 
-                        className="absolute top-0 left-0 h-full bg-purple-600 dark:bg-purple-500 transition-all duration-500 ease-out"
+                        className="absolute top-0 left-0 h-full bg-brand-600 dark:bg-brand-500 transition-all duration-500 ease-out"
                         style={{ width: `${((currentIndex + 1) / SECTION_ORDER.length) * 100}%` }}
                     />
                 </div>
@@ -74,7 +74,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         {prevSection ? (
                             <Link
                                 href={`/anjab/master/edit/${prevSection}/${viewerPath}`}
-                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -114,7 +114,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         {nextSection ? (
                             <Link
                                 href={`/anjab/master/edit/${nextSection}/${viewerPath}`}
-                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-purple-600 dark:bg-purple-600 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-brand-600 dark:bg-brand-600 rounded-lg hover:bg-brand-700 dark:hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
                             >
                                 <span>Selanjutnya</span>
                                 <span className="hidden md:inline">: {SECTION_LABELS[nextSection]}</span>
@@ -164,13 +164,13 @@ function JumpPicker({ currentIndex, currentLabel, viewerPath }: { currentIndex: 
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
                 title="Klik untuk lompat ke bagian lain"
             >
                 <span className="font-semibold">{currentIndex + 1}</span>
-                <span className="text-purple-600 dark:text-purple-400">/</span>
+                <span className="text-brand-600 dark:text-brand-400">/</span>
                 <span className="font-medium">{SECTION_ORDER.length}</span>
-                <span className="hidden sm:inline text-purple-600 dark:text-purple-400 ml-1">• {currentLabel}</span>
+                <span className="hidden sm:inline text-brand-600 dark:text-brand-400 ml-1">• {currentLabel}</span>
                 <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd"/>
                 </svg>
@@ -186,7 +186,7 @@ function JumpPicker({ currentIndex, currentLabel, viewerPath }: { currentIndex: 
                                     <Link
                                         href={href}
                                         onClick={() => setOpen(false)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors text-sm border ${active ? 'border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-900/20 dark:text-purple-200 font-medium' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-300'}`}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors text-sm border ${active ? 'border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-medium' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-300'}`}
                                         role="option"
                                         aria-selected={active}
                                     >

@@ -81,8 +81,8 @@ export default function AnjabCreatePage() {
     }
 
     return (
-        <div className="pt-16 min-h-screen bg-gray-50 dark:bg-gray-900">
-            <div className="p-6 max-w-4xl mx-auto">
+        <div className="pt-6">
+            <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -173,7 +173,7 @@ export default function AnjabCreatePage() {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 {saving ? "Menyimpan..." : "Simpan Anjab"}
                             </button>

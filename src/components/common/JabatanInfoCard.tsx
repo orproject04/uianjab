@@ -121,7 +121,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">
                                     Kode:
                                 </span>
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-light-500 dark:bg-blue-light-600 dark:text-blue-light-200">
                                     {jabatanInfo.kode_jabatan}
                                 </span>
                             </div>
@@ -137,7 +137,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                                 </span>
                             )}
                             {jabatanInfo.jenis_jabatan && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200">
                                     {jabatanInfo.jenis_jabatan}
                                 </span>
                             )}
@@ -205,11 +205,11 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                                     </p>
                                 </div>
                                 <div className="text-right">
-                                    <div className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900">
-                                        <span className="text-2xl font-bold text-blue-600 dark:text-blue-300">
+                                    <div className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-light-100 dark:bg-blue-light-900">
+                                        <span className="text-2xl font-bold text-blue-light-600 dark:text-blue-light-500">
                                             {jabatanInfo.kebutuhan_pegawai}
                                         </span>
-                                        <span className="text-sm text-blue-600 dark:text-blue-300 ml-1">
+                                        <span className="text-sm text-blue-light-600 dark:text-blue-light-300 ml-1">
                                             orang
                                         </span>
                                     </div>

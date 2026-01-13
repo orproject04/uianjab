@@ -87,7 +87,7 @@ export default function SignInForm() {
         notice?.type === "success"
             ? "text-green-700 bg-green-50 border border-green-200"
             : notice?.type === "info"
-                ? "text-blue-700 bg-blue-50 border border-blue-200"
+                ? "text-blue-light-700 bg-blue-light-50 border border-blue-light-200"
                 : "text-red-700 bg-red-50 border border-red-200";
 
     return (
@@ -161,7 +161,7 @@ export default function SignInForm() {
                         </div>
 
                         <div className="flex items-center justify-end">
-                            <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                            <Link href="/forgot-password" className="text-sm text-brand-600 hover:underline">
                                 Lupa password?
                             </Link>
                         </div>
