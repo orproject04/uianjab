@@ -146,7 +146,7 @@ export default function EditJabatanSection({
         const ok = await MySwal.fire({
             icon: "warning",
             title: "Hapus Anjab?",
-            html: `<div class="text-left">Menghapus akan <b>menghapus semua data turunan</b> untuk ID <code>${resolvedId}</code>. Lanjutkan?</div>`,
+            html: `<div class="text-left">Anda akan <b>menghapus semua data turunan</b> untuk ID <code>${resolvedId}</code>. Lanjutkan?</div>`,
             showCancelButton: true,
             confirmButtonText: "Hapus",
             cancelButtonText: "Batal",

@@ -7,6 +7,7 @@ import { MeProvider } from '@/context/MeContext';
 import { icons } from 'lucide-react';
 
 export const metadata = {
+  title: 'Pandawa - Ortala',
   // Point favicon to the root asset so replacing /public/favicon.ico updates tabs.
   icons: {
     icon: '/favicon.ico',

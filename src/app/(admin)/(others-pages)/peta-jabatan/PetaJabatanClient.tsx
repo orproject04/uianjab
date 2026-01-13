@@ -586,7 +586,7 @@ export default function PetaJabatanClient() {
       const synthetic: D3Node[] = [];
 
       // ESELON II → KJF (E3; Inspektur/Inspektorat → E4)
-      if (syntheticFlags.addKJFforEselonII && (n.jenis_jabatan || "").toUpperCase() === "ESELON II") {
+      if (syntheticFlags.addKJFforEselonII && rankJenis(n.jenis_jabatan) === 2) {
         const isInspektorat =
           /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
           /(inspektur|inspektorat)/i.test(n.slug || "");
@@ -626,7 +626,7 @@ export default function PetaJabatanClient() {
       }
 
       // ESELON III → KJF (E4) untuk skenario daerah-struktural
-      if (syntheticFlags.addKJFforEselonIII && (n.jenis_jabatan || "").toUpperCase() === "ESELON III") {
+      if (syntheticFlags.addKJFforEselonIII && rankJenis(n.jenis_jabatan) === 3) {
         synthetic.push({
           _id: `synthetic-kjf-e3:${n.id}`,
           _slug: "kjf",
