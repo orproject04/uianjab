@@ -15,6 +15,7 @@ export default function HomePage() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   const { me } = useMe();
+  const isAdmin = me?.role === "admin";
   const displayName =
     me?.full_name?.trim() ||
     (me?.email ? me.email.split("@")[0] : "User");
@@ -140,7 +141,7 @@ export default function HomePage() {
         </div>
 
         {/* Search + quick create */}
-        <div className="grid gap-6 md:grid-cols-[1.35fr,1fr]">
+        <div className={`grid gap-6 ${isAdmin ? 'md:grid-cols-[1.35fr,1fr]' : 'md:grid-cols-1'}`}>
           <div className="rounded-2xl bg-white shadow-md ring-1 ring-gray-100 p-6 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -154,59 +155,63 @@ export default function HomePage() {
             <HomeSearch />
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-brand-900 text-white shadow-lg p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.08em] text-gray-300 font-semibold">Aksi Cepat</p>
-                <h3 className="text-xl font-bold mt-1">Tambah Jabatan</h3>
-              </div>
-              <span className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-white/10 text-lg font-semibold">
-                +
-              </span>
-            </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-gray-900 px-4 py-2.5 text-sm font-semibold shadow hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-white"
-            >
-              Buka Form Tambah
-            </button>
-          </div>
-        </div>
-
-        {/* Quick actions */}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {quickActions.map((action) => (
-            <button
-              key={action.title}
-              type="button"
-              onClick={() => {
-                if (action.onClick) {
-                  action.onClick();
-                  return;
-                }
-                if (action.href) {
-                  handleNavigate(action.href);
-                }
-              }}
-              className="group w-full text-left rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-all duration-150 hover:-translate-y-px focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200"
-            >
-              <div className="p-5 space-y-3">
-                <div className="space-y-2">
-                  {action.badge && (
-                    <span className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${action.color}`}>
-                      {action.badge}
-                    </span>
-                  )}
-                  <h3 className="font-semibold text-gray-900">{action.title}</h3>
+          {isAdmin && (
+            <div className="rounded-2xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-500 text-white shadow-lg p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.08em] text-gray-100 font-semibold">Aksi Cepat</p>
+                  <h3 className="text-xl font-bold mt-1">Tambah Jabatan</h3>
                 </div>
-                <p className="text-sm text-gray-600 leading-relaxed">{action.description}</p>
-                <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 group-hover:gap-2">
-                  {action.onClick ? "Buka form" : "Pergi ke halaman"} →
+                <span className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-white/10 text-lg font-semibold">
+                  +
                 </span>
               </div>
-            </button>
-          ))}
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-gray-900 px-4 py-2.5 text-sm font-semibold shadow hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-white"
+              >
+                Buka Form Tambah
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Quick actions - Admin only */}
+        {isAdmin && (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {quickActions.map((action) => (
+              <button
+                key={action.title}
+                type="button"
+                onClick={() => {
+                  if (action.onClick) {
+                    action.onClick();
+                    return;
+                  }
+                  if (action.href) {
+                    handleNavigate(action.href);
+                  }
+                }}
+                className="group w-full text-left rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-all duration-150 hover:-translate-y-px focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200 hover:border-brand-500 dark:hover:bg-gray-800"
+              >
+                <div className="p-5 space-y-3">
+                  <div className="space-y-2">
+                    {action.badge && (
+                      <span className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${action.color}`}>
+                        {action.badge}
+                      </span>
+                    )}
+                    <h3 className="font-semibold text-gray-900">{action.title}</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 leading-relaxed">{action.description}</p>
+                  <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 group-hover:gap-2">
+                    {action.onClick ? "Buka form" : "Pergi ke halaman"} →
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
       </div>
 

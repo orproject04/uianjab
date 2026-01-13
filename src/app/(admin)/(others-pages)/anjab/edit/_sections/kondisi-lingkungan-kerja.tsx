@@ -277,7 +277,7 @@ export default function KondisiLingkunganKerjaForm({
                                             value={row.aspek ?? ""}
                                             onChange={(e) => updateLocal(idx, { aspek: e.target.value })}
                                             placeholder="Mis. Kebisingan, Pencahayaan, Temperatur"
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                     <div>
@@ -289,7 +289,7 @@ export default function KondisiLingkunganKerjaForm({
                                             value={row.faktor ?? ""}
                                             onChange={(e) => updateLocal(idx, { faktor: e.target.value })}
                                             placeholder="Mis. 75 dB(A), 500 lux"
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                 </div>

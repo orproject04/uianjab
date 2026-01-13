@@ -84,7 +84,7 @@ function ListInput({
                             onChange={(e) => update(i, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(i, e)}
                             placeholder={placeholder}
-                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                         />
                         <button
                             type="button"
@@ -392,7 +392,7 @@ export default function KorelasiJabatanForm({
                                                 value={row.jabatan_terkait ?? ""}
                                                 onChange={(e) => updateLocal(idx, { jabatan_terkait: e.target.value })}
                                                 placeholder="Contoh: Analis Kebijakan Madya"
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
                                         <div>
@@ -404,7 +404,7 @@ export default function KorelasiJabatanForm({
                                                 value={row.unit_kerja_instansi ?? ""}
                                                 onChange={(e) => updateLocal(idx, { unit_kerja_instansi: e.target.value })}
                                                 placeholder="Contoh: Biro Perencanaan"
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
                                     </div>

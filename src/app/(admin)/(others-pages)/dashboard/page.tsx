@@ -779,7 +779,7 @@ export default function DashboardPage() {
                                             // Set the Jenis filter (behaves like the Jenis dropdown)
                                             setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
                                         }}
-                                        className="bg-white dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer text-left w-full group-hover:border-brand-500 dark:group-hover:border-brand-400"
+                                        className="bg-gradient-to-br from-brand-100/60 to-blue-light-100/60 dark:bg-gray-700/50 rounded-xl p-4 border-2 border-white dark:border-white/90 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer text-left w-full group-hover:border-brand-500 dark:group-hover:border-brand-400"
                                     >
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex-1">
@@ -1218,7 +1218,7 @@ function SummaryCard(props: SummaryCardProps) {
 
     return (
         <div className="relative group h-full">
-            <div className="absolute inset-0 bg-gradient-to-br from-brand-100/60 to-blue-light-100/60 dark:from-brand-800/30 dark:to-blue-light-800/30 backdrop-blur-xl rounded-[2rem] border-4 border-white dark:border-white/90 shadow-lg transition-all duration-300 group-hover:scale-[1.02] group-hover:from-brand-200/70 group-hover:to-blue-light-200/70 dark:group-hover:from-brand-700/40 dark:group-hover:to-blue-light-700/40 group-hover:shadow-xl group-hover:border-brand-500 dark:group-hover:border-brand-400" />
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-200/70 to-blue-light-200/70 dark:from-brand-800/30 dark:to-blue-light-800/30 backdrop-blur-xl rounded-[2rem] border-4 border-white dark:border-white/90 shadow-lg transition-all duration-300 group-hover:scale-[1.02] dark:group-hover:from-brand-700/40 dark:group-hover:to-blue-light-700/40 group-hover:shadow-xl group-hover:border-brand-500 dark:group-hover:border-brand-400" />
 
             {/* Content */}
             <div className="relative p-6 h-full flex flex-col z-10">

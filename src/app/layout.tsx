@@ -7,10 +7,13 @@ import { MeProvider } from '@/context/MeContext';
 import { icons } from 'lucide-react';
 
 export const metadata = {
+  // Point favicon to the root asset so replacing /public/favicon.ico updates tabs.
   icons: {
-    icon: '/images/pandawafav.ico',
-    },
-  };
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico',
+  },
+};
 
 const outfit = Outfit({
   subsets: ["latin"],

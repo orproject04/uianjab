@@ -74,7 +74,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
 
     if (loading) {
         return (
-            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 md:p-6 ${className}`}>
+            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4 md:p-6 ${className}`}>
                 <div className="animate-pulse">
                     <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
                     <div className="space-y-3">
@@ -92,10 +92,10 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
         const fallbackTitle = slugToTitle(currentId.replace(/-/g, " "));
 
         return (
-            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 md:p-6 ${className}`}>
+            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4 md:p-6 ${className}`}>
                 <div className="space-y-4">
                     <div>
-                        <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                        <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white mb-1">
                             {fallbackTitle}
                         </h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -108,29 +108,29 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
     }
 
     return (
-        <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm ${className}`}>
+        <div className={`w-full max-w-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden ${className}`}>
             {/* Always visible header */}
-            <div className="p-4 md:p-6">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                        <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white break-words">
+            <div className="p-3 sm:p-4 md:p-6">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-3 flex-wrap">
+                    <div className="flex-1 min-w-0 w-full">
+                        <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white break-words">
                             {jabatanInfo.nama_jabatan}
                         </h1>
                         {jabatanInfo.kode_jabatan && (
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <span className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">
                                     Kode:
                                 </span>
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-light-500 dark:bg-blue-light-600 dark:text-blue-light-200">
+                                <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-light-500 dark:bg-blue-light-600 dark:text-blue-light-200">
                                     {jabatanInfo.kode_jabatan}
                                 </span>
                             </div>
                         )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
                         {/* Badges */}
-                        <div className="hidden md:flex flex-col gap-1">
+                        <div className="hidden md:flex flex-col gap-1 flex-shrink-0">
                             {jabatanInfo.kelas_jabatan && (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                                     {jabatanInfo.kelas_jabatan}
@@ -147,7 +147,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                         {compact && (
                             <button
                                 onClick={() => setIsExpanded(!isExpanded)}
-                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                             >
                                 <svg
                                     className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -165,7 +165,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
 
             {/* Expandable content */}
             {(!compact || isExpanded) && (
-                <div className="px-4 md:px-6 pb-4 md:pb-6 border-t border-gray-100 dark:border-gray-700 pt-4">
+                <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 border-t border-gray-100 dark:border-gray-700 pt-3 sm:pt-4">
                     {/* Mobile badges */}
                     <div className="flex flex-wrap gap-2 mb-4 md:hidden">
                         {jabatanInfo.kelas_jabatan && (
@@ -174,7 +174,7 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                             </span>
                         )}
                         {jabatanInfo.jenis_jabatan && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200">
                                 {jabatanInfo.jenis_jabatan}
                             </span>
                         )}
@@ -183,10 +183,10 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                     {/* Description */}
                     {jabatanInfo.ikhtisar_jabatan && (
                         <div className="mb-4">
-                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                 Ikhtisar Jabatan
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                                 {jabatanInfo.ikhtisar_jabatan}
                             </p>
                         </div>
@@ -195,21 +195,21 @@ const JabatanInfoCard: React.FC<JabatanInfoCardProps> = ({
                     {/* Kebutuhan Pegawai (ABK) */}
                     {jabatanInfo.kebutuhan_pegawai != null && (
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex-1">
+                                    <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                         Kebutuhan Pegawai (ABK)
                                     </h3>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
                                         Hasil perhitungan Analisis Beban Kerja
                                     </p>
                                 </div>
-                                <div className="text-right">
-                                    <div className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-light-100 dark:bg-blue-light-900">
-                                        <span className="text-2xl font-bold text-blue-light-600 dark:text-blue-light-500">
+                                <div className="text-right flex-shrink-0">
+                                    <div className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-light-100 dark:bg-blue-light-900 whitespace-nowrap">
+                                        <span className="text-xl sm:text-2xl font-bold text-blue-light-600 dark:text-blue-light-500">
                                             {jabatanInfo.kebutuhan_pegawai}
                                         </span>
-                                        <span className="text-sm text-blue-light-600 dark:text-blue-light-300 ml-1">
+                                        <span className="text-xs sm:text-sm text-blue-light-600 dark:text-blue-light-300 ml-1">
                                             orang
                                         </span>
                                     </div>

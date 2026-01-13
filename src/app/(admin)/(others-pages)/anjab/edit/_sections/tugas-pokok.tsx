@@ -178,7 +178,7 @@ function ArrayInput({
                             value={v}
                             onChange={(e) => update(i, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(i, e)}
-                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                             placeholder={placeholder}
                             autoFocus={autoFocus && i === 0}
                         />

@@ -94,7 +94,7 @@ function ListInput({
                             onChange={(e) => update(i, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(i, e)}
                             placeholder={placeholder}
-                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                         />
                         <button
                             type="button"
@@ -395,7 +395,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_jenkel}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_jenkel: e.target.value }))}
                                     placeholder="Mis. L/P" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div>
@@ -405,7 +405,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_umur}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_umur: e.target.value }))}
                                     placeholder="Mis. 25-50 th" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div>
@@ -415,7 +415,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_pb}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_pb: e.target.value }))}
                                     placeholder="Mis. Proporsional" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                         </div>
@@ -428,7 +428,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_tb}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_tb: e.target.value }))}
                                     placeholder="Mis. 160 cm" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div>
@@ -438,7 +438,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_bb}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_bb: e.target.value }))}
                                     placeholder="Mis. 50-80 kg" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div>
@@ -448,7 +448,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_tampilan}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_tampilan: e.target.value }))}
                                     placeholder="Mis. Rapi" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div>
@@ -458,7 +458,7 @@ export default function SyaratJabatanForm({
                                     value={row.kondisi_fisik_keadaan}
                                     onChange={(e) => setRow(r => ({ ...(r as SJRow), kondisi_fisik_keadaan: e.target.value }))}
                                     placeholder="Mis. Sehat jasmani & rohani" 
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                         </div>

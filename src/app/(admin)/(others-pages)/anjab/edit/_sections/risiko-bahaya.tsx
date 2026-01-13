@@ -282,7 +282,7 @@ export default function RisikoBahayaForm({
                                             value={row.nama_risiko ?? ""}
                                             onChange={(e) => updateLocal(idx, { nama_risiko: e.target.value })}
                                             placeholder="Mis. Paparan bahan kimia, Terpeleset"
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                     <div>
@@ -294,7 +294,7 @@ export default function RisikoBahayaForm({
                                             value={row.penyebab ?? ""}
                                             onChange={(e) => updateLocal(idx, { penyebab: e.target.value })}
                                             placeholder="Mis. Kebocoran reagen, lantai licin"
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                 </div>

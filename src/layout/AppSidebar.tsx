@@ -1168,7 +1168,7 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Nama</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                         value={editName}
                                         onChange={(e) => {
                                             const v = e.target.value;
@@ -1181,7 +1181,7 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Kode Penamaan Jabatan</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                         value={editSlug}
                                         onChange={(e) => setEditSlug(toSlug(e.target.value))}
                                         placeholder="Contoh: pksti"
@@ -1194,7 +1194,7 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Unit Kerja</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                         value={editUnitKerja}
                                         onChange={(e) => setEditUnitKerja(e.target.value)}
                                         placeholder="Opsional"
@@ -1238,7 +1238,7 @@ const AppSidebar: React.FC = () => {
                                 {/*    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>*/}
                                 {/*    <input*/}
                                 {/*        type="number"*/}
-                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"*/}
+                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"*/}
                                 {/*        value={editOrder}*/}
                                 {/*        onChange={(e) => setEditOrder(e.target.value)}*/}
                                 {/*        placeholder="Kosongkan untuk auto"*/}
@@ -1256,7 +1256,7 @@ const AppSidebar: React.FC = () => {
                                         {editNamaPejabat.map((nama, idx) => (
                                             <div key={idx} className="flex gap-2">
                                                 <input
-                                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                                     value={nama}
                                                     onChange={(e) => {
                                                         const newNames = [...editNamaPejabat];
@@ -1342,7 +1342,7 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Nama</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                         value={addName}
                                         onChange={(e) => {
                                             const v = e.target.value;
@@ -1473,7 +1473,7 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Kode Penamaan Jabatan</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                         value={addSlug}
                                         onChange={(e) => {
                                             setAddSlug(toSlug(e.target.value));
@@ -1489,7 +1489,7 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Unit Kerja</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                         value={addUnitKerja}
                                         onChange={(e) => setAddUnitKerja(e.target.value)}
                                         placeholder="Opsional"
@@ -1533,7 +1533,7 @@ const AppSidebar: React.FC = () => {
                                 {/*    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>*/}
                                 {/*    <input*/}
                                 {/*        type="number"*/}
-                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"*/}
+                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"*/}
                                 {/*        value={addOrder}*/}
                                 {/*        onChange={(e) => setAddOrder(e.target.value)}*/}
                                 {/*        placeholder="Kosongkan untuk auto"*/}

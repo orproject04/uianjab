@@ -39,8 +39,8 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
                 <div className="flex items-center gap-1 px-6 overflow-x-auto">
                     <button
                         onClick={() => handleTabClick("akun")}
-                        className={`py-4 px-6 text-sm font-medium border-b-2 hover:text-purple-600 hover:border-purple-300 flex items-center gap-2 whitespace-nowrap ${
-                            activeTab === "akun" ? "border-purple-600 text-purple-600" : "border-transparent text-gray-600"
+                        className={`py-4 px-6 text-sm font-medium border-b-2 hover:text-brand-600 hover:border-brand-300 flex items-center gap-2 whitespace-nowrap ${
+                            activeTab === "akun" ? "border-brand-600 text-brand-700 dark:text-brand-400" : "border-transparent text-gray-600 dark:text-gray-300"
                         }`}
                         aria-current={activeTab === "akun"}
                     >
@@ -52,8 +52,8 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
                     </button>
                     <button
                         onClick={() => handleTabClick("peta")}
-                        className={`py-4 px-6 text-sm font-medium border-b-2 hover:text-purple-600 hover:border-purple-300 flex items-center gap-2 whitespace-nowrap ${
-                            activeTab === "peta" ? "border-purple-600 text-purple-600" : "border-transparent text-gray-600"
+                        className={`py-4 px-6 text-sm font-medium border-b-2 hover:text-brand-600 hover:border-brand-300 flex items-center gap-2 whitespace-nowrap ${
+                            activeTab === "peta" ? "border-brand-600 text-brand-700 dark:text-brand-400" : "border-transparent text-gray-600 dark:text-gray-300"
                         }`}
                         aria-current={activeTab === "peta"}
                     >
@@ -73,14 +73,14 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
                         {/* Card: Daftar Akun Baru */}
                         <div className="rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
                             <div className="aspect-video bg-white/30 dark:bg-white/10 backdrop-blur-lg border border-white/40 dark:border-white/20 shadow-lg flex items-center justify-center">
-                                <svg className="w-24 h-24 text-purple-400" viewBox="0 0 24 24" fill="none">
+                                <svg className="w-24 h-24 text-brand-500" viewBox="0 0 24 24" fill="none">
                                     <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" fill="currentColor"/>
                                     <path d="M12.0002 14.5C6.99016 14.5 2.91016 17.86 2.91016 22C2.91016 22.28 3.13016 22.5 3.41016 22.5H20.5902C20.8702 22.5 21.0902 22.28 21.0902 22C21.0902 17.86 17.0102 14.5 12.0002 14.5Z" fill="currentColor"/>
                                 </svg>
                             </div>
                             <div className="p-4 flex-1 flex flex-col">
-                                <h3 className="font-semibold text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-2">
-                                    <span className="flex-none flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-sm font-semibold">1</span>
+                                <h3 className="font-semibold text-brand-700 dark:text-brand-400 mb-2 flex items-center gap-2">
+                                    <span className="flex-none flex items-center justify-center w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-400 text-sm font-semibold">1</span>
                                     Daftar Akun Baru
                                 </h3>
                                 <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 dark:text-gray-200 ml-8" style={{textIndent: '-1.2em', paddingLeft: '1.5em'}}>
@@ -93,13 +93,13 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
                         {/* Card: Verifikasi Email */}
                         <div className="rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
                             <div className="aspect-video bg-white/30 dark:bg-white/10 backdrop-blur-lg border border-white/40 dark:border-white/20 shadow-lg flex items-center justify-center">
-                                <svg className="w-24 h-24 text-blue-400" viewBox="0 0 24 24" fill="none">
+                                <svg className="w-24 h-24 text-brand-500" viewBox="0 0 24 24" fill="none">
                                     <path d="M20 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4ZM20 8L12 13L4 8V6L12 11L20 6V8Z" fill="currentColor"/>
                                 </svg>
                             </div>
                             <div className="p-4 flex-1 flex flex-col">
-                                <h3 className="font-semibold text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-2">
-                                    <span className="flex-none flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-sm font-semibold">2</span>
+                                <h3 className="font-semibold text-brand-700 dark:text-brand-400 mb-2 flex items-center gap-2">
+                                    <span className="flex-none flex items-center justify-center w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-400 text-sm font-semibold">2</span>
                                     Verifikasi Email
                                 </h3>
                                 <ul className="list-disc list-inside space-y-2 text-sm text-gray-700 dark:text-gray-200 ml-8" style={{textIndent: '-1.2em', paddingLeft: '1.5em'}}>
@@ -118,13 +118,13 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
                         {/* Card: Masuk ke Sistem */}
                         <div className="rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
                             <div className="aspect-video bg-white/30 dark:bg-white/10 backdrop-blur-lg border border-white/40 dark:border-white/20 shadow-lg flex items-center justify-center">
-                                <svg className="w-24 h-24 text-green-400" viewBox="0 0 24 24" fill="none">
+                                <svg className="w-24 h-24 text-brand-500" viewBox="0 0 24 24" fill="none">
                                     <path d="M18 8H17V6C17 3.24 14.76 1 12 1C9.24 1 7 3.24 7 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8ZM12 17C10.9 17 10 16.1 10 15C10 13.9 10.9 13 12 13C13.1 13 14 13.9 14 15C14 16.1 13.1 17 12 17ZM15.1 8H8.9V6C8.9 4.29 10.29 2.9 12 2.9C13.71 2.9 15.1 4.29 15.1 6V8Z" fill="currentColor"/>
                                 </svg>
                             </div>
                             <div className="p-4 flex-1 flex flex-col">
-                                <h3 className="font-semibold text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-2">
-                                    <span className="flex-none flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-sm font-semibold">3</span>
+                                <h3 className="font-semibold text-brand-700 dark:text-brand-400 mb-2 flex items-center gap-2">
+                                    <span className="flex-none flex items-center justify-center w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-400 text-sm font-semibold">3</span>
                                     Masuk ke Sistem
                                 </h3>
                                 <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 dark:text-gray-200 ml-8" style={{textIndent: '-1.2em', paddingLeft: '1.5em'}}>
@@ -161,7 +161,7 @@ function HelpContent({activeTab, setActiveTab, isAuthenticated}: {activeTab: str
                 <section className={`${activeTab === "peta" ? "block" : "hidden"} p-6`}>
                     <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
                         <h3 className="font-medium mb-2 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-purple-600" viewBox="0 0 24 24" fill="none">
+                            <svg className="w-5 h-5 text-brand-600" viewBox="0 0 24 24" fill="none">
                                 <path d="M19.5 3H4.5C3.12 3 2 4.12 2 5.5V18.5C2 19.88 3.12 21 4.5 21H19.5C20.88 21 22 19.88 22 18.5V5.5C22 4.12 20.88 3 19.5 3ZM4.5 4.5H19.5C20.05 4.5 20.5 4.95 20.5 5.5V7H3.5V5.5C3.5 4.95 3.95 4.5 4.5 4.5ZM19.5 19.5H4.5C3.95 19.5 3.5 19.05 3.5 18.5V8.5H20.5V18.5C20.5 19.05 20.05 19.5 19.5 19.5Z" fill="currentColor"/>
                             </svg>
                             Cara Menggunakan Peta Jabatan

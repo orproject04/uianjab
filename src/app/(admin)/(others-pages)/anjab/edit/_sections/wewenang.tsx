@@ -301,7 +301,7 @@ export default function WewenangForm({
                                             onChange={(e) => updateLocal(idx, { uraian_wewenang: e.target.value })}
                                             placeholder="Contoh: Menyetujui rencana kerja triwulanan dan mengalokasikan anggaran"
                                             rows={3}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-y"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white resize-y"
                                         />
                                     </div>
 

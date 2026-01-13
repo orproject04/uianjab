@@ -361,7 +361,7 @@ export default function AnjabListPage() {
                 </div>
 
                 {/* Toolbar */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mb-4 sm:mb-6">
+                <div className="bg-gradient-to-b from-brand-25 via-white to-blue-light-25 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mb-4 sm:mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         {/* Search */}
                         <div className="flex-1">
@@ -374,7 +374,7 @@ export default function AnjabListPage() {
                                     placeholder="Cari anjab..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-9 sm:pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                    className="w-full pl-9 sm:pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                         </div>
@@ -480,7 +480,7 @@ export default function AnjabListPage() {
                             {paginatedJabatan.map((jabatan) => (
                                 <div
                                     key={jabatan.id}
-                                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-brand-500 dark:hover:border-brand-400 transition-all group flex flex-col overflow-hidden"
+                                    className="bg-gradient-to-b from-brand-25 via-white to-blue-light-25 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-brand-500 dark:hover:border-brand-400 transition-all group flex flex-col overflow-hidden"
                                 >
                                     <div
                                         onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}

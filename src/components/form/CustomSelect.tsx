@@ -78,7 +78,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             <button
                 type="button"
                 onClick={handleToggle}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white cursor-pointer flex items-center justify-between hover:border-gray-400 transition-colors"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white cursor-pointer flex items-center justify-between hover:border-gray-400 transition-colors"
             >
                 <span className={selectedOption ? "text-gray-900" : "text-gray-500"}>
                     {selectedOption ? selectedOption.label : placeholder}
@@ -121,7 +121,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                                 <input
                                     ref={searchInputRef}
                                     type="text"
-                                    className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                     placeholder="Cari..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}

@@ -88,7 +88,7 @@ function StringList({
                             onChange={(e) => update(i, e.target.value)}
                             onKeyDown={(e) => onKey(e, i)}
                             placeholder={placeholder}
-                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-shadow"
                         />
                         <button
                             type="button"
@@ -234,7 +234,7 @@ function NestedHasilKerjaEditor({
                             onChange={(e) => updateParentText(pi, e.target.value)}
                             onKeyDown={(e) => onParentKey(e, pi)}
                             placeholder="Contoh: Dokumen Rencana Strategis ..."
-                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                         />
                         <button
                             type="button"
@@ -264,7 +264,7 @@ function NestedHasilKerjaEditor({
                                     onChange={(e) => updateChildText(pi, ci, e.target.value)}
                                     onKeyDown={(e) => onChildKey(e, pi, ci)}
                                     placeholder="Contoh: 9 (sembilan) draft ..."
-                                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                                 />
                                 <button
                                     type="button"

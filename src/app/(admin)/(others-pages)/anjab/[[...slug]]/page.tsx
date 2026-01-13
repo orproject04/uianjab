@@ -325,8 +325,8 @@ export default function InformasiJabatanPage() {
                             onClick={() => setActiveTab("info")}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "info"
                                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                                : "border-transparent text-gray-500"
-                                }`}
+                                    : "border-transparent text-gray-500"
+                            }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -339,8 +339,8 @@ export default function InformasiJabatanPage() {
                             onClick={() => setActiveTab("pdf")}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "pdf"
                                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                                : "border-transparent text-gray-500"
-                                }`}
+                                    : "border-transparent text-gray-500"
+                            }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -391,8 +391,8 @@ export default function InformasiJabatanPage() {
                                 onClick={() => setActiveTab("info")}
                                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "info"
                                     ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                                    : "border-transparent text-gray-500"
-                                    }`}
+                                        : "border-transparent text-gray-500"
+                                }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,8 +405,8 @@ export default function InformasiJabatanPage() {
                                 onClick={() => setActiveTab("pdf")}
                                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "pdf"
                                     ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                                    : "border-transparent text-gray-500"
-                                    }`}
+                                        : "border-transparent text-gray-500"
+                                }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -419,10 +419,10 @@ export default function InformasiJabatanPage() {
                         </nav>
                     </div>
 
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         {activeTab === "info" && <JabatanInfoCard currentId={id} className="mb-6" />}
                         <div className="w-full min-h-[calc(100dvh-400px)] flex items-center justify-center">
-                            <div className="max-w-3xl text-center space-y-3">
+                            <div className="w-full max-w-3xl text-center space-y-3 px-4">
                                 <p className={isNotFound ? "text-gray-800" : "text-red-700"}>
                                     {isNotFound ? (
                                         <>
@@ -461,8 +461,8 @@ export default function InformasiJabatanPage() {
                             onClick={() => setActiveTab("info")}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "info"
                                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                                : "border-transparent text-gray-500"
-                                }`}
+                                    : "border-transparent text-gray-500"
+                            }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -475,8 +475,8 @@ export default function InformasiJabatanPage() {
                             onClick={() => setActiveTab("pdf")}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === "pdf"
                                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                                : "border-transparent text-gray-500"
-                                }`}
+                                    : "border-transparent text-gray-500"
+                            }`}
                             disabled
                         >
                             <div className="flex items-center gap-2 opacity-50">
@@ -490,7 +490,7 @@ export default function InformasiJabatanPage() {
                     </nav>
                 </div>
 
-                <div className="p-8 max-w-5xl mx-auto space-y-6">
+                <div className="p-4 sm:p-6 lg:p-8 w-full max-w-full mx-auto space-y-6">
                     <JabatanInfoCard currentId={id} />
 
                     <div className="text-center space-y-2">
@@ -532,7 +532,7 @@ export default function InformasiJabatanPage() {
                             className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === "info"
                                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
                                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-brand-100 dark:text-gray-400 dark:hover:text-brand-100"
-                                }`}
+                            }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -547,7 +547,7 @@ export default function InformasiJabatanPage() {
                             className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === "pdf"
                                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
                                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-brand-100 dark:text-gray-400 dark:hover:text-brand-100"
-                                }`}
+                            }`}
                         >
                             <div className="flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -582,8 +582,8 @@ export default function InformasiJabatanPage() {
 
             {/* Tab Content */}
             {activeTab === "info" && (
-                <div className="p-6 min-h-[calc(100dvh-200px)]">
-                    <div className="max-w-4xl mx-auto">
+                <div className="p-4 sm:p-6 min-h-[calc(100dvh-200px)]">
+                    <div className="w-full max-w-full mx-auto">
                         {/* Jabatan Info Card */}
                         <JabatanInfoCard currentId={id} />
                     </div>

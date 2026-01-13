@@ -106,7 +106,7 @@ export default function AnjabCreatePage() {
                                 type="text"
                                 id="nama_jabatan"
                                 name="nama_jabatan"
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 placeholder="Masukkan nama jabatan"
                             />
                         </div>
@@ -121,7 +121,7 @@ export default function AnjabCreatePage() {
                                 type="text"
                                 id="kode_jabatan"
                                 name="kode_jabatan"
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 placeholder="Masukkan kode jabatan"
                             />
                         </div>
@@ -135,7 +135,7 @@ export default function AnjabCreatePage() {
                                 id="ikhtisar_jabatan"
                                 name="ikhtisar_jabatan"
                                 rows={4}
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 placeholder="Masukkan ikhtisar jabatan (opsional)"
                             />
                         </div>
@@ -149,7 +149,7 @@ export default function AnjabCreatePage() {
                                 type="text"
                                 id="kelas_jabatan"
                                 name="kelas_jabatan"
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 placeholder="Masukkan kelas jabatan (opsional)"
                             />
                         </div>
@@ -163,7 +163,7 @@ export default function AnjabCreatePage() {
                                 id="prestasi_diharapkan"
                                 name="prestasi_diharapkan"
                                 rows={4}
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 placeholder="Masukkan prestasi yang diharapkan (opsional)"
                             />
                         </div>
