@@ -92,6 +92,10 @@ export default function DashboardPage() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [searchNama, setSearchNama] = useState<string>('');
     const [currentPage, setCurrentPage] = useState<number>(1);
+    // Overrides for kebutuhan khusus fungsional: key => `${nama}|||${unit}` -> string|number
+    // We keep string here to allow empty-string during editing (so leading zero can be removed on focus)
+    const [overrides, setOverrides] = useState<Record<string, string | number>>({});
+    const [unsavedChanges, setUnsavedChanges] = useState(false);
     const itemsPerPage = 100;
 
     // Filters
@@ -118,7 +122,7 @@ export default function DashboardPage() {
         loadData();
     }, [selectedBiro, selectedJenis, selectedLokasi]);
 
-    async function loadData() {
+    async function loadData(forceNoCache: boolean = false) {
         setLoading(true);
         setError(null);
         try {
@@ -127,7 +131,8 @@ export default function DashboardPage() {
             if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
             if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
 
-            const res = await apiFetch(`/api/dashboard/jabatan?${params.toString()}`);
+            const url = `/api/dashboard/jabatan?${params.toString()}`;
+            const res = await apiFetch(url, forceNoCache ? { cache: 'no-store' } : undefined);
             if (!res.ok) {
                 const j = await res.json().catch(() => null as any);
                 const msg = j?.error || j?.message || `Failed to fetch dashboard data (${res.status})`;
@@ -214,6 +219,30 @@ export default function DashboardPage() {
     if (!data) return null;
 
     const { summary, byJenis, byLokasi, byBiro, byNamaJabatan, filters } = data;
+
+    // Handler to save overrides: collect overrides entries and call API
+    async function handleSaveOverrides() {
+        try {
+            const edits: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number }> = [];
+            for (const key of Object.keys(overrides)) {
+                const [nama, unit] = key.split('|||');
+                const raw = overrides[key];
+                const num = raw === '' ? 0 : Number(raw);
+                edits.push({ nama_jabatan: nama || '', unit_kerja: unit || '', kebutuhan_khusus: Number.isFinite(num) ? num : 0 });
+            }
+            if (!edits.length) return;
+            // send to API
+            const res = await saveOverridesApi(edits);
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok || j?.error) throw new Error(j?.error || `HTTP ${res.status}`);
+            await loadData(true);
+            setOverrides({});
+            setUnsavedChanges(false);
+            console.log('Perubahan kebutuhan fungsional telah disimpan.');
+        } catch (err: any) {
+            console.error('Gagal menyimpan overrides:', err);
+        }
+    }
 
     // --- UI helpers ---
     // Sort `byJenis` in this order: Eselon 1,2,3,4, Jabatan Pelaksana, Jabatan Fungsional
@@ -863,11 +892,11 @@ export default function DashboardPage() {
                                     className="flex-1 sm:w-80 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                                 />
                                 <button
-                                    onClick={() => handlePrintTotalJabatan()}
-                                    className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 transition-colors flex-shrink-0"
-                                    title="Print tabel Total Jabatan"
+                                    onClick={() => { if (unsavedChanges) handleSaveOverrides(); else handlePrintTotalJabatan(); }}
+                                    className={`px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 ${unsavedChanges ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                                    title={unsavedChanges ? 'Simpan perubahan kebutuhan fungsional' : 'Print tabel Total Jabatan'}
                                 >
-                                    Print
+                                    {unsavedChanges ? 'Simpan' : 'Print'}
                                 </button>
                             </div>
                         </div>
@@ -951,9 +980,55 @@ export default function DashboardPage() {
                                             </span>
                                         </td>
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                            <span className="text-xs font-medium text-gray-900 dark:text-white">
-                                                {(item.kebutuhan ?? 0).toLocaleString("id-ID")}
-                                            </span>
+                                            {(/fungsional/i).test(String(item.jenis_jabatan || '')) ? (
+                                                (() => {
+                                                    const key = `${String(item.nama_jabatan||'').trim()}|||${String(item.unit_kerja||'').trim()}`;
+                                                    const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.kebutuhan ?? 0));
+                                                    const displayed = existing === '' ? '' : String(existing);
+                                                    return (
+                                                        <input
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            className="w-28 text-center rounded border px-2 py-1 text-sm"
+                                                            value={displayed}
+                                                            onFocus={() => {
+                                                                // if current displayed value is '0', clear it so typing '12' doesn't produce '012'
+                                                                const curr = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.kebutuhan ?? 0));
+                                                                if ((curr === 0 || curr === '0') && !overrides.hasOwnProperty(key)) {
+                                                                    setOverrides((prev) => ({ ...prev, [key]: '' }));
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                // if user focused and left without typing, remove temporary override so original value shows again
+                                                                if (overrides.hasOwnProperty(key) && overrides[key] === '') {
+                                                                    setOverrides((prev) => {
+                                                                        const next = { ...prev } as Record<string, string | number>;
+                                                                        delete next[key];
+                                                                        return next;
+                                                                    });
+                                                                }
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                // allow only digits and control keys while typing
+                                                                if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
+                                                                    e.preventDefault();
+                                                                }
+                                                            }}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value;
+                                                                // keep raw string while editing; we'll coerce when saving
+                                                                setOverrides((prev) => ({ ...prev, [key]: raw }));
+                                                                setUnsavedChanges(true);
+                                                            }}
+                                                        />
+                                                    );
+                                                })()
+                                            ) : (
+                                                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                                    {(item.kebutuhan ?? 0).toLocaleString("id-ID")}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${(item.selisih === 0)
@@ -1212,6 +1287,17 @@ export default function DashboardPage() {
         </>
     );
 }
+
+// Save overrides to server
+async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number }>) {
+    const res = await apiFetch('/api/dashboard/jabatan/overrides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edits: payload })
+    });
+    return res;
+}
+
 
 function SummaryCard(props: SummaryCardProps) {
     const { title, value, icon, color, subtitle, breakdown } = props;
