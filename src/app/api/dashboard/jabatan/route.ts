@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        if (!hasRole(user, ["admin"])) {
+        // allow both full admin and admin-jf (special role limited to fungsional dashboard)
+        if (!hasRole(user, ["admin", "admin-jf"])) {
             return NextResponse.json(
                 { error: "Forbidden, hanya admin yang dapat mengakses data ini" },
                 { status: 403 }
@@ -35,6 +36,13 @@ export async function GET(req: NextRequest) {
     const whereConditions: string[] = [];
         const params: any[] = [];
         let paramIndex = 1;
+
+        // Special-case: if the caller is an admin-jf and didn't explicitly supply a jenis_jabatan,
+        // restrict results to fungsional by default so the UI only needs to call the API once.
+        let effectiveJenisFilter = jenisJabatanFilter;
+        if (!effectiveJenisFilter && user && user.role === 'admin-jf') {
+            effectiveJenisFilter = '__ADMIN_JF__';
+        }
 
         // Jika ada filter biro, gunakan recursive CTE untuk mendapatkan semua child nodes
         let biroFilterCTE = "";
@@ -61,10 +69,15 @@ export async function GET(req: NextRequest) {
             whereConditions.push(`id IN (SELECT id FROM unit_tree)`);
         }
 
-        if (jenisJabatanFilter) {
-            whereConditions.push(`jenis_jabatan = $${paramIndex}`);
-            params.push(jenisJabatanFilter);
-            paramIndex++;
+        if (effectiveJenisFilter) {
+            if (effectiveJenisFilter === '__ADMIN_JF__') {
+                // restrict to any jenis_jabatan that contains 'fungsional' (case-insensitive)
+                whereConditions.push(`lower(coalesce(jenis_jabatan,'')) LIKE '%fungsional%'`);
+            } else {
+                whereConditions.push(`jenis_jabatan = $${paramIndex}`);
+                params.push(effectiveJenisFilter);
+                paramIndex++;
+            }
         }
 
         if (lokasiFilter) {

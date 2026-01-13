@@ -5,7 +5,8 @@ import { getUserFromReq, hasRole } from "@/lib/auth";
 export async function POST(req: NextRequest) {
     try {
         const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin"])) {
+        // allow both full admin and admin-jf (limited to fungsional overrides)
+        if (!user || !hasRole(user, ["admin", "admin-jf"])) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

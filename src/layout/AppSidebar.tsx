@@ -57,7 +57,7 @@ type NavItem = {
 const AppSidebar: React.FC = () => {
     const {isExpanded, isMobileOpen, isHovered, setIsHovered} = useSidebar();
     const pathname = usePathname();
-    const {isAdmin, loading: meLoading} = useMe();
+    const {isAdmin, isAdminJf, loading: meLoading} = useMe();
 
     // State tetap sama seperti kode asli
     const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
@@ -242,7 +242,7 @@ const AppSidebar: React.FC = () => {
         }] : []),
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
-        ...(isAdmin ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : [])
+        ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : [])
     ];
     const othersItems: NavItem[] = [];
 

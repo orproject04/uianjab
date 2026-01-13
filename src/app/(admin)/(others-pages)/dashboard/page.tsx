@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
@@ -76,14 +76,14 @@ type SummaryCardProps = {
 const COLORS = ["#8FC54A", "#80C15D", "#6DB980", "#3CA8CD", "#48ADBC", "#83C7E8"];
 
 export default function DashboardPage() {
-    const { isAdmin, loading: meLoading } = useMe();
+    const { isAdmin, isAdminJf, loading: meLoading } = useMe();
     const router = useRouter();
 
     useEffect(() => {
-        if (!meLoading && !isAdmin) {
+        if (!meLoading && !(isAdmin || isAdminJf)) {
             router.replace("/");
         }
-    }, [meLoading, isAdmin, router]);
+    }, [meLoading, isAdmin, isAdminJf, router]);
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -118,11 +118,39 @@ export default function DashboardPage() {
         return () => window.removeEventListener('resize', setW);
     }, []);
 
+    const skipNextLoadRef = useRef(false);
+    const lastFetchUrlRef = useRef<string | null>(null);
     useEffect(() => {
+        if (skipNextLoadRef.current) {
+            skipNextLoadRef.current = false;
+            return;
+        }
+        // compute same URL as loadData to detect redundant fetches
+        const params = new URLSearchParams();
+        if (selectedBiro?.value) params.append("biro", selectedBiro.value);
+        if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
+        if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
+        const url = `/api/dashboard/jabatan?${params.toString()}`;
+        if (lastFetchUrlRef.current === url) return; // already fetched this exact URL
         loadData();
     }, [selectedBiro, selectedJenis, selectedLokasi]);
 
-    async function loadData(forceNoCache: boolean = false) {
+    // If current user is admin-jf, auto-select and restrict jenis filter to fungsional
+    useEffect(() => {
+        if (!isAdminJf) return;
+        if (skipNextLoadRef.current) return; // avoid running during controlled reloads
+        const list = (data?.filters?.jenisList || []);
+        const found = list.find((j: string) => /fungsional/i.test(String(j || '')));
+        if (!found) return;
+        // prevent selectedJenis change from triggering another fetch (we already fetched fungsional data server-side)
+        skipNextLoadRef.current = true;
+        setSelectedJenis((prev) => {
+            if (prev && /fungsional/i.test(String(prev.value || ''))) return prev;
+            return { value: found, label: 'JABATAN FUNGSIONAL' };
+        });
+    }, [isAdminJf, data]);
+
+    async function loadData(forceNoCache: boolean = false): Promise<DashboardData | null> {
         setLoading(true);
         setError(null);
         try {
@@ -149,11 +177,14 @@ export default function DashboardPage() {
                 }
             });
             setData(json);
+            lastFetchUrlRef.current = url;
+            return json;
         } catch (e: any) {
             setError(e.message || "Gagal memuat data");
         } finally {
             setLoading(false);
         }
+        return null;
     }
 
     if (meLoading) {
@@ -167,7 +198,7 @@ export default function DashboardPage() {
         );
     }
 
-    if (!isAdmin) {
+    if (!(isAdmin || isAdminJf)) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
@@ -220,6 +251,8 @@ export default function DashboardPage() {
 
     const { summary, byJenis, byLokasi, byBiro, byNamaJabatan, filters } = data;
 
+    
+
     // Handler to save overrides: collect overrides entries and call API
     async function handleSaveOverrides() {
         try {
@@ -232,10 +265,25 @@ export default function DashboardPage() {
             }
             if (!edits.length) return;
             // send to API
+            // Prevent automatic effects from reloading data while we perform a controlled reload
+            skipNextLoadRef.current = true;
             const res = await saveOverridesApi(edits);
             const j = await res.json().catch(() => ({}));
             if (!res.ok || j?.error) throw new Error(j?.error || `HTTP ${res.status}`);
-            await loadData(true);
+            const newData = await loadData(true);
+            // Ensure admin-jf keeps the jenis filter set to an actual fungsional value if available,
+            // otherwise clear the filter to avoid showing an empty table.
+            if (isAdminJf) {
+                const list = newData?.filters?.jenisList || [];
+                const found = list.find((jj: string) => /fungsional/i.test(String(jj || '')));
+                // Prevent the selectedJenis change from triggering another automatic loadData()
+                skipNextLoadRef.current = true;
+                if (found) {
+                    setSelectedJenis({ value: found, label: 'JABATAN FUNGSIONAL' });
+                } else {
+                    setSelectedJenis(null);
+                }
+            }
             setOverrides({});
             setUnsavedChanges(false);
             console.log('Perubahan kebutuhan fungsional telah disimpan.');
@@ -293,6 +341,21 @@ export default function DashboardPage() {
         // Sort by kebutuhan if same rank
         return (b.kebutuhan || 0) - (a.kebutuhan || 0);
     });
+
+    // For admin-jf users, show only a single aggregated "JABATAN FUNGSIONAL" card
+    const displayByJenis = (isAdminJf)
+        ? (() => {
+            const fRows = sortedByJenis.filter((r) => /fungsional/i.test(String(r.jenis || '')));
+            const agg = {
+                jenis: 'JABATAN FUNGSIONAL',
+                jumlah_jabatan: fRows.reduce((s, r) => s + (Number((r as any).jumlah_jabatan) || 0), 0),
+                bezetting: fRows.reduce((s, r) => s + (Number((r as any).bezetting) || 0), 0),
+                kebutuhan: fRows.reduce((s, r) => s + (Number((r as any).kebutuhan) || 0), 0),
+                selisih: fRows.reduce((s, r) => s + (Number((r as any).selisih) || 0), 0),
+            } as any;
+            return [agg];
+        })()
+        : sortedByJenis;
 
     // Dedupe by (nama_jabatan, unit_kerja) to avoid exact duplicate rows
     const dedupeByNamaUnitMap: Record<string, BreakdownItem> = {};
@@ -454,7 +517,14 @@ export default function DashboardPage() {
 
     // Convert filters to react-select format
     const biroOptions = filters.biroList.map((biro) => ({ value: biro, label: biro }));
-    const jenisOptions = filters.jenisList.map((jenis) => ({ value: jenis, label: jenis }));
+    const jenisOptions = (isAdminJf)
+        ? (() => {
+            // Restrict to a single fungsional option for admin-jf only if the API provides one.
+            const found = (filters.jenisList || []).find((j: string) => /fungsional/i.test(String(j || '')));
+            if (found) return [{ value: found, label: 'JABATAN FUNGSIONAL' }];
+            return [] as { value: string; label: string }[];
+        })()
+        : filters.jenisList.map((jenis) => ({ value: jenis, label: jenis }));
     const lokasiOptions = [
         { value: "pusat", label: "Pusat" },
         { value: "daerah", label: "Daerah" },
@@ -672,23 +742,25 @@ export default function DashboardPage() {
                                 className="react-select-container"
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                                Jenis Jabatan
-                            </label>
-                            <Select
-                                options={jenisOptions}
-                                value={selectedJenis}
-                                onChange={setSelectedJenis}
-                                styles={selectStyles}
-                                placeholder="Semua Jenis"
-                                isClearable
-                                className="react-select-container"
-                            />
-                        </div>
+                        {!isAdminJf && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    Jenis Jabatan
+                                </label>
+                                <Select
+                                    options={jenisOptions}
+                                    value={selectedJenis}
+                                    onChange={setSelectedJenis}
+                                    styles={selectStyles}
+                                    placeholder="Semua Jenis"
+                                    isClearable
+                                    className="react-select-container"
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -707,7 +779,7 @@ export default function DashboardPage() {
                                 className="react-select-container"
                             />
                         </div>
-                        {(selectedBiro || selectedJenis || selectedLokasi) && (
+                        {!isAdminJf && (selectedBiro || selectedJenis || selectedLokasi) && (
                             <div className="flex items-end">
                                 <button
                                     onClick={() => {
@@ -773,7 +845,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Rincian jumlah untuk setiap jenis jabatan</p>
                         </div>
                         <div className="ml-auto">
-                            {selectedJenis && (
+                            {selectedJenis && !isAdminJf && (
                                 <button
                                     onClick={() => setSelectedJenis(null)}
                                     className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -784,7 +856,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {sortedByJenis.map((item, index) => {
+                        {displayByJenis.map((item, index) => {
                             // Use API-provided deduped jumlah_jabatan when available;
                             // fallback to deduping by nama_jabatan in byNamaJabatan
                             const jumlahJabatan = Number((item as any).jumlah_jabatan ?? (() => {

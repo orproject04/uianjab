@@ -45,6 +45,11 @@ export async function apiFetch(input: string | URL | Request, init?: RequestInit
     const apiFetchCache: Map<string, Promise<any>> = (globalThis as any).__apiFetchCache;
 
     const shouldCache = method === 'GET' && fetchInit.cache !== 'no-store';
+    // If caller explicitly asked for no-store, evict any existing cached response
+    // so future cached GETs won't return stale data after a mutation.
+    if (method === 'GET' && fetchInit.cache === 'no-store') {
+        apiFetchCache.delete(url);
+    }
     if (shouldCache) {
         if (apiFetchCache.has(url)) {
             const cached = await apiFetchCache.get(url);

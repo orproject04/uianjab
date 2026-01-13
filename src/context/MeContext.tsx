@@ -13,6 +13,7 @@ type MeCtx = {
     // panggil manual kalau perlu re-fetch (mis. setelah update profil)
     refresh: () => Promise<void>;
     isAdmin: boolean;
+    isAdminJf: boolean;
 };
 
 const Ctx = createContext<MeCtx | null>(null);
@@ -73,6 +74,7 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
         error,
         refresh: load,
         isAdmin: (me?.role ?? "user") === "admin",
+        isAdminJf: (me?.role ?? "user") === "admin-jf",
     }), [me, loading, error]);
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
