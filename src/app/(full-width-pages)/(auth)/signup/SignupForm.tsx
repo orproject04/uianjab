@@ -157,13 +157,13 @@ export default function SignupForm() {
                         <div className="text-sm text-center space-y-2">
                             <div>
                                 Sudah punya akun?{" "}
-                                <Link href="/signin" className="text-brand-600 hover:underline">
+                                <Link href="/signin" className="text-blue-500 hover:underline">
                                     Masuk
                                 </Link>
                             </div>
                             <div>
                                 Butuh bantuan?{" "}
-                                <Link href="/help" className="text-brand-600 hover:underline">
+                                <Link href="/help" className="text-blue-500 hover:underline">
                                     Help
                                 </Link>
                             </div>

@@ -112,7 +112,7 @@ export default function ForgotPasswordForm() {
 
                         <div className="text-sm text-center">
                             Ingat password?{" "}
-                            <Link href="/signin" className="text-blue-600 hover:underline">
+                            <Link href="/signin" className="text-blue-500 hover:underline">
                                 Masuk
                             </Link>
                         </div>

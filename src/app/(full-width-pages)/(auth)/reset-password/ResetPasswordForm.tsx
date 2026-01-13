@@ -141,7 +141,7 @@ export default function ResetPasswordForm() {
 
                         <div className="text-sm text-center">
                             Kembali ke{" "}
-                            <Link href="/signin" className="text-blue-600 hover:underline">
+                            <Link href="/signin" className="text-blue-500 hover:underline">
                                 halaman masuk
                             </Link>
                         </div>

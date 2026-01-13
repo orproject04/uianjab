@@ -133,13 +133,13 @@ export default function ResendVerificationForm() {
             <div className="text-sm text-center space-y-2">
               <div>
                 Sudah memiliki akun terverifikasi?{" "}
-                <Link href="/signin" className="text-blue-600 hover:underline">
+                <Link href="/signin" className="text-blue-500 hover:underline">
                   Masuk
                 </Link>
               </div>
               <div>
                 Belum punya akun?{" "}
-                <Link href="/signup" className="text-blue-600 hover:underline">
+                <Link href="/signup" className="text-blue-500 hover:underline">
                   Daftar
                 </Link>
               </div>

@@ -181,13 +181,13 @@ export default function SignInForm() {
                             </div>
                             <div>
                                 Belum terima email verifikasi?{" "}
-                                <Link href="/resend-verification" className="text-blue-600 hover:underline">
+                                <Link href="/resend-verification" className="text-blue-500 hover:underline">
                                     Kirim ulang
                                 </Link>
                             </div>
                             <div>
                                 Butuh bantuan?{" "}
-                                <Link href="/help" className="text-blue-600 hover:underline">
+                                <Link href="/help" className="text-blue-500 hover:underline">
                                     Help
                                 </Link>
                             </div>
