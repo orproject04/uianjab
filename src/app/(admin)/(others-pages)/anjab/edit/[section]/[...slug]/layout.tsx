@@ -89,13 +89,13 @@ function JumpPicker({ currentIndex, currentLabel, viewerPath }: { currentIndex: 
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                 title="Klik untuk lompat ke bagian lain"
             >
                 <span className="font-semibold">{currentIndex + 1}</span>
-                <span className="text-purple-600 dark:text-purple-400">/</span>
+                <span className="text-green-600 dark:text-green-400">/</span>
                 <span className="font-medium">{SECTION_ORDER.length}</span>
-                <span className="hidden sm:inline text-purple-600 dark:text-purple-400 ml-1">• {currentLabel}</span>
+                <span className="hidden sm:inline text-green-600 dark:text-green-400 ml-1">• {currentLabel}</span>
                 <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd"/>
                 </svg>
@@ -111,7 +111,7 @@ function JumpPicker({ currentIndex, currentLabel, viewerPath }: { currentIndex: 
                                     <Link
                                         href={href}
                                         onClick={() => setOpen(false)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors text-sm border ${active ? 'border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-900/20 dark:text-purple-200 font-medium' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-300'}`}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors text-sm border ${active ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-200 font-medium' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-300'}`}
                                         role="option"
                                         aria-selected={active}
                                     >

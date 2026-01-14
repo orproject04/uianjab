@@ -215,9 +215,9 @@ export default function SyncPegawaiPage() {
                 </p>
               </div>
 
-              <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
-                <p className="text-sm text-purple-600 dark:text-purple-400">Jabatan Diupdate</p>
-                <p className="mt-1 text-2xl font-bold text-purple-900 dark:text-purple-100">
+              <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+                <p className="text-sm text-green-600 dark:text-green-400">Jabatan Diupdate</p>
+                <p className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
                   {result.totalUpdated.toLocaleString()}
                 </p>
               </div>

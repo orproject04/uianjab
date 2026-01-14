@@ -642,7 +642,7 @@ export default function AnjabListPage() {
                                                     <div className="flex items-center justify-center gap-2">
                                                         <button
                                                             onClick={(e) => handlePreviewPDF(jabatan.id, jabatan.nama_jabatan, e)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                                                             title="Preview PDF"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

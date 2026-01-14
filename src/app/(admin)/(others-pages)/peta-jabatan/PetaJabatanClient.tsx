@@ -1089,7 +1089,7 @@ export default function PetaJabatanClient() {
     const isCurrentMatch = isSearchMatch && searchMatches[currentMatchIndex] === attrs.id;
 
     // Determine border style based on state
-    let borderColor = "#6DB980"; // default purple
+    let borderColor = "#6DB980"; // default green
     let borderWidth = 1;
     let shadowFilter = "drop-shadow(0 2px 3px rgba(0,0,0,0.08))";
 

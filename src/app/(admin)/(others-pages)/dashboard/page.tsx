@@ -150,6 +150,18 @@ export default function DashboardPage() {
         });
     }, [isAdminJf, data]);
 
+    // When user's role changes (e.g. sign out/in with different account), force a fresh no-cache reload
+    // so summary cards and other dashboard data are not stale from previous user session.
+    useEffect(() => {
+        if (meLoading) return; // wait until user info resolved
+        // clear last fetch marker so the normal load effect doesn't skip the new load
+        lastFetchUrlRef.current = null;
+        // avoid double-fetch due to selectedJenis changes triggered by role-specific logic
+        skipNextLoadRef.current = true;
+        // force reload without cache to ensure fresh summary data for new role
+        loadData(true).catch(() => {});
+    }, [isAdmin, isAdminJf, meLoading]);
+
     async function loadData(forceNoCache: boolean = false): Promise<DashboardData | null> {
         setLoading(true);
         setError(null);
