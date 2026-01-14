@@ -44,6 +44,7 @@ services:
     volumes:
       - ./storage/pdf-cache:/app/storage/pdf-cache
       - ./storage/sync-logs:/app/storage/sync-logs
+      - ./storage/rekom-jf:/app/storage/rekom-jf
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
