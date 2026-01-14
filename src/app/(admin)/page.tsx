@@ -108,7 +108,7 @@ export default function HomePage() {
               <p className="text-gray-600 leading-relaxed">
                 Silahkan pilih menu untuk memulai pengelolaan data.
               </p>
-              <div className="flex flex-wrap gap-3">
+              <div className="hidden md:flex flex-wrap gap-3">
                 {isAdmin && (
                   <button
                     onClick={() => handleNavigate("/dashboard")}
@@ -124,6 +124,22 @@ export default function HomePage() {
                   Lihat Peta Jabatan
                 </button>
               </div>
+                <div className="md:hidden mt-4 flex flex-row gap-3 justify-center items-center z-20">
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleNavigate("/dashboard")}
+                      className="relative z-20 inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+                    >
+                      Buka Dashboard
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleNavigate("/peta-jabatan")}
+                    className="relative z-20 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200"
+                  >
+                    Lihat Peta Jabatan
+                  </button>
+                </div>
             </div>
             <div className="relative flex items-center justify-center">
               <div className="absolute -inset-6 md:-inset-10 bg-gradient-to-br from-brand-200/40 via-white to-blue-light-200/50 blur-3xl" />

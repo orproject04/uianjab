@@ -174,15 +174,6 @@ export default function DashboardPage() {
                 throw new Error(msg);
             }
             const json = await res.json();
-            console.log('[DEBUG] Dashboard data received:', {
-                summary: json.summary,
-                bezetting_pns: json.summary?.bezetting_pns,
-                bezetting_pppk: json.summary?.bezetting_pppk,
-                types: {
-                    bezetting_pns: typeof json.summary?.bezetting_pns,
-                    bezetting_pppk: typeof json.summary?.bezetting_pppk
-                }
-            });
             setData(json);
             lastFetchUrlRef.current = url;
             return json;
