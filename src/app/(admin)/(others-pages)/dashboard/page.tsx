@@ -138,12 +138,9 @@ export default function DashboardPage() {
     // If current user is admin-jf, auto-select and restrict jenis filter to fungsional
     useEffect(() => {
         if (!isAdminJf) return;
-        if (skipNextLoadRef.current) return; // avoid running during controlled reloads
         const list = (data?.filters?.jenisList || []);
         const found = list.find((j: string) => /fungsional/i.test(String(j || '')));
         if (!found) return;
-        // prevent selectedJenis change from triggering another fetch (we already fetched fungsional data server-side)
-        skipNextLoadRef.current = true;
         setSelectedJenis((prev) => {
             if (prev && /fungsional/i.test(String(prev.value || ''))) return prev;
             return { value: found, label: 'JABATAN FUNGSIONAL' };
@@ -156,8 +153,6 @@ export default function DashboardPage() {
         if (meLoading) return; // wait until user info resolved
         // clear last fetch marker so the normal load effect doesn't skip the new load
         lastFetchUrlRef.current = null;
-        // avoid double-fetch due to selectedJenis changes triggered by role-specific logic
-        skipNextLoadRef.current = true;
         // force reload without cache to ensure fresh summary data for new role
         loadData(true).catch(() => {});
     }, [isAdmin, isAdminJf, meLoading]);
@@ -528,7 +523,11 @@ export default function DashboardPage() {
 
 
     // Convert filters to react-select format
-    const biroOptions = filters.biroList.map((biro) => ({ value: biro, label: biro }));
+    const biroOptions = (isAdminJf)
+        ? filters.biroList
+            .filter((biro) => /^\s*Biro\b/i.test(String(biro || '')))
+            .map((biro) => ({ value: biro, label: biro }))
+        : filters.biroList.map((biro) => ({ value: biro, label: biro }));
     const jenisOptions = (isAdminJf)
         ? (() => {
             // Restrict to a single fungsional option for admin-jf only if the API provides one.
