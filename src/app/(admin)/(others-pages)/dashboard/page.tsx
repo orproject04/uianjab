@@ -120,11 +120,20 @@ export default function DashboardPage() {
 
     const skipNextLoadRef = useRef(false);
     const lastFetchUrlRef = useRef<string | null>(null);
+    const isInitialMount = useRef(true);
+    
     useEffect(() => {
+        // Skip on initial mount - let the role-based effect handle first load
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        
         if (skipNextLoadRef.current) {
             skipNextLoadRef.current = false;
             return;
         }
+        
         // compute same URL as loadData to detect redundant fetches
         const params = new URLSearchParams();
         if (selectedBiro?.value) params.append("biro", selectedBiro.value);
@@ -147,15 +156,18 @@ export default function DashboardPage() {
         });
     }, [isAdminJf, data]);
 
-    // When user's role changes (e.g. sign out/in with different account), force a fresh no-cache reload
-    // so summary cards and other dashboard data are not stale from previous user session.
+    // Initial load after user authentication completes
+    const hasLoadedOnce = useRef(false);
     useEffect(() => {
         if (meLoading) return; // wait until user info resolved
+        if (hasLoadedOnce.current) return; // already loaded once
+        
         // clear last fetch marker so the normal load effect doesn't skip the new load
         lastFetchUrlRef.current = null;
-        // force reload without cache to ensure fresh summary data for new role
+        hasLoadedOnce.current = true;
+        // force reload without cache to ensure fresh summary data
         loadData(true).catch(() => {});
-    }, [isAdmin, isAdminJf, meLoading]);
+    }, [meLoading]);
 
     async function loadData(forceNoCache: boolean = false): Promise<DashboardData | null> {
         setLoading(true);
@@ -226,7 +238,7 @@ export default function DashboardPage() {
                     <p className="text-red-600 dark:text-red-300 text-sm">{error}</p>
                     <div className="mt-4 flex gap-3">
                         <button
-                            onClick={loadData}
+                            onClick={() => loadData()}
                             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                         >
                             Coba Lagi
@@ -701,7 +713,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
                     <button
-                        onClick={loadData}
+                        onClick={() => loadData()}
                         className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white rounded-xl hover:from-brand-700 hover:to-brand-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

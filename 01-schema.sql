@@ -570,3 +570,45 @@ CREATE INDEX IF NOT EXISTS idx_tugas_pokok_abk_tugas ON tugas_pokok_abk(tugas_po
 
 -- Verifikasi
 -- SELECT 'Data ABK berhasil direset' as status;
+
+-- ============================================================================
+-- REKOM JF (Surat Rekomendasi JF)
+-- ============================================================================
+-- Migration merged from 05-create-rekom-jf.sql (2026-01-14)
+
+-- Create rekom_jf table for storing JF recommendation letters
+
+CREATE TABLE IF NOT EXISTS rekom_jf (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nama VARCHAR(255) NOT NULL,
+  kemenpan_path VARCHAR(500),
+  instansi_pembina_path VARCHAR(500),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create index on nama for faster searches
+CREATE INDEX IF NOT EXISTS idx_rekom_jf_nama ON rekom_jf(nama);
+
+-- Create updated_at trigger
+CREATE OR REPLACE FUNCTION update_rekom_jf_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_rekom_jf_updated_at ON rekom_jf;
+CREATE TRIGGER trigger_rekom_jf_updated_at
+  BEFORE UPDATE ON rekom_jf
+  FOR EACH ROW
+  EXECUTE FUNCTION update_rekom_jf_updated_at();
+
+-- Comments
+COMMENT ON TABLE rekom_jf IS 'Stores JF recommendation letters from KEMENPAN and Instansi Pembina';
+COMMENT ON COLUMN rekom_jf.id IS 'Primary key UUID';
+COMMENT ON COLUMN rekom_jf.nama IS 'Name/title of the recommendation letter';
+COMMENT ON COLUMN rekom_jf.kemenpan_path IS 'File path to KEMENPAN recommendation PDF';
+COMMENT ON COLUMN rekom_jf.instansi_pembina_path IS 'File path to Instansi Pembina recommendation PDF';
+

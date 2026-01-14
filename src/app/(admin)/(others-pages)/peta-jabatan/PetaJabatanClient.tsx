@@ -730,7 +730,15 @@ export default function PetaJabatanClient() {
     const kelasHLocal = bp.isMobile ? 16 : bp.isTablet ? 18 : 20;
     const headerH = Math.max(bp.isMobile ? 36 : bp.isTablet ? 40 : 44, titleLines.length * lineH + 8) + kelasHLocal + 10;
 
-    const namesArrLocal: string[] = Array.isArray(n.pejabat) ? (n.pejabat as PegawaiInfo[]).map(p => p.name) : [];
+    const namesArrLocal: string[] = Array.isArray(n.pejabat) 
+      ? (n.pejabat as PegawaiInfo[]).map(p => {
+          // Only show role for JABATAN FUNGSIONAL (rank 5) and JABATAN PELAKSANA (rank 6)
+          const jenisRank = rankJenis(n.jenis_jabatan);
+          const showRole = jenisRank === 5 || jenisRank === 6;
+          const role = showRole && p.role ? ` (${p.role})` : '';
+          return `${p.name}${role}`;
+        }) 
+      : [];
     const namesCountLocal = namesArrLocal.length;
     const boxGapVerticalLocal = bp.isMobile ? 6 : 8;
     const totalNamesHeightLocal = namesCountLocal > 0
@@ -1005,7 +1013,13 @@ export default function PetaJabatanClient() {
     const sel: number = bez - keb;
 
     const namesArr: string[] = Array.isArray(attrs.pejabat)
-      ? (attrs.pejabat as PegawaiInfo[]).map(p => p.name)
+      ? (attrs.pejabat as PegawaiInfo[]).map(p => {
+          // Only show role for JABATAN FUNGSIONAL (rank 5) and JABATAN PELAKSANA (rank 6)
+          const jenisRank = rankJenis(attrs.jenis);
+          const showRole = jenisRank === 5 || jenisRank === 6;
+          const role = showRole && p.role ? ` (${p.role})` : '';
+          return `${p.name}${role}`;
+        })
       : [];
     const namaPejabatText = namesArr.join(", ");
 

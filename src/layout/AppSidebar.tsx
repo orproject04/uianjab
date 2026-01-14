@@ -242,7 +242,8 @@ const AppSidebar: React.FC = () => {
         }] : []),
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
-        ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : [])
+        ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
+        ...((isAdmin || isAdminJf) ? [{ name: "Surat Rekomendasi JF", icon: <DocsIcon/>, path: "/rekom-jf", subItems: [] }] : [])
     ];
     const othersItems: NavItem[] = [];
 
