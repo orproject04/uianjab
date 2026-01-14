@@ -95,7 +95,7 @@ export async function PUT(
       const filePath = path.join(UPLOAD_DIR, fileName);
       const bytes = await kemenpanFile.arrayBuffer();
       await writeFile(filePath, Buffer.from(bytes));
-      kemenpanPath = `/api/storage/rekom-jf/${fileName}`;
+      kemenpanPath = `/api/files/rekom-jf/${fileName}`;
     }
 
     // Update Instansi Pembina file if provided
@@ -113,7 +113,7 @@ export async function PUT(
       const filePath = path.join(UPLOAD_DIR, fileName);
       const bytes = await instansiPembinaFile.arrayBuffer();
       await writeFile(filePath, Buffer.from(bytes));
-      instansiPembinaPath = `/api/storage/rekom-jf/${fileName}`;
+      instansiPembinaPath = `/api/files/rekom-jf/${fileName}`;
     }
 
     const result = await pool.query(
