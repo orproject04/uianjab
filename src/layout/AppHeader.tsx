@@ -208,7 +208,7 @@ const AppHeader: React.FC = () => {
         <header
             style={{ height: 'var(--header-height)' }}
             className={`fixed top-0 bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 shadow-sm transition-all duration-300 ${
-                isExpanded || (!isExpanded && isHovered) ? 'lg:ml-[380px]' : 'lg:ml-[90px]'
+                isExpanded || (!isExpanded && isHovered) ? 'lg:ml-[350px]' : 'lg:ml-[90px]'
             } right-0 left-0 z-[60]`}
         >
             <div className="flex flex-grow flex-col lg:flex-row w-full h-full">

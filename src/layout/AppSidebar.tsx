@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useCallback, useEffect, useRef, useState} from "react";
+import React, {useCallback, useEffect, useRef, useState, useMemo} from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {usePathname} from "next/navigation";
@@ -55,9 +55,28 @@ type NavItem = {
 };
 
 const AppSidebar: React.FC = () => {
-    const {isExpanded, isMobileOpen, isHovered, setIsHovered} = useSidebar();
+    const {isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar} = useSidebar();
     const pathname = usePathname();
     const {isAdmin, isAdminJf, loading: meLoading} = useMe();
+
+    // Check if we're on mobile
+    const [isMobile, setIsMobile] = useState(false);
+    
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024); // lg breakpoint
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // Function to close mobile sidebar
+    const closeMobileSidebar = () => {
+        if (isMobile && isMobileOpen) {
+            toggleMobileSidebar();
+        }
+    };
 
     // State tetap sama seperti kode asli
     const [anjabSubs, setAnjabSubs] = useState<SubNavItem[]>([]);
@@ -220,7 +239,7 @@ const AppSidebar: React.FC = () => {
         };
     }, [loadData]);
 
-    const navItems: NavItem[] = [
+    const navItems: NavItem[] = useMemo(() => [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
         ...(isAdmin ? [{
             name: "Master Anjab", 
@@ -244,7 +263,7 @@ const AppSidebar: React.FC = () => {
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
         ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
         ...((isAdmin || isAdminJf) ? [{ name: "Surat Rekomendasi JF", icon: <DocsIcon/>, path: "/rekom-jf", subItems: [] }] : [])
-    ];
+    ], [isAdmin, isAdminJf, anjabSubs]);
     const othersItems: NavItem[] = [];
 
     const isExactActive = useCallback(
@@ -894,76 +913,86 @@ const AppSidebar: React.FC = () => {
         );
     };
 
-    const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
-        <ul className={`mt-1 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
-            {subItems.map((subItem) => {
-                const hasSubItems = !!subItem.subItems?.length;
-                const isNestedOpen = openNestedSubmenus[subItem.path];
-                const href = `/${(subItem.path || "").replace(/^\/+/, "")}`;
+    // Memoized SubMenuItem component untuk performa lebih baik
+    const SubMenuItem = React.memo<{
+        subItem: SubNavItem;
+        level: number;
+    }>(({ subItem, level }) => {
+        const hasSubItems = !!subItem.subItems?.length;
+        const isNestedOpen = openNestedSubmenus[subItem.path];
+        const href = `/${(subItem.path || "").replace(/^\/+/, "")}`;
 
-                return (
-                    <li key={`${subItem.path}-${subItem.id}`}>
-                        {hasSubItems ? (
-                            <div>
-                                <div className="relative isolate flex items-start min-w-0 group pr-2">
-                                    <Link
-                                        href={href}
-                                        className={`relative z-0 flex-1 min-w-0 block px-3 py-2 rounded-md text-sm transition-colors ${
-                                            isExactActive(subItem.path)
-                                                ? "bg-brand-50 text-brand-700 font-medium"
-                                                : "text-gray-700 hover:bg-gray-50"
-                                        }`}
-                                        title={`${subItem.name}${subItem.unit_kerja ? ' - ' + subItem.unit_kerja : ''}`}
-                                    >
-                                        <div className="leading-relaxed break-words hyphens-auto" style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}>
-                                            {subItem.name}
-                                        </div>
-                                    </Link>
-                                    <div className="flex items-start flex-shrink-0 ml-2 pt-2 gap-1">
-                                        <button
-                                            onClick={() => toggleNestedSubmenu(subItem.path)}
-                                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                            aria-label="toggle"
-                                            title="Expand/Collapse"
-                                        >
-                                            <ChevronDownIcon
-                                                className={`w-4 h-4 transition-transform duration-300 text-gray-500 ${isNestedOpen ? "rotate-180" : ""}`}
-                                            />
-                                        </button>
-                                        <NodeActionsButton node={subItem}/>
-                                    </div>
+        return (
+            <li key={`${subItem.path}-${subItem.id}`}>
+                {hasSubItems ? (
+                    <div>
+                        <div className="relative isolate flex items-start min-w-0 group pr-2">
+                            <Link
+                                href={href}
+                                onClick={closeMobileSidebar}
+                                className={`relative z-0 flex-1 min-w-0 block px-3 py-2 rounded-md text-sm transition-colors ${
+                                    isExactActive(subItem.path)
+                                        ? "bg-brand-50 text-brand-700 font-medium"
+                                        : "text-gray-700 hover:bg-gray-50"
+                                }`}
+                                title={`${subItem.name}${subItem.unit_kerja ? ' - ' + subItem.unit_kerja : ''}`}
+                            >
+                                <div className="leading-relaxed break-words hyphens-auto" style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}>
+                                    {subItem.name}
                                 </div>
-                                <div
-                                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                                        isNestedOpen ? "max-h-[50000px] opacity-100 scale-y-100" : "max-h-0 opacity-0 scale-y-95"
-                                    }`}
+                            </Link>
+                            <div className="flex items-start flex-shrink-0 ml-2 pt-2 gap-1">
+                                <button
+                                    onClick={() => toggleNestedSubmenu(subItem.path)}
+                                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                    aria-label="toggle"
+                                    title="Expand/Collapse"
                                 >
-                                    {renderSubItems(subItem.subItems ?? [], level + 1)}
-                                </div>
+                                    <ChevronDownIcon
+                                        className={`w-4 h-4 transition-transform duration-300 text-gray-500 ${isNestedOpen ? "rotate-180" : ""}`}
+                                    />
+                                </button>
+                                <NodeActionsButton node={subItem}/>
                             </div>
-                        ) : (
-                            <div className="relative isolate flex items-start min-w-0 group pr-2">
-                                <Link
-                                    href={href}
-                                    className={`relative z-0 flex-1 min-w-0 block px-3 py-2 rounded-md text-sm transition-colors ${
-                                        isExactActive(subItem.path)
-                                            ? "bg-brand-50 text-brand-700 font-medium"
-                                            : "text-gray-700 hover:bg-gray-50"
-                                    }`}
-                                    title={`${subItem.name}${subItem.unit_kerja ? ' - ' + subItem.unit_kerja : ''}`}
-                                >
-                                    <div className="leading-relaxed break-words hyphens-auto" style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}>
-                                        {subItem.name}
-                                    </div>
-                                </Link>
-                                <div className="flex-shrink-0 ml-2 pt-2">
-                                    <NodeActionsButton node={subItem}/>
-                                </div>
+                        </div>
+                        {isNestedOpen && (
+                            <div className="transition-all duration-300 ease-in-out">
+                                {renderSubItems(subItem.subItems ?? [], level + 1)}
                             </div>
                         )}
-                    </li>
-                );
-            })}
+                    </div>
+                ) : (
+                    <div className="relative isolate flex items-start min-w-0 group pr-2">
+                        <Link
+                            href={href}
+                            onClick={closeMobileSidebar}
+                            className={`relative z-0 flex-1 min-w-0 block px-3 py-2 rounded-md text-sm transition-colors ${
+                                isExactActive(subItem.path)
+                                    ? "bg-brand-50 text-brand-700 font-medium"
+                                    : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                            title={`${subItem.name}${subItem.unit_kerja ? ' - ' + subItem.unit_kerja : ''}`}
+                        >
+                            <div className="leading-relaxed break-words hyphens-auto" style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}>
+                                {subItem.name}
+                            </div>
+                        </Link>
+                        <div className="flex-shrink-0 ml-2 pt-2">
+                            <NodeActionsButton node={subItem}/>
+                        </div>
+                    </div>
+                )}
+            </li>
+        );
+    });
+
+    SubMenuItem.displayName = 'SubMenuItem';
+
+    const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
+        <ul className={`mt-1 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
+            {subItems.map((subItem) => (
+                <SubMenuItem key={`${subItem.path}-${subItem.id}`} subItem={subItem} level={level} />
+            ))}
         </ul>
     );
 
@@ -1011,23 +1040,20 @@ const AppSidebar: React.FC = () => {
                                         </>
                                     )}
                                 </button>
-                                <div
-                                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                                        openSubmenu?.type === menuType && openSubmenu.index === index
-                                            ? "max-h-[50000px] opacity-100 scale-y-100"
-                                            : "max-h-0 opacity-0 scale-y-95"
-                                    }`}
-                                >
-                                    {isAnjab && loadingAnjab && (!nav.subItems || nav.subItems.length === 0) ? (
-                                        <div className="ml-9 mt-2 text-xs text-gray-400">Memuat…</div>
-                                    ) : (
-                                        nav.subItems && renderSubItems(nav.subItems)
-                                    )}
-                                </div>
+                                {openSubmenu?.type === menuType && openSubmenu.index === index && (
+                                    <div className="transition-all duration-200 ease-in-out">
+                                        {isAnjab && loadingAnjab && (!nav.subItems || nav.subItems.length === 0) ? (
+                                            <div className="ml-9 mt-2 text-xs text-gray-400">Memuat…</div>
+                                        ) : (
+                                            nav.subItems && renderSubItems(nav.subItems)
+                                        )}
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <Link
                                 href={nav.path || "/"}
+                                onClick={closeMobileSidebar}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
                                     isExactActive(nav.path)
                                         ? "bg-brand-50 text-brand-700 font-medium"
@@ -1101,9 +1127,10 @@ const AppSidebar: React.FC = () => {
     return (
         <>
             <aside
-                className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-4 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
-                    isExpanded || isMobileOpen ? "w-[380px]" : isHovered ? "w-[380px]" : "w-[90px]"
-                } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+                className={`fixed left-0 flex flex-col bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 transition-all duration-300 ease-in-out z-50 border-r border-gray-200 px-4 
+                    top-16 h-[calc(100vh-4rem)] lg:top-0 lg:h-screen
+                    ${isExpanded || isMobileOpen ? "w-[350px]" : isHovered ? "w-[350px]" : "w-[90px]"}
+                    ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
                 onMouseEnter={() => !isExpanded && setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
@@ -1132,7 +1159,7 @@ const AppSidebar: React.FC = () => {
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    <nav className="flex-1 overflow-y-scroll overflow-x-hidden px-2 sidebar-scrollbar">
+                    <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 sidebar-scrollbar">
                         <div className="flex flex-col pb-6">
                             <div>
                                 {(isExpanded || isHovered || isMobileOpen) && (
