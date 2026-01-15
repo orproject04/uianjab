@@ -16,7 +16,7 @@ export const REFRESH_TOKEN_MAXAGE_SEC = RT_DAYS * 24 * 60 * 60;
 
 /* ====== Password hashing ====== */
 export async function hashPassword(plain: string) {
-    const salt = await bcrypt.genSalt(12);
+    const salt = await bcrypt.genSalt(10);
     return bcrypt.hash(plain, salt);
 }
 export function comparePassword(plain: string, hash: string) {

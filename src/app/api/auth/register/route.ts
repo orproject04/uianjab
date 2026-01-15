@@ -55,15 +55,15 @@ export async function POST(req: NextRequest) {
       </div>
     `;
 
-        // Kirim email verifikasi
-        try {
-            await sendMail(email, "Verifikasi Email Anda", emailHtml);
-        } catch (emailError) {
-            console.error("Failed to send verification email:", emailError);
-            // Lanjutkan registrasi walaupun email gagal terkirim
-            // User bisa resend verification nanti
-        }
+        // Kirim email verifikasi secara async (fire-and-forget untuk response cepat)
+        sendMail(email, "Verifikasi Email Anda", emailHtml)
+            .then(() => console.log("Verification email sent to:", email))
+            .catch((emailError) => {
+                console.error("Failed to send verification email:", emailError);
+                // User bisa resend verification nanti
+            });
 
+        // Return response immediately tanpa tunggu email
         return Response.json({ 
             ok: true, 
             data: { id: user.id, email: user.email },

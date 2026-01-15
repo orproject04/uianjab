@@ -44,9 +44,9 @@ export async function POST(req: NextRequest) {
 
         await client.query("COMMIT");
 
-        // 4) Kirim email di luar transaksi
+        // 4) Kirim email secara async (fire-and-forget untuk response cepat)
         const link = `${process.env.APP_URL}/reset-password?token=${plain}`;
-        await sendMail(
+        sendMail(
             email,
             "Reset Password Anjab",
             `
@@ -62,8 +62,11 @@ export async function POST(req: NextRequest) {
         </p>
         <p>Abaikan jika kamu tidak merasa meminta.</p>
       `
-        );
+        )
+            .then(() => console.log("Password reset email sent to:", email))
+            .catch((err) => console.error("Failed to send password reset email:", err));
 
+        // Return response immediately tanpa tunggu email
         return Response.json({ ok: true, message: "Tautan reset telah dikirim ke email Anda." });
     } catch (e) {
         try { await (await pool.connect()).query("ROLLBACK"); } catch {}
