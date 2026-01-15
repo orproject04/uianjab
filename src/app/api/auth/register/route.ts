@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
         const verificationUrl = `${process.env.APP_URL || "http://localhost:3000"}/api/auth/verify?token=${token}`;
     
-    const emailHtml = `
+        const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Verifikasi Email Anda</h2>
         <p>Terima kasih telah mendaftar! Silakan klik tombol di bawah untuk memverifikasi email Anda:</p>
@@ -55,8 +55,22 @@ export async function POST(req: NextRequest) {
       </div>
     `;
 
-        return Response.json({ ok: true, data: { id: user.id, email: user.email } }, { status: 201 });
-    } catch {
+        // Kirim email verifikasi
+        try {
+            await sendMail(email, "Verifikasi Email Anda", emailHtml);
+        } catch (emailError) {
+            console.error("Failed to send verification email:", emailError);
+            // Lanjutkan registrasi walaupun email gagal terkirim
+            // User bisa resend verification nanti
+        }
+
+        return Response.json({ 
+            ok: true, 
+            data: { id: user.id, email: user.email },
+            message: "Registrasi berhasil. Silakan cek email untuk verifikasi."
+        }, { status: 201 });
+    } catch (err) {
+        console.error("Registration error:", err);
         return Response.json({ error: "Gagal register" }, { status: 500 });
     }
 }
