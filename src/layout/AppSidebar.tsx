@@ -6,7 +6,7 @@ import Image from "next/image";
 import {usePathname} from "next/navigation";
 
 import {useSidebar} from "../context/SidebarContext";
-import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon, PieChartIcon, DocsIcon, TaskIcon, ArrowRightIcon, PlugInIcon, DownloadIcon} from "../icons/index";
+import {GridIcon, ListIcon, ChevronDownIcon, HorizontaLDots, GroupIcon, PieChartIcon, DocsIcon, TaskIcon, ArrowRightIcon, PlugInIcon, DownloadIcon, MailIcon} from "../icons/index";
 
 import {useMe} from "@/context/MeContext";
 import {createPortal} from "react-dom";
@@ -262,7 +262,8 @@ const AppSidebar: React.FC = () => {
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
         ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
-        ...((isAdmin || isAdminJf) ? [{ name: "Surat Rekomendasi JF", icon: <DocsIcon/>, path: "/rekom-jf", subItems: [] }] : [])
+        ...((isAdmin || isAdminJf) ? [{ name: "Surat Rekomendasi JF", icon: <DocsIcon/>, path: "/rekom-jf", subItems: [] }] : []),
+        {name: "Usulan Perbaikan Dokumen Anjab", icon: <MailIcon/>, path: "/feedback", subItems: []}
     ], [isAdmin, isAdminJf, anjabSubs]);
     const othersItems: NavItem[] = [];
 

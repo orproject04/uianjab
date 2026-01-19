@@ -1316,7 +1316,9 @@ export default function PetaJabatanClient() {
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">Peta Jabatan</h1>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-2 mb-2">Peta Jabatan</h1>
+          </div>
           <div className="flex items-center gap-2">
             <input
               placeholder="Cari Jabatan"
