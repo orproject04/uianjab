@@ -1172,12 +1172,12 @@ const AppSidebar: React.FC = () => {
                         </div>
                     </nav>
                     
-                    <div className="flex-shrink-0 px-4 pt-4 pb-6 flex justify-end border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex-shrink-0 px-4 pt-4 pb-6 flex justify-start border-t border-gray-200 dark:border-gray-700">
                         <Image
-                            src="/images/logo/setjen.svg"
+                            src="/images/logo/logosetjen1.png"
                             alt="Setjen DPD RI"
-                            width={isExpanded || isHovered || isMobileOpen ? 60 : 40}
-                            height={isExpanded || isHovered || isMobileOpen ? 60 : 40}
+                            width={isExpanded || isHovered || isMobileOpen ? 220 : 200}
+                            height={isExpanded || isHovered || isMobileOpen ? 220 : 200}
                             className="opacity-60"
                         />
                     </div>
