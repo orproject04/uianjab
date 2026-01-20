@@ -1,4 +1,4 @@
-import { Outfit } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 
 import { SidebarProvider } from '@/context/SidebarContext';
@@ -16,8 +16,20 @@ export const metadata = {
   },
 };
 
-const outfit = Outfit({
-  subsets: ["latin"],
+const tahoma = localFont({
+  src: [
+    {
+      path: '../../fonts/tahoma/tahoma.ttf',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../../fonts/tahoma/tahomabd.ttf',
+      weight: '700',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-tahoma',
 });
 
 export default function RootLayout({
@@ -27,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${outfit.className} dark:bg-gray-900`}>
+      <body className={`${tahoma.className} dark:bg-gray-900`}>
         <ThemeProvider>
           <SidebarProvider>
             <MeProvider>

@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
 
     // Send verification email
     const verificationUrl = `${process.env.APP_URL || "http://localhost:3000"}/api/auth/verify?token=${verificationToken}`;
-    
+
     const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="font-family: Tahoma, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Verifikasi Email Anda</h2>
         <p>Terima kasih telah mendaftar! Silakan klik tombol di bawah untuk memverifikasi email Anda:</p>
         

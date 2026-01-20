@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
             email,
             "Reset Password Anjab",
             `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="font-family: Tahoma, sans-serif; max-width: 600px; margin: 0 auto;">
         <p>Kamu meminta reset password.</p>
         <p>Klik tautan berikut (berlaku 30 menit):
         <div style="text-align: center; margin: 30px 0;">
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         // Return response immediately tanpa tunggu email
         return Response.json({ ok: true, message: "Tautan reset telah dikirim ke email Anda." });
     } catch (e) {
-        try { await (await pool.connect()).query("ROLLBACK"); } catch {}
+        try { await (await pool.connect()).query("ROLLBACK"); } catch { }
         return Response.json({ error: "Gagal memproses permintaan" }, { status: 500 });
     } finally {
         client.release();
