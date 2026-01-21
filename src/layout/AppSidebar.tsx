@@ -1255,8 +1255,6 @@ const AppSidebar: React.FC = () => {
                                             { value: "ESELON IV", label: "ESELON IV" },
                                             { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
                                             { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
-                                            { value: "PEGAWAI DPK", label: "PEGAWAI DPK" },
-                                            { value: "PEGAWAI CLTN", label: "PEGAWAI CLTN" }
                                         ]}
                                         placeholder="Pilih Jenis Jabatan"
                                         searchable={true}
@@ -1550,8 +1548,6 @@ const AppSidebar: React.FC = () => {
                                             { value: "ESELON IV", label: "ESELON IV" },
                                             { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
                                             { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
-                                            { value: "PEGAWAI DPK", label: "PEGAWAI DPK" },
-                                            { value: "PEGAWAI CLTN", label: "PEGAWAI CLTN" }
                                         ]}
                                         placeholder="Pilih Jenis Jabatan"
                                         searchable={true}

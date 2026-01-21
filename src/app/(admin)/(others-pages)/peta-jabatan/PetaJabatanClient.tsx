@@ -79,8 +79,6 @@ function rankJenis(j: string | null | undefined): number {
   if (/\bESELON\s*IV\b/.test(t)) return 4;
   if (/JABATAN\s+FUNGSIONAL/.test(t)) return 5;
   if (/JABATAN\s+PELAKSANA/.test(t)) return 6;
-  if (/PEGAWAI\s+DPK/.test(t)) return 7;
-  if (/PEGAWAI\s+CLTN/.test(t)) return 8;
   return 99;
 }
 
