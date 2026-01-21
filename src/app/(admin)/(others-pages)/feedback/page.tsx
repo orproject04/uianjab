@@ -352,12 +352,17 @@ export default function FeedbackPage() {
             </div>
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {paginatedFeedback.map((item) => (
+              {paginatedFeedback.map((item, index) => (
                 <div
                   key={item.id}
                   className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    {/* Row Number */}
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 flex items-center justify-center font-semibold text-sm">
+                      {startIndex + index + 1}
+                    </div>
+                    
                     <div className="flex-1 min-w-0">
                       {/* Header Info */}
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">

@@ -108,7 +108,11 @@ export default function HomePage() {
               <p className="text-gray-600 leading-relaxed">
                 Silahkan pilih menu untuk memulai pengelolaan data.
               </p>
+<<<<<<< HEAD
               <div className="hidden md:flex flex-row gap-3 items-center">
+=======
+              <div className="flex flex-wrap gap-3">
+>>>>>>> e31d5556731fac6b6f7bdc75d45916a54af80ec7
                 {isAdmin && (
                   <button
                     onClick={() => handleNavigate("/dashboard")}
@@ -121,9 +125,10 @@ export default function HomePage() {
                   onClick={() => handleNavigate("/peta-jabatan")}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200 whitespace-nowrap"
                 >
-                  Lihat Peta Jabatan
+                  Peta Jabatan
                 </button>
               </div>
+<<<<<<< HEAD
                 <div className="md:hidden mt-4 flex flex-row gap-3 justify-center items-center z-20">
                   {isAdmin && (
                     <button
@@ -140,6 +145,8 @@ export default function HomePage() {
                     Lihat Peta Jabatan
                   </button>
                 </div>
+=======
+>>>>>>> e31d5556731fac6b6f7bdc75d45916a54af80ec7
             </div>
             <div className="relative flex items-center justify-center">
               <div className="absolute -inset-1 md:-inset-2 bg-gradient-to-br from-brand-200/40 via-white to-blue-light-200/50 blur-3xl" />

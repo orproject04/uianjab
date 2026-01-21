@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
           u.email as user_email
         FROM feedback f
         LEFT JOIN user_anjab u ON f.user_id = u.id
-        ORDER BY f.created_at DESC
+        ORDER BY f.created_at ASC
       `;
     } else {
       query = `
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
         FROM feedback f
         LEFT JOIN user_anjab u ON f.user_id = u.id
         WHERE f.user_id = $1
-        ORDER BY f.created_at DESC
+        ORDER BY f.created_at ASC
       `;
       params = [user.id];
     }
