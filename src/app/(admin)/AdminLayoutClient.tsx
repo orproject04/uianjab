@@ -65,9 +65,9 @@ const AdminLayoutClient: React.FC<{ children: React.ReactNode }> = ({children}) 
         <div className="min-h-screen xl:flex">
             <AppSidebar/>
             <Backdrop/>
-            <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
+            <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${mainContentMargin}`}>
                 <AppHeader/>
-                <div id="admin-content" style={{paddingTop: 'var(--header-height)'}} className="p-4 mx-auto max-w-7xl md:p-6 lg:p-8">{children}</div>
+                <div id="admin-content" style={{paddingTop: 'var(--header-height)'}} className="flex-1 p-4 mx-auto max-w-7xl md:p-6 lg:p-8 w-full">{children}</div>
             </div>
         </div>
     );

@@ -38,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${tahoma.className} dark:bg-gray-900`}>
+    <html lang="en" className="h-full">
+      <body className={`${tahoma.className} dark:bg-gray-900 h-full`}>
         <ThemeProvider>
           <SidebarProvider>
             <MeProvider>

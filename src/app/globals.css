@@ -200,6 +200,19 @@
   }
   body {
     @apply relative font-normal font-outfit z-1 bg-gray-25;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* Ensure minimum height and prevent overflow issues */
+  html {
+    overflow-x: hidden;
+  }
+  
+  html, body {
+    min-height: 100vh;
+    height: 100%;
   }
 }
 
@@ -912,4 +925,14 @@ span.flatpickr-weekday,
   to {
     opacity: 0;
   }
+}
+
+/* Tahoma font optimizations */
+.font-semibold {
+  letter-spacing: -0.01em;
+}
+
+/* Prevent layout shift with consistent button sizing */
+button {
+  font-variant-numeric: tabular-nums;
 }

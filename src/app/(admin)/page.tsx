@@ -96,7 +96,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-[calc(100dvh-120px)] bg-gradient-to-b from-brand-25 via-white to-blue-light-25">
+    <div className="h-full bg-gradient-to-b from-brand-25 via-white to-blue-light-25">
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-8 md:px-6 md:pt-12 space-y-8">
         {/* Hero */}
         <div className="rounded-3xl bg-white/80 shadow-lg ring-1 ring-black/5 overflow-hidden">
@@ -108,18 +108,18 @@ export default function HomePage() {
               <p className="text-gray-600 leading-relaxed">
                 Silahkan pilih menu untuk memulai pengelolaan data.
               </p>
-              <div className="hidden md:flex flex-wrap gap-3">
+              <div className="hidden md:flex flex-row gap-3 items-center">
                 {isAdmin && (
                   <button
                     onClick={() => handleNavigate("/dashboard")}
-                    className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 whitespace-nowrap"
                   >
                     Buka Dashboard
                   </button>
                 )}
                 <button
                   onClick={() => handleNavigate("/peta-jabatan")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200 whitespace-nowrap"
                 >
                   Lihat Peta Jabatan
                 </button>
@@ -128,21 +128,21 @@ export default function HomePage() {
                   {isAdmin && (
                     <button
                       onClick={() => handleNavigate("/dashboard")}
-                      className="relative z-20 inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+                      className="relative z-20 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 flex-1 min-w-0"
                     >
                       Buka Dashboard
                     </button>
                   )}
                   <button
                     onClick={() => handleNavigate("/peta-jabatan")}
-                    className="relative z-20 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200"
+                    className="relative z-20 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200 flex-1 min-w-0"
                   >
                     Lihat Peta Jabatan
                   </button>
                 </div>
             </div>
             <div className="relative flex items-center justify-center">
-              <div className="absolute -inset-6 md:-inset-10 bg-gradient-to-br from-brand-200/40 via-white to-blue-light-200/50 blur-3xl" />
+              <div className="absolute -inset-1 md:-inset-2 bg-gradient-to-br from-brand-200/40 via-white to-blue-light-200/50 blur-3xl" />
               <div className="relative">
                 <Image
                   src="/images/logo/pandawa-icon.png"

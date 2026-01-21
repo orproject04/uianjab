@@ -211,10 +211,10 @@ export default function HelpPage() {
             <div className="min-h-screen flex flex-col xl:flex-row">
                 <AppSidebar />
                 <Backdrop />
-                <div className={`flex-1 min-h-screen ${mainContentMargin} transition-all duration-300`}>
+                <div className={`flex-1 flex flex-col ${mainContentMargin} transition-all duration-300`}>
                     <AppHeader />
-                    <main className="p-4 sm:p-6 lg:p-8" style={{ paddingTop: 'calc(var(--header-height) + 2rem)' }}>
-                        <div className="mx-auto max-w-7xl">
+                    <main className="flex-1 p-4 sm:p-6 lg:p-8" style={{ paddingTop: 'calc(var(--header-height) + 2rem)' }}>
+                        <div className="mx-auto max-w-7xl h-full">
                             <HelpContent activeTab={activeTab} setActiveTab={setActiveTab} isAuthenticated={isAuthenticated} />
                         </div>
                     </main>
