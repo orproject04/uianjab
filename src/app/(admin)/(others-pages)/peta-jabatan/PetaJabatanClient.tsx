@@ -250,6 +250,7 @@ export default function PetaJabatanClient() {
   const [lastClickedPath, setLastClickedPath] = useState<string | null>(null);
   const hasFocusedOnce = useRef(false);
   const [highlightUpdate, setHighlightUpdate] = useState(0); // Counter to force re-render for highlight
+  const [showTips, setShowTips] = useState(false); // State for tips tooltip visibility
 
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
@@ -1421,23 +1422,37 @@ export default function PetaJabatanClient() {
 
       {err && <div className="text-sm text-red-600">{err}</div>}
 
-      {/* Info card untuk panduan singkat */}
+      {/* Tips Navigasi - Collapsible tooltip */}
       {!loading && rd3Data.length > 0 && (
-        <div className="bg-blue-50 border border-blue-light-200 rounded-lg p-3 text-sm">
-          <div className="flex items-start gap-2">
-            <svg className="w-5 h-5 text-blue-light-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="relative">
+          <button
+            onClick={() => setShowTips(!showTips)}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm hover:bg-blue-100 transition-colors"
+          >
+            <svg className="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div className="space-y-1 text-blue-light-900">
-              <p className="font-medium">Tips Navigasi:</p>
-              <ul className="list-disc list-inside space-y-0.5 text-xs">
+            <span className="font-medium text-blue-900">Tips Navigasi</span>
+            <svg 
+              className={`w-4 h-4 text-blue-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {showTips && (
+            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-900">
                 <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
                 <li>Drag background untuk menggeser tampilan</li>
                 <li>Klik panah di card untuk expand/collapse cabang</li>
                 {bp.isMobile && <li className="text-orange-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
               </ul>
             </div>
-          </div>
+          )}
         </div>
       )}
 
