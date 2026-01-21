@@ -22,7 +22,7 @@ export default function HomePage() {
   const quickActions = [
     {
       title: "Dashboard Anjab & ABK",
-      description: "Pantau total jabatan, kebutuhan pegawai, dan gap secara real-time.",
+      description: "Pantau bezetting dan kebutuhan pegawai secara real-time.",
       href: "/dashboard",
       badge: "Analitik",
       color: "bg-brand-50 text-brand-700 border-brand-100",
@@ -36,28 +36,28 @@ export default function HomePage() {
     },
     {
       title: "Master Anjab",
-      description: "Kelola dokumen Analisis Jabatan, edit konten, dan ekspor Word/PDF.",
+      description: "Kelola dokumen Analisis Jabatan, edit konten, dan ekspor PDF.",
       href: "/anjab/master",
       badge: "Dokumen",
       color: "bg-emerald-50 text-emerald-700 border-emerald-100",
     },
     {
       title: "Tambah Jabatan Baru",
-      description: "Buat node jabatan baru dengan auto-matching ke master Anjab.",
+      description: "Buat jabatan baru dengan auto-matching ke master Anjab.",
       onClick: () => setShowAddModal(true),
       badge: "Aksi Cepat",
       color: "bg-orange-50 text-orange-700 border-orange-100",
     },
     {
       title: "Pencocokan Anjab",
-      description: "Cek kesesuaian antara peta jabatan dan master Anjab dengan fuzzy match.",
+      description: "Cek kesesuaian antara peta jabatan dan master Anjab.",
       href: "/anjab/match",
       badge: "Auto-match",
       color: "bg-amber-50 text-amber-700 border-amber-100",
     },
     {
       title: "Sinkronisasi Pegawai",
-      description: "Perbarui data pegawai agar perhitungan kebutuhan selalu akurat.",
+      description: "Perbarui data pegawai agar perhitungan kebutuhan akurat.",
       href: "/sync-pegawai",
       badge: "Integrasi",
       color: "bg-rose-50 text-rose-700 border-rose-100",
@@ -68,7 +68,7 @@ export default function HomePage() {
     {
       title: "Analisis Jabatan",
       points: [
-        "Upload & generate dokumen Word/PDF dari master Anjab",
+        "Upload & generate dokumen PDF dari master Anjab",
         "Auto-matching peta jabatan ke master menggunakan similarity score",
         "Pantau kebutuhan vs bezetting langsung di dashboard",
       ],
