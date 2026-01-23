@@ -57,7 +57,7 @@ export async function fetchPegawaiData(
   page: number = 1,
   perPage: number = 100
 ): Promise<PegawaiApiResponse> {
-  const baseUrl = process.env.EXTERNAL_PEGAWAI_API_URL || 'https://cmb.tail91813a.ts.net/api/pegawai';
+  const baseUrl = process.env.EXTERNAL_PEGAWAI_API_URL;
   const timeout = parseInt(process.env.EXTERNAL_API_TIMEOUT || '60000');
   
   const url = `${baseUrl}?per_page=${perPage}&page=${page}`;

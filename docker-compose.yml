@@ -21,6 +21,7 @@ services:
       - ./storage/pdf-cache:/app/storage/pdf-cache
       - ./storage/sync-logs:/app/storage/sync-logs
       - ./storage/rekom-jf:/app/storage/rekom-jf
+      - ./storage/persesjen:/app/storage/persesjen
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

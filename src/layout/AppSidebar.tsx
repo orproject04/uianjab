@@ -242,27 +242,25 @@ const AppSidebar: React.FC = () => {
     const navItems: NavItem[] = useMemo(() => [
         {icon: <GridIcon/>, name: "Homepage", path: "/", subItems: []},
         ...(isAdmin ? [{
-            name: "Master Anjab", 
+            name: "Master Data", 
             icon: <DocsIcon/>, 
-            path: "/anjab/master", 
-            subItems: []
-        }] : []),
-        ...(isAdmin ? [{
-            name: "Match Anjab", 
-            icon: <TaskIcon/>, 
-            path: "/anjab/match", 
-            subItems: []
-        }] : []),
-        ...(isAdmin ? [{
-            name: "Sinkronisasi Data Pegawai",
-            icon: <DownloadIcon/>,
-            path: "/sync-pegawai",
-            subItems: []
+            subItems: [
+                { id: "master-anjab", name: "Master Anjab", slug: "master-anjab", path: "/anjab/master" },
+                { id: "match-anjab", name: "Match Anjab", slug: "match-anjab", path: "/anjab/match" },
+                { id: "sync-pegawai", name: "Sinkronisasi Data Pegawai", slug: "sync-pegawai", path: "/sync-pegawai" }
+            ]
         }] : []),
         {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
         ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
-        ...((isAdmin || isAdminJf) ? [{ name: "Surat Rekomendasi JF", icon: <DocsIcon/>, path: "/rekom-jf", subItems: [] }] : []),
+        ...((isAdmin || isAdminJf) ? [{
+            name: "Dokumen",
+            icon: <DocsIcon/>,
+            subItems: [
+                { id: "rekom-jf", name: "Surat Rekomendasi JF", slug: "rekom-jf", path: "/rekom-jf" },
+                ...(isAdmin ? [{ id: "persesjen", name: "Persesjen", slug: "persesjen", path: "/persesjen" }] : [])
+            ]
+        }] : []),
         {name: "Usulan Perbaikan Dokumen Anjab", icon: <MailIcon/>, path: "/feedback", subItems: []}
     ], [isAdmin, isAdminJf, anjabSubs]);
     const othersItems: NavItem[] = [];
@@ -918,10 +916,12 @@ const AppSidebar: React.FC = () => {
     const SubMenuItem = React.memo<{
         subItem: SubNavItem;
         level: number;
-    }>(({ subItem, level }) => {
+        parentName?: string;
+    }>(({ subItem, level, parentName }) => {
         const hasSubItems = !!subItem.subItems?.length;
         const isNestedOpen = openNestedSubmenus[subItem.path];
         const href = `/${(subItem.path || "").replace(/^\/+/, "")}`;
+        const showDotsMenu = parentName === "Anjab"; // Only show dots menu for Anjab children
 
         return (
             <li key={`${subItem.path}-${subItem.id}`}>
@@ -953,12 +953,12 @@ const AppSidebar: React.FC = () => {
                                         className={`w-4 h-4 transition-transform duration-300 text-gray-500 ${isNestedOpen ? "rotate-180" : ""}`}
                                     />
                                 </button>
-                                <NodeActionsButton node={subItem}/>
+                                {showDotsMenu && <NodeActionsButton node={subItem}/>}
                             </div>
                         </div>
                         {isNestedOpen && (
                             <div className="transition-all duration-300 ease-in-out">
-                                {renderSubItems(subItem.subItems ?? [], level + 1)}
+                                {renderSubItems(subItem.subItems ?? [], level + 1, parentName)}
                             </div>
                         )}
                     </div>
@@ -978,9 +978,11 @@ const AppSidebar: React.FC = () => {
                                 {subItem.name}
                             </div>
                         </Link>
-                        <div className="flex-shrink-0 ml-2 pt-2">
-                            <NodeActionsButton node={subItem}/>
-                        </div>
+                        {showDotsMenu && (
+                            <div className="flex-shrink-0 ml-2 pt-2">
+                                <NodeActionsButton node={subItem}/>
+                            </div>
+                        )}
                     </div>
                 )}
             </li>
@@ -989,10 +991,10 @@ const AppSidebar: React.FC = () => {
 
     SubMenuItem.displayName = 'SubMenuItem';
 
-    const renderSubItems = (subItems: SubNavItem[], level: number = 0) => (
+    const renderSubItems = (subItems: SubNavItem[], level: number = 0, parentName?: string) => (
         <ul className={`mt-1 space-y-1 ${level === 0 ? "ml-9" : "ml-4"}`}>
             {subItems.map((subItem) => (
-                <SubMenuItem key={`${subItem.path}-${subItem.id}`} subItem={subItem} level={level} />
+                <SubMenuItem key={`${subItem.path}-${subItem.id}`} subItem={subItem} level={level} parentName={parentName} />
             ))}
         </ul>
     );
@@ -1046,7 +1048,7 @@ const AppSidebar: React.FC = () => {
                                         {isAnjab && loadingAnjab && (!nav.subItems || nav.subItems.length === 0) ? (
                                             <div className="ml-9 mt-2 text-xs text-gray-400">Memuat…</div>
                                         ) : (
-                                            nav.subItems && renderSubItems(nav.subItems)
+                                            nav.subItems && renderSubItems(nav.subItems, 0, nav.name)
                                         )}
                                     </div>
                                 )}
@@ -1261,17 +1263,6 @@ const AppSidebar: React.FC = () => {
                                     />
                                 </div>
 
-                                {/*<div>*/}
-                                {/*    <label className="text-sm font-medium text-gray-700 block mb-1.5">Order index</label>*/}
-                                {/*    <input*/}
-                                {/*        type="number"*/}
-                                {/*        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"*/}
-                                {/*        value={editOrder}*/}
-                                {/*        onChange={(e) => setEditOrder(e.target.value)}*/}
-                                {/*        placeholder="Kosongkan untuk auto"*/}
-                                {/*    />*/}
-                                {/*</div>*/}
-
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">
                                         Nama Pejabat
@@ -1332,6 +1323,17 @@ const AppSidebar: React.FC = () => {
                                     <p className="mt-1.5 text-xs text-gray-500">
                                         Memindahkan jabatan juga memindahkan seluruh jabatan dibawahnya.
                                     </p>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1.5">Urutan</label>
+                                    <input
+                                        type="number"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        value={editOrder}
+                                        onChange={(e) => setEditOrder(e.target.value)}
+                                        placeholder="Kosongkan untuk auto"
+                                    />
                                 </div>
                             </div>
 

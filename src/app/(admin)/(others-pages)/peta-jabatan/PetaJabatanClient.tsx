@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import type { RawNodeDatum, CustomNodeElementProps } from "react-d3-tree";
+import { useMe } from "@/context/MeContext";
 
 const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), { ssr: false });
 
@@ -228,6 +229,7 @@ type FungsionalOpt = "STRUKTURAL" | "FUNGSIONAL";
 
 export default function PetaJabatanClient() {
   const router = useRouter();
+  const { isAdmin } = useMe();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
@@ -250,12 +252,44 @@ export default function PetaJabatanClient() {
   const [highlightUpdate, setHighlightUpdate] = useState(0); // Counter to force re-render for highlight
   const [showTips, setShowTips] = useState(false); // State for tips tooltip visibility
 
+  // Persesjen documents state
+  const [petaJabatanDoc, setPetaJabatanDoc] = useState<string | null>(null);
+  const [kelasJabatanDoc, setKelasJabatanDoc] = useState<string | null>(null);
+
+
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
     if (Object.keys(collapseMap).length > 0) {
       sessionStorage.setItem('petaJabatan_collapseMap', JSON.stringify(collapseMap));
     }
   }, [collapseMap]);
+
+  // Fetch latest persesjen documents
+  useEffect(() => {
+    const fetchPersesjen = async () => {
+      try {
+        const res = await fetch("/api/persesjen");
+        if (!res.ok) return;
+        const json = await res.json();
+        const data = json?.data || [];
+        
+        // Get latest Peta Jabatan
+        const petaJabatan = data
+          .filter((d: any) => d.jenis_persesjen === "Peta Jabatan" && d.persesjen_path)
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        if (petaJabatan) setPetaJabatanDoc(petaJabatan.persesjen_path);
+
+        // Get latest Kelas Jabatan
+        const kelasJabatan = data
+          .filter((d: any) => d.jenis_persesjen === "Kelas Jabatan" && d.persesjen_path)
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        if (kelasJabatan) setKelasJabatanDoc(kelasJabatan.persesjen_path);
+      } catch (error) {
+        console.error("Error fetching persesjen:", error);
+      }
+    };
+    fetchPersesjen();
+  }, []);
 
   useEffect(() => {
     sessionStorage.setItem('petaJabatan_scope', scope);
@@ -1422,27 +1456,57 @@ export default function PetaJabatanClient() {
 
       {/* Tips Navigasi - Collapsible tooltip */}
       {!loading && rd3Data.length > 0 && (
-        <div className="relative">
-          <button
-            onClick={() => setShowTips(!showTips)}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm hover:bg-blue-100 transition-colors"
-          >
-            <svg className="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-blue-900">Tips Navigasi</span>
-            <svg 
-              className={`w-4 h-4 text-blue-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => setShowTips(!showTips)}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm hover:bg-blue-100 transition-colors"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+              <svg className="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium text-blue-900">Tips Navigasi</span>
+              <svg 
+                className={`w-4 h-4 text-blue-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Persesjen Buttons - aligned right */}
+            <div className="flex items-center gap-2">
+              {petaJabatanDoc && (
+                <button
+                  onClick={() => window.open(petaJabatanDoc, '_blank')}
+                  className="px-3 py-2 rounded border text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  title="Lihat Peta Jabatan (Persesjen)"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Persesjen Peta Jabatan</span>
+                </button>
+              )}
+              {isAdmin && kelasJabatanDoc && (
+                <button
+                  onClick={() => window.open(kelasJabatanDoc, '_blank')}
+                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  title="Lihat Kelas Jabatan (Persesjen)"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Persesjen Kelas Jabatan</span>
+                </button>
+              )}
+            </div>
+          </div>
           
           {showTips && (
-            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
               <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-900">
                 <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
                 <li>Drag background untuk menggeser tampilan</li>

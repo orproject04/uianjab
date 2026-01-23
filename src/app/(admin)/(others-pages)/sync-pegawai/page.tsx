@@ -151,15 +151,15 @@ export default function SyncPegawaiPage() {
         {/* API Configuration Info */}
         <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
           <h3 className="mb-2 font-semibold text-blue-light-900 dark:text-blue-light-100">
-            Informasi API
+            Informasi API Data Pegawai
           </h3>
           <div className="space-y-1 text-sm text-blue-light-800 dark:text-blue-light-200">
             <p>
               <strong>API URL:</strong>{' '}
-              {process.env.NEXT_PUBLIC_EXTERNAL_PEGAWAI_API_URL || 'https://cmb.tail91813a.ts.net/api/pegawai'}
+              {process.env.NEXT_PUBLIC_EXTERNAL_PEGAWAI_API_URL}
             </p>
             <p>
-              <strong>Per Page:</strong> {process.env.NEXT_PUBLIC_EXTERNAL_API_PER_PAGE || '100'}
+              <strong>Per Page:</strong> {process.env.NEXT_PUBLIC_EXTERNAL_API_PER_PAGE}
             </p>
           </div>
         </div>
