@@ -21,6 +21,8 @@ export default function PeresjenPage() {
   const { me, isAdmin, isAdminJf, loading: meLoading } = useMe();
   const [data, setData] = useState<Persesjen[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -109,23 +111,34 @@ export default function PeresjenPage() {
     form.append("jenis_persesjen", formData.jenis_persesjen.trim());
     if (formData.persesjen) form.append("persesjen", formData.persesjen);
 
+    setUploadLoading(true);
+    setShowModal(false);
+    
+    Swal.fire({
+      title: 'Mengunggah dokumen...',
+      html: 'Mohon tunggu, file sedang diunggah',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     try {
       const res = await fetch("/api/persesjen", { method: "POST", body: form });
       const json = await res.json();
 
       if (!res.ok) {
-        setShowModal(false);
         Swal.fire("Error", json.error || "Failed to save", "error");
         return;
       }
 
       Swal.fire("Success", json.message || "Saved successfully", "success");
-      setShowModal(false);
       loadData();
     } catch (error: any) {
       console.error("Error saving:", error);
-      setShowModal(false);
       Swal.fire("Error", error.message || "Failed to save", "error");
+    } finally {
+      setUploadLoading(false);
     }
   };
 
@@ -144,6 +157,16 @@ export default function PeresjenPage() {
 
     if (!result.isConfirmed) return;
 
+    setDeleteLoading(id);
+    Swal.fire({
+      title: 'Menghapus dokumen...',
+      html: 'Mohon tunggu',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     try {
       const res = await fetch(`/api/persesjen/${id}`, { method: "DELETE" });
       const json = await res.json();
@@ -158,6 +181,8 @@ export default function PeresjenPage() {
     } catch (error: any) {
       console.error("Error deleting:", error);
       Swal.fire("Error", error.message || "Failed to delete", "error");
+    } finally {
+      setDeleteLoading(null);
     }
   };
 
@@ -366,13 +391,18 @@ export default function PeresjenPage() {
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nama); }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-red-600 to-red-500 dark:from-red-500 dark:to-red-600 rounded-lg hover:from-red-700 hover:to-red-600 dark:hover:from-red-600 dark:hover:to-red-700 shadow-sm hover:shadow transition-all"
+                      disabled={deleteLoading === item.id}
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-red-600 to-red-500 dark:from-red-500 dark:to-red-600 rounded-lg hover:from-red-700 hover:to-red-600 dark:hover:from-red-600 dark:hover:to-red-700 shadow-sm hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Hapus Dokumen Persesjen"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      <span>Hapus</span>
+                      {deleteLoading === item.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
+                      <span>{deleteLoading === item.id ? 'Menghapus...' : 'Hapus'}</span>
                     </button>
                   </div>
                 </div>
@@ -508,13 +538,18 @@ export default function PeresjenPage() {
                             )}
                             <button
                               onClick={() => handleDelete(item.id, item.nama)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                              disabled={deleteLoading === item.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Hapus"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              <span>Hapus</span>
+                              {deleteLoading === item.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              )}
+                              <span>{deleteLoading === item.id ? 'Menghapus...' : 'Hapus'}</span>
                             </button>
                           </div>
                         </td>
@@ -674,15 +709,24 @@ export default function PeresjenPage() {
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    disabled={uploadLoading}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-light-500 text-white rounded-lg hover:bg-blue-light-700 transition-colors"
+                    disabled={uploadLoading}
+                    className="flex-1 px-4 py-2 bg-blue-light-500 text-white rounded-lg hover:bg-blue-light-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
-                    Upload
+                    {uploadLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Mengunggah...</span>
+                      </>
+                    ) : (
+                      <span>Upload</span>
+                    )}
                   </button>
                 </div>
               </form>
