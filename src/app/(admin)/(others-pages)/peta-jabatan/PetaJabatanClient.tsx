@@ -1481,7 +1481,7 @@ export default function PetaJabatanClient() {
               {petaJabatanDoc && (
                 <button
                   onClick={() => window.open(petaJabatanDoc, '_blank')}
-                  className="px-3 py-2 rounded border text-sm bg-brand-500 text-white hover:bg-brand-600 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap"
                   title="Lihat Peta Jabatan (Persesjen)"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
