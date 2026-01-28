@@ -261,6 +261,32 @@ export async function GET(req: NextRequest) {
 
         // Query untuk breakdown by nama_jabatan di peta_jabatan (tanpa grouping)
         // Use the same sort_path ordering as /api/peta-jabatan for consistency
+        // Build the WHERE clause for the tree CTE - need to filter in the SELECT from tree
+        const treeWhereConditions: string[] = [];
+        const treeParams: any[] = [];
+        
+        if (biroFilter) {
+            treeWhereConditions.push(`t.id IN (SELECT id FROM unit_tree)`);
+            // biroFilterCTE uses $1 for biro filter, so we need to pass it
+            treeParams.push(biroFilter);
+        }
+        if (effectiveJenisFilter) {
+            if (effectiveJenisFilter === '__ADMIN_JF__') {
+                treeWhereConditions.push(`lower(coalesce(t.jenis_jabatan,'')) LIKE '%fungsional%'`);
+            } else {
+                // Use literal value in WHERE clause to avoid param index mismatch
+                treeWhereConditions.push(`t.jenis_jabatan = '${effectiveJenisFilter.replace(/'/g, "''")}'`);
+            }
+        }
+        if (lokasiFilter) {
+            if (lokasiFilter.toLowerCase() === "pusat") {
+                treeWhereConditions.push(`t.is_pusat = true`);
+            } else if (lokasiFilter.toLowerCase() === "daerah") {
+                treeWhereConditions.push(`t.is_pusat = false`);
+            }
+        }
+        const treeWhereClause = treeWhereConditions.length > 0 ? `WHERE ${treeWhereConditions.join(" AND ")}` : "";
+
         const byNamaJabatanQuery = `
             ${biroFilterCTE ? biroFilterCTE + ',' : 'WITH RECURSIVE'}
             tree AS (
@@ -272,6 +298,7 @@ export async function GET(req: NextRequest) {
                     jenis_jabatan,
                     bezetting,
                     kebutuhan_pegawai,
+                    is_pusat,
                     order_index,
                     ARRAY[
                         lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
@@ -289,6 +316,7 @@ export async function GET(req: NextRequest) {
                     c.jenis_jabatan,
                     c.bezetting,
                     c.kebutuhan_pegawai,
+                    c.is_pusat,
                     c.order_index,
                     t.sort_path || (
                         lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
@@ -304,11 +332,12 @@ export async function GET(req: NextRequest) {
                 t.kebutuhan_pegawai as kebutuhan,
                 (t.bezetting - t.kebutuhan_pegawai) as selisih
             FROM tree t
-            ${whereClause ? whereClause.replace('FROM peta_jabatan', '') : ''}
+            ${treeWhereClause}
             ORDER BY t.sort_path
         `;
 
-        const byNamaJabatanResult = await runQuery('byNamaJabatanQuery', byNamaJabatanQuery, params);
+        // Use treeParams which includes biroFilter if present
+        const byNamaJabatanResult = await runQuery('byNamaJabatanQuery', byNamaJabatanQuery, treeParams);
         const byNamaJabatan = byNamaJabatanResult.rows;
 
         // Also return lists of normalized unique names for verification
