@@ -88,8 +88,8 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     // modal removed — jenis cards now act as filters
-    const [sortField, setSortField] = useState<string>("selisih");
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+    const [sortField, setSortField] = useState<string>("");
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [searchNama, setSearchNama] = useState<string>('');
     const [currentPage, setCurrentPage] = useState<number>(1);
     // Overrides for kebutuhan khusus fungsional: key => `${nama}|||${unit}` -> string|number
@@ -386,6 +386,12 @@ export default function DashboardPage() {
     const getSortedByNama = () => {
         const arr = [...byNamaJabatan];
         const field = sortField;
+        
+        // If no sort field is set, return original order from API
+        if (!field) {
+            return arr;
+        }
+        
         const dir = sortDir === 'desc' ? -1 : 1;
         arr.sort((a: any, b: any) => {
             const va = (a as any)[field];
@@ -497,6 +503,83 @@ export default function DashboardPage() {
 
             // Add totals row
             html += `<tr style="background:#f0f0f0;font-weight:bold;"><td colspan="3" style="border:1px solid #000;padding:6px;text-align:center;">TOTAL</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalBezetting.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalKebutuhan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalSelisih.toLocaleString('id-ID')}</td></tr>`;
+
+            html += `</tbody></table>`;
+            html += `<p style="margin:15px 0 0 0;font-size:9px;color:#666;">Generated: ${new Date().toLocaleString('id-ID')}</p>`;
+            html += `</div>`;
+
+            // Insert into hidden print container
+            const printContainer = document.getElementById('print-container');
+            if (printContainer) {
+                printContainer.innerHTML = html;
+                // Add small delay to ensure DOM is rendered before printing
+                setTimeout(() => {
+                    window.print();
+                    // Clear content after print to avoid showing during loading
+                    setTimeout(() => {
+                        if (printContainer) printContainer.innerHTML = '';
+                    }, 500);
+                }, 50);
+            }
+        } catch (err) {
+            console.error('Print failed', err);
+            alert('Gagal memulai print.');
+        }
+    }
+
+    // Print function for Total Per Jenis Jabatan
+    function handlePrintJenisJabatan() {
+        try {
+            // Use the displayByJenis data (already filtered and sorted)
+            const rows = displayByJenis;
+
+            const filterLines: string[] = [];
+            if (selectedBiro?.value) filterLines.push(`Biro: ${selectedBiro.label}`);
+            if (selectedJenis?.value) filterLines.push(`Jenis: ${selectedJenis.label}`);
+            if (selectedLokasi?.value) filterLines.push(`Lokasi: ${selectedLokasi.label}`);
+
+            // Build printable HTML
+            let html = `<div style="font-family:Arial,sans-serif;padding:20px;">`;
+            html += `<h2 style="margin:0 0 10px 0;font-size:18px;font-weight:bold;">Total Per Jenis Jabatan</h2>`;
+            if (filterLines.length > 0) {
+                html += `<p style="margin:0 0 15px 0;font-size:12px;"><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
+            }
+            html += `<table style="border-collapse:collapse;width:100%;font-size:10px;border:1px solid #000;"><thead><tr style="background:#f0f0f0;">`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">No</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Jenis Jabatan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Total Jenis Jabatan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Bezetting</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Kebutuhan</th>`;
+            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Selisih</th>`;
+            html += `</tr></thead><tbody>`;
+            
+            let totalJenisJabatan = 0;
+            let totalBezetting = 0;
+            let totalKebutuhan = 0;
+            let totalSelisih = 0;
+
+            rows.forEach((r: any, i: number) => {
+                const jumlahVal = Number((r as any).jumlah_jabatan ?? 0);
+                const bezVal = Number(r.bezetting ?? 0);
+                const kebVal = Number(r.kebutuhan ?? 0);
+                const selVal = Number(r.selisih ?? 0);
+
+                totalJenisJabatan += jumlahVal;
+                totalBezetting += bezVal;
+                totalKebutuhan += kebVal;
+                totalSelisih += selVal;
+
+                const jumlah = jumlahVal.toLocaleString('id-ID');
+                const bez = bezVal.toLocaleString('id-ID');
+                const keb = kebVal.toLocaleString('id-ID');
+                const sel = selVal.toLocaleString('id-ID');
+                const jenis = String(r.jenis || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                
+                html += `<tr><td style="border:1px solid #000;padding:4px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:4px;">${jenis}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${jumlah}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${bez}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${keb}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${sel}</td></tr>`;
+            });
+
+            // Add totals row
+            html += `<tr style="background:#f0f0f0;font-weight:bold;"><td colspan="2" style="border:1px solid #000;padding:6px;text-align:center;">TOTAL</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalJenisJabatan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalBezetting.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalKebutuhan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalSelisih.toLocaleString('id-ID')}</td></tr>`;
 
             html += `</tbody></table>`;
             html += `<p style="margin:15px 0 0 0;font-size:9px;color:#666;">Generated: ${new Date().toLocaleString('id-ID')}</p>`;
@@ -854,11 +937,11 @@ export default function DashboardPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
                         </div>
-                        <div>
+                        <div className="flex-1">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Per Jenis Jabatan</h3>
                             <p className="text-xs text-gray-500 dark:text-gray-400">Rincian jumlah untuk setiap jenis jabatan</p>
                         </div>
-                        <div className="ml-auto">
+                        <div className="ml-auto flex items-center gap-2">
                             {selectedJenis && !isAdminJf && (
                                 <button
                                     onClick={() => setSelectedJenis(null)}
@@ -867,6 +950,13 @@ export default function DashboardPage() {
                                     Reset Filter
                                 </button>
                             )}
+                            <button
+                                onClick={handlePrintJenisJabatan}
+                                className="px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 bg-brand-600 text-white hover:bg-brand-700"
+                                title="Print tabel Total Per Jenis Jabatan"
+                            >
+                                Print
+                            </button>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

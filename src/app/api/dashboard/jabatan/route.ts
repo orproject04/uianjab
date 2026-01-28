@@ -260,18 +260,52 @@ export async function GET(req: NextRequest) {
         const byBiro = byBiroResult.rows;
 
         // Query untuk breakdown by nama_jabatan di peta_jabatan (tanpa grouping)
+        // Use the same sort_path ordering as /api/peta-jabatan for consistency
         const byNamaJabatanQuery = `
-            ${biroFilterCTE}
+            ${biroFilterCTE ? biroFilterCTE + ',' : 'WITH RECURSIVE'}
+            tree AS (
+                SELECT
+                    id,
+                    parent_id,
+                    nama_jabatan,
+                    unit_kerja,
+                    jenis_jabatan,
+                    bezetting,
+                    kebutuhan_pegawai,
+                    order_index,
+                    ARRAY[
+                        lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
+                    ]::text[] AS sort_path
+                FROM peta_jabatan
+                WHERE parent_id IS NULL
+                
+                UNION ALL
+                
+                SELECT
+                    c.id,
+                    c.parent_id,
+                    c.nama_jabatan,
+                    c.unit_kerja,
+                    c.jenis_jabatan,
+                    c.bezetting,
+                    c.kebutuhan_pegawai,
+                    c.order_index,
+                    t.sort_path || (
+                        lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
+                    )
+                FROM peta_jabatan c
+                JOIN tree t ON c.parent_id = t.id
+            )
             SELECT 
-                COALESCE(nama_jabatan, 'Tidak Ada Nama') as nama_jabatan,
-                COALESCE(unit_kerja, 'Tidak Ada Unit') as unit_kerja,
-                COALESCE(jenis_jabatan, 'Tidak Ditentukan') as jenis_jabatan,
-                bezetting,
-                kebutuhan_pegawai as kebutuhan,
-                (bezetting - kebutuhan_pegawai) as selisih
-            FROM peta_jabatan
-            ${whereClause}
-            ORDER BY kebutuhan DESC, nama_jabatan ASC
+                COALESCE(t.nama_jabatan, 'Tidak Ada Nama') as nama_jabatan,
+                COALESCE(t.unit_kerja, 'Tidak Ada Unit') as unit_kerja,
+                COALESCE(t.jenis_jabatan, 'Tidak Ditentukan') as jenis_jabatan,
+                t.bezetting,
+                t.kebutuhan_pegawai as kebutuhan,
+                (t.bezetting - t.kebutuhan_pegawai) as selisih
+            FROM tree t
+            ${whereClause ? whereClause.replace('FROM peta_jabatan', '') : ''}
+            ORDER BY t.sort_path
         `;
 
         const byNamaJabatanResult = await runQuery('byNamaJabatanQuery', byNamaJabatanQuery, params);
