@@ -451,7 +451,7 @@ export default function DashboardPage() {
         }
     }
 
-    // Prepare and trigger print without popup
+    // Prepare and trigger print using hidden iframe approach
     function handlePrintTotalJabatan() {
         try {
             // Use the full filtered & sorted dataset (not only current page)
@@ -466,20 +466,49 @@ export default function DashboardPage() {
             if (selectedLokasi?.value) filterLines.push(`Lokasi: ${selectedLokasi.label}`);
             if (searchNama) filterLines.push(`Cari: ${searchNama}`);
 
-            // Build printable HTML with optimized structure
-            let html = `<div style="font-family:Arial,sans-serif;padding:20px;">`;
-            html += `<h2 style="margin:0 0 10px 0;font-size:18px;font-weight:bold;">Total Jabatan</h2>`;
+            // Build complete HTML document
+            let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Total Jabatan - Print</title>
+    <style>
+        @page { margin: 1cm; size: A4 portrait; }
+        body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }
+        h2 { margin: 0 0 8px 0; font-size: 16px; font-weight: bold; }
+        p { margin: 0 0 10px 0; font-size: 11px; }
+        table { border-collapse: collapse; width: 100%; font-size: 10px; border: 1px solid #000; }
+        thead { display: table-header-group; }
+        tbody { display: table-row-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #000; padding: 4px; text-align: left; }
+        th { background: #f0f0f0; text-align: center; padding: 5px; font-weight: bold; }
+        td.center { text-align: center; }
+        td.right { text-align: right; }
+        .total-row { background: #f0f0f0; font-weight: bold; }
+        .footer { margin: 10px 0 0 0; font-size: 9px; color: #666; }
+    </style>
+</head>
+<body>
+    <h2>Total Jabatan</h2>`;
+            
             if (filterLines.length > 0) {
-                html += `<p style="margin:0 0 15px 0;font-size:12px;"><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
+                html += `    <p><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
             }
-            html += `<table style="border-collapse:collapse;width:100%;font-size:10px;border:1px solid #000;"><thead><tr style="background:#f0f0f0;">`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">No</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Jabatan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Unit Kerja</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Bezetting</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Kebutuhan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Selisih</th>`;
-            html += `</tr></thead><tbody>`;
+            
+            html += `    <table>
+        <thead>
+            <tr>
+                <th>No</th>
+                <th>Jabatan</th>
+                <th>Unit Kerja</th>
+                <th>Bezetting</th>
+                <th>Kebutuhan</th>
+                <th>Selisih</th>
+            </tr>
+        </thead>
+        <tbody>`;
+            
             let totalBezetting = 0;
             let totalKebutuhan = 0;
             let totalSelisih = 0;
@@ -498,28 +527,56 @@ export default function DashboardPage() {
                 const sel = selVal.toLocaleString('id-ID');
                 const nama = String(r.nama_jabatan || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const unit = String(r.unit_kerja || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                html += `<tr><td style="border:1px solid #000;padding:4px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:4px;">${nama}</td><td style="border:1px solid #000;padding:4px;">${unit}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${bez}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${keb}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${sel}</td></tr>`;
+                
+                html += `            <tr>
+                <td class="center">${i + 1}</td>
+                <td>${nama}</td>
+                <td>${unit}</td>
+                <td class="right">${bez}</td>
+                <td class="right">${keb}</td>
+                <td class="right">${sel}</td>
+            </tr>`;
             });
 
-            // Add totals row
-            html += `<tr style="background:#f0f0f0;font-weight:bold;"><td colspan="3" style="border:1px solid #000;padding:6px;text-align:center;">TOTAL</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalBezetting.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalKebutuhan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalSelisih.toLocaleString('id-ID')}</td></tr>`;
+            html += `            <tr class="total-row">
+                <td colspan="3" class="center">TOTAL</td>
+                <td class="right">${totalBezetting.toLocaleString('id-ID')}</td>
+                <td class="right">${totalKebutuhan.toLocaleString('id-ID')}</td>
+                <td class="right">${totalSelisih.toLocaleString('id-ID')}</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="footer">Generated: ${new Date().toLocaleString('id-ID')}</p>
+</body>
+</html>`;
 
-            html += `</tbody></table>`;
-            html += `<p style="margin:15px 0 0 0;font-size:9px;color:#666;">Generated: ${new Date().toLocaleString('id-ID')}</p>`;
-            html += `</div>`;
+            // Create or reuse hidden iframe
+            let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'print-iframe';
+                iframe.style.position = 'absolute';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = 'none';
+                iframe.style.visibility = 'hidden';
+                document.body.appendChild(iframe);
+            }
 
-            // Insert into hidden print container
-            const printContainer = document.getElementById('print-container');
-            if (printContainer) {
-                printContainer.innerHTML = html;
-                // Add small delay to ensure DOM is rendered before printing
-                setTimeout(() => {
-                    window.print();
-                    // Clear content after print to avoid showing during loading
+            // Write content to iframe
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (iframeDoc) {
+                iframeDoc.open();
+                iframeDoc.write(html);
+                iframeDoc.close();
+
+                // Wait for content to load then print
+                iframe.onload = () => {
                     setTimeout(() => {
-                        if (printContainer) printContainer.innerHTML = '';
-                    }, 500);
-                }, 50);
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
+                    }, 100);
+                };
             }
         } catch (err) {
             console.error('Print failed', err);
@@ -527,7 +584,7 @@ export default function DashboardPage() {
         }
     }
 
-    // Print function for Total Per Jenis Jabatan
+    // Print function for Total Per Jenis Jabatan using hidden iframe approach
     function handlePrintJenisJabatan() {
         try {
             // Use the displayByJenis data (already filtered and sorted)
@@ -538,20 +595,48 @@ export default function DashboardPage() {
             if (selectedJenis?.value) filterLines.push(`Jenis: ${selectedJenis.label}`);
             if (selectedLokasi?.value) filterLines.push(`Lokasi: ${selectedLokasi.label}`);
 
-            // Build printable HTML
-            let html = `<div style="font-family:Arial,sans-serif;padding:20px;">`;
-            html += `<h2 style="margin:0 0 10px 0;font-size:18px;font-weight:bold;">Total Per Jenis Jabatan</h2>`;
+            // Build complete HTML document
+            let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Total Per Jenis Jabatan - Print</title>
+    <style>
+        @page { margin: 1cm; size: A4 portrait; }
+        body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }
+        h2 { margin: 0 0 8px 0; font-size: 16px; font-weight: bold; }
+        p { margin: 0 0 10px 0; font-size: 11px; }
+        table { border-collapse: collapse; width: 100%; font-size: 10px; border: 1px solid #000; }
+        thead { display: table-header-group; }
+        tbody { display: table-row-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #000; padding: 4px; text-align: left; }
+        th { background: #f0f0f0; text-align: center; padding: 5px; font-weight: bold; }
+        td.center { text-align: center; }
+        td.right { text-align: right; }
+        .total-row { background: #f0f0f0; font-weight: bold; }
+        .footer { margin: 10px 0 0 0; font-size: 9px; color: #666; }
+    </style>
+</head>
+<body>
+    <h2>Total Per Jenis Jabatan</h2>`;
+            
             if (filterLines.length > 0) {
-                html += `<p style="margin:0 0 15px 0;font-size:12px;"><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
+                html += `    <p><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
             }
-            html += `<table style="border-collapse:collapse;width:100%;font-size:10px;border:1px solid #000;"><thead><tr style="background:#f0f0f0;">`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">No</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Jenis Jabatan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Total Jenis Jabatan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Bezetting</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Kebutuhan</th>`;
-            html += `<th style="border:1px solid #000;padding:6px;text-align:center;">Selisih</th>`;
-            html += `</tr></thead><tbody>`;
+            
+            html += `    <table>
+        <thead>
+            <tr>
+                <th>No</th>
+                <th>Jenis Jabatan</th>
+                <th>Total Jenis Jabatan</th>
+                <th>Bezetting</th>
+                <th>Kebutuhan</th>
+                <th>Selisih</th>
+            </tr>
+        </thead>
+        <tbody>`;
             
             let totalJenisJabatan = 0;
             let totalBezetting = 0;
@@ -575,28 +660,56 @@ export default function DashboardPage() {
                 const sel = selVal.toLocaleString('id-ID');
                 const jenis = String(r.jenis || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 
-                html += `<tr><td style="border:1px solid #000;padding:4px;text-align:center;">${i + 1}</td><td style="border:1px solid #000;padding:4px;">${jenis}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${jumlah}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${bez}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${keb}</td><td style="border:1px solid #000;padding:4px;text-align:right;">${sel}</td></tr>`;
+                html += `            <tr>
+                <td class="center">${i + 1}</td>
+                <td>${jenis}</td>
+                <td class="right">${jumlah}</td>
+                <td class="right">${bez}</td>
+                <td class="right">${keb}</td>
+                <td class="right">${sel}</td>
+            </tr>`;
             });
 
-            // Add totals row
-            html += `<tr style="background:#f0f0f0;font-weight:bold;"><td colspan="2" style="border:1px solid #000;padding:6px;text-align:center;">TOTAL</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalJenisJabatan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalBezetting.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalKebutuhan.toLocaleString('id-ID')}</td><td style="border:1px solid #000;padding:6px;text-align:right;">${totalSelisih.toLocaleString('id-ID')}</td></tr>`;
+            html += `            <tr class="total-row">
+                <td colspan="2" class="center">TOTAL</td>
+                <td class="right">${totalJenisJabatan.toLocaleString('id-ID')}</td>
+                <td class="right">${totalBezetting.toLocaleString('id-ID')}</td>
+                <td class="right">${totalKebutuhan.toLocaleString('id-ID')}</td>
+                <td class="right">${totalSelisih.toLocaleString('id-ID')}</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="footer">Generated: ${new Date().toLocaleString('id-ID')}</p>
+</body>
+</html>`;
 
-            html += `</tbody></table>`;
-            html += `<p style="margin:15px 0 0 0;font-size:9px;color:#666;">Generated: ${new Date().toLocaleString('id-ID')}</p>`;
-            html += `</div>`;
+            // Create or reuse hidden iframe
+            let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'print-iframe';
+                iframe.style.position = 'absolute';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = 'none';
+                iframe.style.visibility = 'hidden';
+                document.body.appendChild(iframe);
+            }
 
-            // Insert into hidden print container
-            const printContainer = document.getElementById('print-container');
-            if (printContainer) {
-                printContainer.innerHTML = html;
-                // Add small delay to ensure DOM is rendered before printing
-                setTimeout(() => {
-                    window.print();
-                    // Clear content after print to avoid showing during loading
+            // Write content to iframe
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (iframeDoc) {
+                iframeDoc.open();
+                iframeDoc.write(html);
+                iframeDoc.close();
+
+                // Wait for content to load then print
+                iframe.onload = () => {
                     setTimeout(() => {
-                        if (printContainer) printContainer.innerHTML = '';
-                    }, 500);
-                }, 50);
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
+                    }, 100);
+                };
             }
         } catch (err) {
             console.error('Print failed', err);
@@ -723,44 +836,7 @@ export default function DashboardPage() {
 
     return (
         <>
-            {/* Hidden print container */}
-            <div id="print-container" className="print-only" style={{ display: 'none', visibility: 'hidden', position: 'absolute', left: '-9999px', top: '-9999px' }}></div>
-
             <style jsx global>{`
-                #print-container {
-                    display: none !important;
-                    visibility: hidden !important;
-                    position: absolute !important;
-                    left: -9999px !important;
-                    top: -9999px !important;
-                }
-                
-                @media print {
-                    body * {
-                        visibility: hidden;
-                    }
-                    .no-print,
-                    .no-print * {
-                        display: none !important;
-                        visibility: hidden !important;
-                    }
-                    #print-container {
-                        display: block !important;
-                        visibility: visible !important;
-                        position: absolute !important;
-                        left: 0 !important;
-                        top: 0 !important;
-                        width: 100%;
-                    }
-                    #print-container * {
-                        visibility: visible;
-                    }
-                    @page {
-                        margin: 1cm;
-                        size: A4;
-                    }
-                }
-                
                 :root {
                     --select-bg: white;
                     --select-border: #d1d5db;
