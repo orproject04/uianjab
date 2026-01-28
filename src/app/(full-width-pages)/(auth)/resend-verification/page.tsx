@@ -12,8 +12,3 @@ export default function ResendVerificationPage() {
     </Suspense>
   );
 }
-
-export const metadata : Metadata = {
-  title: "Kirim Ulang Email Verifikasi",
-  description: "Kirim ulang email verifikasi akun Anda",
-};
