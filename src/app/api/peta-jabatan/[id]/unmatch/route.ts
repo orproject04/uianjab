@@ -12,30 +12,21 @@ export async function PATCH(
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        const body = await req.json();
-        const { jabatan_id } = body;
         const { id: petaId } = await params;
 
-        if (!jabatan_id) {
-            return NextResponse.json(
-                { error: "jabatan_id required" },
-                { status: 400 }
-            );
-        }
-
-        // Update peta_jabatan
+        // Update peta_jabatan - set jabatan_id to NULL
         await pool.query(
             `UPDATE peta_jabatan 
-             SET jabatan_id = $1, updated_at = NOW()
-             WHERE id = $2`,
-            [jabatan_id, petaId]
+             SET jabatan_id = NULL, updated_at = NOW()
+             WHERE id = $1`,
+            [petaId]
         );
 
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ ok: true, message: "Berhasil unmatch" });
     } catch (error: any) {
-        console.error("Error matching peta jabatan:", error);
+        console.error("Error unmatching peta jabatan:", error);
         return NextResponse.json(
-            { error: error?.message || "Gagal matching" },
+            { error: error?.message || "Gagal unmatch" },
             { status: 500 }
         );
     }
