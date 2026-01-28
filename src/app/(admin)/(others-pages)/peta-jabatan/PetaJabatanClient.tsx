@@ -1460,14 +1460,14 @@ export default function PetaJabatanClient() {
           <div className="flex items-center justify-between gap-3">
             <button
               onClick={() => setShowTips(!showTips)}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm hover:bg-blue-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm hover:bg-brand-100 transition-colors"
             >
-              <svg className="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="font-medium text-blue-900">Tips Navigasi</span>
+              <span className="font-medium text-brand-900">Tips Navigasi</span>
               <svg 
-                className={`w-4 h-4 text-blue-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
+                className={`w-4 h-4 text-brand-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -1481,7 +1481,7 @@ export default function PetaJabatanClient() {
               {petaJabatanDoc && (
                 <button
                   onClick={() => window.open(petaJabatanDoc, '_blank')}
-                  className="px-3 py-2 rounded border text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  className="px-3 py-2 rounded border text-sm bg-brand-500 text-white hover:bg-brand-600 transition-colors flex items-center gap-2 whitespace-nowrap"
                   title="Lihat Peta Jabatan (Persesjen)"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1506,12 +1506,12 @@ export default function PetaJabatanClient() {
           </div>
           
           {showTips && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
-              <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-900">
+            <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <ul className="list-disc list-inside space-y-0.5 text-xs text-brand-900">
                 <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
                 <li>Drag background untuk menggeser tampilan</li>
                 <li>Klik panah di card untuk expand/collapse cabang</li>
-                {bp.isMobile && <li className="text-orange-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
+                {bp.isMobile && <li className="text-brand-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
               </ul>
             </div>
           )}
