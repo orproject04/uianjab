@@ -71,18 +71,18 @@ export default function ResetPasswordForm() {
 
     return (
         <div className="flex flex-col flex-1 lg:w-1/2 w-full">
-            <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
-                <div className="mb-5 sm:mb-8">
-                    <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
+            <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto py-2">
+                <div className="mb-3">
+                    <h1 className="mb-1.5 font-bold text-gray-800 text-3xl dark:text-white/90">
                         Reset Password
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Masukkan password baru Anda.</p>
+                    <p className="text-base text-gray-500 dark:text-gray-400">Masukkan password baru Anda.</p>
                 </div>
 
                 {notice && (
                     <div
                         role="status"
-                        className={`${alertClass} rounded-lg px-3 py-2 text-sm mb-4 flex items-start justify-between gap-3`}
+                        className={`${alertClass} rounded-lg px-3 py-1.5 text-xs mb-2 flex items-start justify-between gap-3`}
                     >
                         <span>{notice.text}</span>
                         <button
@@ -97,13 +97,13 @@ export default function ResetPasswordForm() {
                 )}
 
                 {tokenMissing && (
-                    <div className="text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm mb-4">
+                    <div className="text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 text-xs mb-2">
                         Token tidak ditemukan. Buka tautan dari email reset password Anda.
                     </div>
                 )}
 
                 <form onSubmit={onSubmit}>
-                    <div className="space-y-6">
+                    <div className="space-y-3">
                         <input type="hidden" value={token} readOnly/>
 
                         <div>
@@ -134,12 +134,12 @@ export default function ResetPasswordForm() {
                         </div>
 
                         <div>
-                            <Button className="w-full" size="sm" type="submit" disabled={loading || tokenMissing}>
+                            <Button className="w-full mt-5" size="sm" type="submit" disabled={loading || tokenMissing}>
                                 {loading ? "Memproses..." : "Setel Ulang"}
                             </Button>
                         </div>
 
-                        <div className="text-sm text-center">
+                        <div className="text-xs text-center">
                             Kembali ke{" "}
                             <Link href="/signin" className="text-blue-500 hover:underline">
                                 halaman masuk

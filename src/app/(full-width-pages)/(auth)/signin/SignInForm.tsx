@@ -92,12 +92,12 @@ export default function SignInForm() {
 
     return (
         <div className="flex flex-col flex-1 lg:w-1/2 w-full">
-            <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
-                <div className="mb-5 sm:mb-8">
-                    <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
+            <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto py-2">
+                <div className="mb-3">
+                    <h1 className="mb-1.5 font-bold text-gray-800 text-3xl dark:text-white/90">
                         Sign In
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-base text-gray-500 dark:text-gray-400">
                         Silakan input email dan password.
                     </p>
                 </div>
@@ -105,7 +105,7 @@ export default function SignInForm() {
                 {notice && (
                     <div
                         role="status"
-                        className={`${alertClass} rounded-lg px-3 py-2 text-sm mb-4 flex items-start justify-between gap-3`}
+                        className={`${alertClass} rounded-lg px-3 py-1.5 text-xs mb-2 flex items-start justify-between gap-3`}
                     >
                         <span>{notice.text}</span>
                         <button
@@ -120,7 +120,7 @@ export default function SignInForm() {
                 )}
 
                 <form onSubmit={onSubmit}>
-                    <div className="space-y-6">
+                    <div className="space-y-3">
                         <div>
                             <Label>
                                 Email <span className="text-error-500">*</span>
@@ -161,7 +161,7 @@ export default function SignInForm() {
                         </div>
 
                         <div className="flex items-center justify-end">
-                            <Link href="/forgot-password" className="text-sm text-brand-600 hover:underline">
+                            <Link href="/forgot-password" className="text-xs text-brand-600 hover:underline">
                                 Lupa password?
                             </Link>
                         </div>
@@ -172,7 +172,33 @@ export default function SignInForm() {
                             </Button>
                         </div>
 
-                        <div className="text-sm text-center space-y-2">
+                        {/* Divider */}
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                                <span className="px-2 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+                                    Atau
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* SSO Login Button */}
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    window.location.href = `/api/auth/keycloak/login?next=${encodeURIComponent(next)}`;
+                                }}
+                                disabled={loading}
+                                className="w-full inline-flex items-center justify-center px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <span>Login dengan SSO</span>
+                            </button>
+                        </div>
+
+                        <div className="text-xs text-center space-y-1 pt-1">
                             <div>
                                 Belum punya akun?{" "}
                                 <Link href="/signup" className="text-blue-600 hover:underline">

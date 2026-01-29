@@ -42,20 +42,35 @@ export default function UserDropdown() {
         setSigningOut(true);
         try {
             // Logout ke server untuk revoke session dan clear cookies
-            await fetch("/api/auth/logout", {
+            const response = await fetch("/api/auth/logout", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 credentials: "include", // Penting: kirim cookies
-            }).catch(() => { /* abaikan error jaringan */ });
+            });
+            
+            const data = await response.json().catch(() => ({}));
             
             // Broadcast ke tab lain bahwa user sudah logout
             const channel = new BroadcastChannel('auth_channel');
             channel.postMessage('logout');
             channel.close();
-        } finally {
-            // Redirect ke signin
+            
+            // Jika ada Keycloak logout URL, redirect ke sana
+            // Keycloak akan logout user dan redirect kembali ke /signin
+            if (data.keycloak_logout_url) {
+                window.location.href = data.keycloak_logout_url;
+                return;
+            }
+            
+            // Regular logout - redirect ke signin
             closeDropdown();
             router.replace("/signin?loggedout=1");
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Tetap redirect ke signin meskipun ada error
+            closeDropdown();
+            router.replace("/signin?loggedout=1");
+        } finally {
             setSigningOut(false);
         }
     }
