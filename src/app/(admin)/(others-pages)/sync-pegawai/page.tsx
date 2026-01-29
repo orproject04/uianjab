@@ -19,6 +19,20 @@ export default function SyncPegawaiPage() {
   const { isAdmin, loading: meLoading } = useMe();
   const router = useRouter();
   const [result, setResult] = useState<SyncResult | null>(null);
+  const [apiConfig, setApiConfig] = useState<{ url: string; perPage: number } | null>(null);
+
+  // Fetch API config from server
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        setApiConfig({
+          url: data.externalPegawaiApiUrl,
+          perPage: data.externalApiPerPage
+        });
+      })
+      .catch(err => console.error('Failed to load API config:', err));
+  }, []);
 
   useEffect(() => {
     if (!meLoading && !isAdmin) {
@@ -156,10 +170,10 @@ export default function SyncPegawaiPage() {
           <div className="space-y-1 text-sm text-blue-light-800 dark:text-blue-light-200">
             <p>
               <strong>API URL:</strong>{' '}
-              {process.env.NEXT_PUBLIC_EXTERNAL_PEGAWAI_API_URL}
+              {apiConfig ? apiConfig.url : 'Memuat...'}
             </p>
             <p>
-              <strong>Per Page:</strong> {process.env.NEXT_PUBLIC_EXTERNAL_API_PER_PAGE}
+              <strong>Per Page:</strong> {apiConfig ? apiConfig.perPage : 'Memuat...'}
             </p>
           </div>
         </div>

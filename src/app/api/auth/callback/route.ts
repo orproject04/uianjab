@@ -180,8 +180,10 @@ export async function GET(req: NextRequest) {
         cookieStore.delete('keycloak_code_verifier');
         cookieStore.delete('keycloak_next');
 
+        const appUrl = process.env.APP_URL!;
+        return NextResponse.redirect(new URL(next, appUrl));
         // Redirect ke halaman yang diminta atau homepage
-        return NextResponse.redirect(new URL(next, req.url));
+        // return NextResponse.redirect(new URL(next, req.url));
     } catch (error) {
         console.error('Keycloak callback error:', error);
         return NextResponse.redirect(
