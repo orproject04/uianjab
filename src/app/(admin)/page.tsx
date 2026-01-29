@@ -102,8 +102,9 @@ export default function HomePage() {
         <div className="rounded-3xl bg-white/80 shadow-lg ring-1 ring-black/5 overflow-hidden">
           <div className="grid gap-8 md:grid-cols-2 p-8 md:p-12">
             <div className="space-y-4">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
-                Selamat datang, {displayName}.
+              <h1 className="text-sm md:text-xl font-bold text-gray-900 leading-tight">
+                Selamat datang, <br />
+                {displayName}
               </h1>
               <p className="text-gray-600 leading-relaxed">
                 Silahkan pilih menu untuk memulai pengelolaan data.

@@ -94,11 +94,6 @@ export default function UserDropdown() {
           <FaUser size={20}/>
         </span>
 
-                {/* Nama di tombol hanya tampil di desktop */}
-                <span className="mr-1 font-medium text-theme-sm hidden lg:block">
-          {displayName}
-        </span>
-
                 <svg
                     className={`stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                     width="18" height="20" viewBox="0 0 18 20" fill="none"
@@ -115,15 +110,15 @@ export default function UserDropdown() {
                 onClose={closeDropdown}
                 className="absolute right-0 mt-[17px] flex w-[260px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
             >
-                {/* Nama dipindah ke dalam dropdown untuk mobile, non-interaktif */}
+                {/* Nama user di dalam dropdown untuk semua ukuran layar */}
                 <div
-                    className="block lg:hidden px-3 py-2 text-left text-gray-800 dark:text-gray-200 font-semibold text-[14px] select-none cursor-default"
+                    className="px-3 py-2 text-left text-gray-800 dark:text-gray-200 font-semibold text-[14px] select-none cursor-default"
                     aria-hidden="true"
                 >
                   {displayName}
                 </div>
 
-                <div className="block lg:hidden h-px bg-gray-200 dark:bg-white/10 my-2"/>
+                <div className="h-px bg-gray-200 dark:bg-white/10 my-2"/>
 
                 <button
                     type="button"
