@@ -1457,7 +1457,8 @@ export default function PetaJabatanClient() {
       {/* Tips Navigasi - Collapsible tooltip */}
       {!loading && rd3Data.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
+          {/* Desktop: Tips dan Persesjen dalam satu baris */}
+          <div className="hidden sm:flex sm:items-center sm:justify-between gap-3">
             <button
               onClick={() => setShowTips(!showTips)}
               className="flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm hover:bg-brand-100 transition-colors"
@@ -1476,35 +1477,55 @@ export default function PetaJabatanClient() {
               </svg>
             </button>
 
-            {/* Persesjen Buttons - aligned right */}
+            {/* Persesjen Buttons - Desktop */}
             <div className="flex items-center gap-2">
               {petaJabatanDoc && (
                 <button
                   onClick={() => window.open(petaJabatanDoc, '_blank')}
-                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2"
                   title="Lihat Peta Jabatan (Persesjen)"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <span>Persesjen Peta Jabatan</span>
+                  <span className="truncate">Persesjen Peta Jabatan</span>
                 </button>
               )}
               {isAdmin && kelasJabatanDoc && (
                 <button
                   onClick={() => window.open(kelasJabatanDoc, '_blank')}
-                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2"
                   title="Lihat Kelas Jabatan (Persesjen)"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <span>Persesjen Kelas Jabatan</span>
+                  <span className="truncate">Persesjen Kelas Jabatan</span>
                 </button>
               )}
             </div>
           </div>
+
+          {/* Mobile: Tips button saja */}
+          <button
+            onClick={() => setShowTips(!showTips)}
+            className="sm:hidden flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm hover:bg-brand-100 transition-colors w-full justify-center"
+          >
+            <svg className="w-5 h-5 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium text-brand-900">Tips Navigasi</span>
+            <svg 
+              className={`w-4 h-4 text-brand-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
           
+          {/* Tips content */}
           {showTips && (
             <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
               <ul className="list-disc list-inside space-y-0.5 text-xs text-brand-900">
@@ -1515,6 +1536,34 @@ export default function PetaJabatanClient() {
               </ul>
             </div>
           )}
+
+          {/* Mobile: Persesjen Buttons di bawah tips */}
+          <div className="sm:hidden flex flex-col gap-2">
+            {petaJabatanDoc && (
+              <button
+                onClick={() => window.open(petaJabatanDoc, '_blank')}
+                className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                title="Lihat Peta Jabatan (Persesjen)"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="truncate">Persesjen Peta Jabatan</span>
+              </button>
+            )}
+            {isAdmin && kelasJabatanDoc && (
+              <button
+                onClick={() => window.open(kelasJabatanDoc, '_blank')}
+                className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                title="Lihat Kelas Jabatan (Persesjen)"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="truncate">Persesjen Kelas Jabatan</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
