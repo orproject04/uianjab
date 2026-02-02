@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Start sync process
-    const result = await syncPegawaiToPetaJabatan();
+    const result = await syncPegawaiToPetaJabatan(undefined, user.email || user.full_name || user.id);
     
     const response = NextResponse.json({
       ok: true,
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
             });
             
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-          });
+          }, user?.email || user?.full_name || user?.id);
           
           // Send completion message with result
           const finalData = JSON.stringify({

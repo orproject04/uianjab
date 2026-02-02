@@ -40,6 +40,7 @@ export interface SyncResult {
     json?: string;
     csv?: string;
   };
+  syncedBy?: string;
 }
 
 export interface UnmatchedRecord {
@@ -48,6 +49,44 @@ export interface UnmatchedRecord {
   jabatan_name: string;
   unit_organisasi_name: string;
   reason: string;
+}
+
+/**
+ * Save sync result to database
+ */
+export async function saveSyncHistory(result: SyncResult): Promise<number> {
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO sync_history (
+        sync_type,
+        total_fetched,
+        total_matched,
+        total_updated,
+        total_unmatched,
+        errors,
+        log_file_json,
+        log_file_csv,
+        synced_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id`,
+      [
+        'pegawai',
+        result.totalFetched,
+        result.totalMatched,
+        result.totalUpdated,
+        result.unmatchedRecords.length,
+        result.errors.length > 0 ? result.errors : null,
+        result.logFilePaths?.json || null,
+        result.logFilePaths?.csv || null,
+        result.syncedBy || null,
+      ]
+    );
+    
+    return rows[0].id;
+  } catch (error: any) {
+    console.error('[SAVE_SYNC_HISTORY] Error:', error);
+    throw error;
+  }
 }
 
 /**
@@ -180,7 +219,8 @@ export async function clearAllNamaPejabat(): Promise<void> {
  * Sync pegawai data to peta_jabatan
  */
 export async function syncPegawaiToPetaJabatan(
-  onProgress?: (current: number, total: number, message: string) => void
+  onProgress?: (current: number, total: number, message: string) => void,
+  syncedBy?: string
 ): Promise<SyncResult> {
   const result: SyncResult = {
     totalFetched: 0,
@@ -188,6 +228,7 @@ export async function syncPegawaiToPetaJabatan(
     totalUpdated: 0,
     unmatchedRecords: [],
     errors: [],
+    syncedBy: syncedBy,
   };
   
   try {
@@ -306,6 +347,15 @@ export async function syncPegawaiToPetaJabatan(
       if (onProgress) onProgress(92, 100, 'Menulis log unmatched records...');
       const logPaths = await writeUnmatchedLog(result.unmatchedRecords);
       result.logFilePaths = logPaths;
+    }
+    
+    // Step 6: Save to sync history database
+    if (onProgress) onProgress(95, 100, 'Menyimpan riwayat sinkronisasi...');
+    try {
+      await saveSyncHistory(result);
+    } catch (saveError: any) {
+      console.error('[SYNC] Failed to save sync history:', saveError);
+      // Don't throw - sync was successful even if history save failed
     }
     
     if (onProgress) onProgress(100, 100, 'Selesai!');

@@ -13,13 +13,46 @@ interface SyncResult {
   totalUpdated: number;
   totalUnmatched: number;
   errors: string[];
+  logFilePaths?: {
+    json?: string;
+    csv?: string;
+  };
+}
+
+interface SyncHistory {
+  id: number;
+  sync_type: string;
+  total_fetched: number;
+  total_matched: number;
+  total_updated: number;
+  total_unmatched: number;
+  errors: string[] | null;
+  log_file_json: string | null;
+  log_file_csv: string | null;
+  synced_at: string;
+  synced_by: string | null;
 }
 
 export default function SyncPegawaiPage() {
   const { isAdmin, loading: meLoading } = useMe();
   const router = useRouter();
   const [result, setResult] = useState<SyncResult | null>(null);
+  const [lastSync, setLastSync] = useState<SyncHistory | null>(null);
   const [apiConfig, setApiConfig] = useState<{ url: string; perPage: number } | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+
+  // Fetch last sync history
+  const fetchLastSync = async () => {
+    try {
+      const res = await fetch('/api/sync/history?limit=1');
+      const data = await res.json();
+      if (data.ok && data.history.length > 0) {
+        setLastSync(data.history[0]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch last sync:', err);
+    }
+  };
 
   // Fetch API config from server
   useEffect(() => {
@@ -32,6 +65,9 @@ export default function SyncPegawaiPage() {
         });
       })
       .catch(err => console.error('Failed to load API config:', err));
+    
+    // Fetch last sync history
+    fetchLastSync();
   }, []);
 
   useEffect(() => {
@@ -63,6 +99,30 @@ export default function SyncPegawaiPage() {
   }
 
   const startSync = async () => {
+    // Show confirmation first
+    const confirm = await Swal.fire({
+      title: 'Mulai Sinkronisasi?',
+      html: `
+        <div class="text-left">
+          <p class="text-sm text-gray-600 mb-3">Proses ini akan:</p>
+          <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
+            <li>Menghapus semua data pegawai yang ada di kolom pejabat</li>
+            <li>Mengambil data terbaru dari API eksternal</li>
+            <li>Memperbarui data jabatan dengan pegawai terbaru</li>
+            <li>Memakan waktu beberapa menit</li>
+          </ul>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Mulai Sinkronisasi',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#2563eb',
+      cancelButtonColor: '#6b7280',
+    });
+
+    if (!confirm.isConfirmed) return;
+
     // Show loading with SweetAlert2
     Swal.fire({
       title: 'Sinkronisasi Data Pegawai',
@@ -122,6 +182,9 @@ export default function SyncPegawaiPage() {
             setResult(data.result);
           }
 
+          // Refresh last sync history
+          fetchLastSync();
+
           Swal.fire({
             icon: 'success',
             title: 'Sinkronisasi Selesai!',
@@ -147,6 +210,97 @@ export default function SyncPegawaiPage() {
         title: 'Error',
         text: err.message || 'Terjadi kesalahan',
       });
+    }
+  };
+
+  const downloadLatestCsv = async () => {
+    try {
+      const res = await fetch('/api/sync/download-csv');
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Gagal mengunduh CSV');
+      }
+      
+      // Create blob and download
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Get filename from Content-Disposition header
+      const contentDisposition = res.headers.get('Content-Disposition');
+      let filename = 'unmatched-pegawai.csv';
+      if (contentDisposition) {
+        const matches = /filename="?(.+?)"?$/i.exec(contentDisposition);
+        if (matches && matches[1]) {
+          filename = matches[1];
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: 'File CSV berhasil diunduh',
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || 'Gagal mengunduh CSV',
+      });
+    }
+  };
+
+  const clearCache = async () => {
+    const confirm = await Swal.fire({
+      title: 'Hapus Cache Lama?',
+      text: 'File CSV dan JSON lama akan dihapus, kecuali yang terakhir',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Hapus',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#dc2626',
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    setClearingCache(true);
+    
+    try {
+      const res = await fetch('/api/sync/clear-cache', {
+        method: 'DELETE',
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal membersihkan cache');
+      }
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: `${data.deletedCount} file berhasil dihapus`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || 'Gagal membersihkan cache',
+      });
+    } finally {
+      setClearingCache(false);
     }
   };
 
@@ -204,7 +358,74 @@ export default function SyncPegawaiPage() {
           </Button>
         </div>
 
-        {/* Result Display */}
+        {/* Last Sync Info & Action Buttons */}
+        {lastSync && (
+          <div className="mb-6 rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Terakhir Sinkronisasi
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {new Date(lastSync.synced_at).toLocaleString('id-ID', {
+                    dateStyle: 'full',
+                    timeStyle: 'medium'
+                  })}
+                  {lastSync.synced_by && ` oleh ${lastSync.synced_by}`}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {lastSync.log_file_csv && (
+                  <Button
+                    onClick={downloadLatestCsv}
+                    size="sm"
+                    className="text-xs bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    Download CSV Terakhir
+                  </Button>
+                )}
+                <Button
+                  onClick={clearCache}
+                  size="sm"
+                  className="text-xs bg-red-600 hover:bg-red-700 text-white"
+                  disabled={clearingCache}
+                >
+                  {clearingCache ? 'Menghapus...' : 'Hapus Cache Lama'}
+                </Button>
+              </div>
+            </div>
+            
+            {/* Mini Stats from Last Sync */}
+            <div className="grid gap-2 sm:grid-cols-4">
+              <div className="rounded bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
+                <p className="text-xs text-blue-600 dark:text-blue-400">Total Diambil</p>
+                <p className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                  {lastSync.total_fetched.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded bg-green-50 px-3 py-2 dark:bg-green-900/20">
+                <p className="text-xs text-green-600 dark:text-green-400">Data Cocok</p>
+                <p className="text-lg font-bold text-green-900 dark:text-green-100">
+                  {lastSync.total_matched.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded bg-green-50 px-3 py-2 dark:bg-green-900/20">
+                <p className="text-xs text-green-600 dark:text-green-400">Diupdate</p>
+                <p className="text-lg font-bold text-green-900 dark:text-green-100">
+                  {lastSync.total_updated.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded bg-yellow-50 px-3 py-2 dark:bg-yellow-900/20">
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">Tidak Cocok</p>
+                <p className="text-lg font-bold text-yellow-900 dark:text-yellow-100">
+                  {lastSync.total_unmatched.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Result Display (Current Sync) */}
         {result && (
           <div className="space-y-4 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
             <div className="flex items-center gap-2 border-b border-gray-200 pb-4 dark:border-gray-700">
