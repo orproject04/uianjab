@@ -27,6 +27,7 @@ export interface PegawaiData {
   jenis_jabatan: string;
   golongan: string;
   role: string;
+  status: string; // ACTIVE, INACTIVE, etc.
   json: any;
 }
 
@@ -249,12 +250,17 @@ export async function syncPegawaiToPetaJabatan(
     
     result.totalFetched = allPegawai.length;
     
-    // Step 3: Group pegawai by jabatan and unit kerja
+    // Step 3: Filter only ACTIVE pegawai
+    if (onProgress) onProgress(38, 100, 'Memfilter pegawai aktif...');
+    const activePegawai = allPegawai.filter(p => p.status === 'ACTIVE');
+    console.log(`[SYNC] Total fetched: ${allPegawai.length}, Active: ${activePegawai.length}`);
+    
+    // Step 4: Group pegawai by jabatan and unit kerja
     if (onProgress) onProgress(40, 100, 'Mengelompokkan data pegawai...');
     
     const groupedPegawai = new Map<string, PegawaiData[]>();
     
-    for (const pegawai of allPegawai) {
+    for (const pegawai of activePegawai) {
       const key = `${pegawai.jabatan_name}|||${pegawai.unit_organisasi_name}`;
       if (!groupedPegawai.has(key)) {
         groupedPegawai.set(key, []);
@@ -262,7 +268,7 @@ export async function syncPegawaiToPetaJabatan(
       groupedPegawai.get(key)!.push(pegawai);
     }
     
-    // Step 4: Match and update peta_jabatan
+    // Step 5: Match and update peta_jabatan
     if (onProgress) onProgress(45, 100, 'Mencocokkan dan update database...');
     
     let processed = 0;
@@ -342,14 +348,14 @@ export async function syncPegawaiToPetaJabatan(
       }
     }
     
-    // Step 5: Write unmatched records to log file
+    // Step 6: Write unmatched records to log file
     if (result.unmatchedRecords.length > 0) {
       if (onProgress) onProgress(92, 100, 'Menulis log unmatched records...');
       const logPaths = await writeUnmatchedLog(result.unmatchedRecords);
       result.logFilePaths = logPaths;
     }
     
-    // Step 6: Save to sync history database
+    // Step 7: Save to sync history database
     if (onProgress) onProgress(95, 100, 'Menyimpan riwayat sinkronisasi...');
     try {
       await saveSyncHistory(result);

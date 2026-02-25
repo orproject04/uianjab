@@ -369,8 +369,10 @@ export default function SyncPegawaiPage() {
                 <p className="text-xs text-gray-600 dark:text-gray-400">
                   {new Date(lastSync.synced_at).toLocaleString('id-ID', {
                     dateStyle: 'full',
-                    timeStyle: 'medium'
+                    timeStyle: 'medium',
+                    timeZone: 'Asia/Jakarta'
                   })}
+                  {' WIB'}
                   {lastSync.synced_by && ` oleh ${lastSync.synced_by}`}
                 </p>
               </div>
@@ -398,7 +400,7 @@ export default function SyncPegawaiPage() {
             {/* Mini Stats from Last Sync */}
             <div className="grid gap-2 sm:grid-cols-4">
               <div className="rounded bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-                <p className="text-xs text-blue-600 dark:text-blue-400">Total Diambil</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400">Total Data Diambil</p>
                 <p className="text-lg font-bold text-blue-900 dark:text-blue-100">
                   {lastSync.total_fetched.toLocaleString()}
                 </p>
@@ -410,13 +412,13 @@ export default function SyncPegawaiPage() {
                 </p>
               </div>
               <div className="rounded bg-green-50 px-3 py-2 dark:bg-green-900/20">
-                <p className="text-xs text-green-600 dark:text-green-400">Diupdate</p>
+                <p className="text-xs text-green-600 dark:text-green-400">Data Jabatan Diupdate</p>
                 <p className="text-lg font-bold text-green-900 dark:text-green-100">
                   {lastSync.total_updated.toLocaleString()}
                 </p>
               </div>
               <div className="rounded bg-yellow-50 px-3 py-2 dark:bg-yellow-900/20">
-                <p className="text-xs text-yellow-600 dark:text-yellow-400">Tidak Cocok</p>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">Data Tidak Cocok</p>
                 <p className="text-lg font-bold text-yellow-900 dark:text-yellow-100">
                   {lastSync.total_unmatched.toLocaleString()}
                 </p>
@@ -451,7 +453,7 @@ export default function SyncPegawaiPage() {
               </div>
 
               <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-                <p className="text-sm text-green-600 dark:text-green-400">Jabatan Diupdate</p>
+                <p className="text-sm text-green-600 dark:text-green-400">Data Jabatan Diupdate</p>
                 <p className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
                   {result.totalUpdated.toLocaleString()}
                 </p>
