@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
       result: {
         totalFetched: result.totalFetched,
         totalMatched: result.totalMatched,
-        totalUpdated: result.totalUpdated,
         totalUnmatched: result.unmatchedRecords.length,
+        totalInactive: result.totalInactive,
         errors: result.errors,
         logFilePaths: result.logFilePaths,
       },
@@ -94,8 +94,8 @@ export async function GET(req: NextRequest) {
             result: {
               totalFetched: syncResult.totalFetched,
               totalMatched: syncResult.totalMatched,
-              totalUpdated: syncResult.totalUpdated,
               totalUnmatched: syncResult.unmatchedRecords.length,
+              totalInactive: syncResult.totalInactive,
               errors: syncResult.errors,
               logFilePaths: syncResult.logFilePaths,
             },

@@ -10,8 +10,8 @@ import Swal from 'sweetalert2';
 interface SyncResult {
   totalFetched: number;
   totalMatched: number;
-  totalUpdated: number;
   totalUnmatched: number;
+  totalInactive: number;
   errors: string[];
   logFilePaths?: {
     json?: string;
@@ -24,8 +24,8 @@ interface SyncHistory {
   sync_type: string;
   total_fetched: number;
   total_matched: number;
-  total_updated: number;
   total_unmatched: number;
+  total_inactive: number;
   errors: string[] | null;
   log_file_json: string | null;
   log_file_csv: string | null;
@@ -400,25 +400,25 @@ export default function SyncPegawaiPage() {
             {/* Mini Stats from Last Sync */}
             <div className="grid gap-2 sm:grid-cols-4">
               <div className="rounded bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-                <p className="text-xs text-blue-600 dark:text-blue-400">Total Data Diambil</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400">Total Pegawai</p>
                 <p className="text-lg font-bold text-blue-900 dark:text-blue-100">
                   {lastSync.total_fetched.toLocaleString()}
                 </p>
               </div>
               <div className="rounded bg-green-50 px-3 py-2 dark:bg-green-900/20">
-                <p className="text-xs text-green-600 dark:text-green-400">Data Cocok</p>
+                <p className="text-xs text-green-600 dark:text-green-400">Data Sesuai</p>
                 <p className="text-lg font-bold text-green-900 dark:text-green-100">
                   {lastSync.total_matched.toLocaleString()}
                 </p>
               </div>
-              <div className="rounded bg-green-50 px-3 py-2 dark:bg-green-900/20">
-                <p className="text-xs text-green-600 dark:text-green-400">Data Jabatan Diupdate</p>
-                <p className="text-lg font-bold text-green-900 dark:text-green-100">
-                  {lastSync.total_updated.toLocaleString()}
+              <div className="rounded bg-orange-50 px-3 py-2 dark:bg-orange-900/20">
+                <p className="text-xs text-orange-600 dark:text-orange-400">Pegawai Tidak Aktif</p>
+                <p className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                  {lastSync.total_inactive?.toLocaleString() || 0}
                 </p>
               </div>
               <div className="rounded bg-yellow-50 px-3 py-2 dark:bg-yellow-900/20">
-                <p className="text-xs text-yellow-600 dark:text-yellow-400">Data Tidak Cocok</p>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">Data Tidak Sesuai</p>
                 <p className="text-lg font-bold text-yellow-900 dark:text-yellow-100">
                   {lastSync.total_unmatched.toLocaleString()}
                 </p>
@@ -439,44 +439,44 @@ export default function SyncPegawaiPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-                <p className="text-sm text-blue-600 dark:text-blue-400">Total Data Diambil</p>
+                <p className="text-sm text-blue-600 dark:text-blue-400">Total Pegawai</p>
                 <p className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
                   {result.totalFetched.toLocaleString()}
                 </p>
               </div>
 
               <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-                <p className="text-sm text-green-600 dark:text-green-400">Data Cocok</p>
+                <p className="text-sm text-green-600 dark:text-green-400">Data Sesuai</p>
                 <p className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
                   {result.totalMatched.toLocaleString()}
                 </p>
               </div>
 
-              <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-                <p className="text-sm text-green-600 dark:text-green-400">Data Jabatan Diupdate</p>
-                <p className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
-                  {result.totalUpdated.toLocaleString()}
+              <div className="rounded-lg bg-orange-50 p-4 dark:bg-orange-900/20">
+                <p className="text-sm text-orange-600 dark:text-orange-400">Pegawai Tidak Aktif</p>
+                <p className="mt-1 text-2xl font-bold text-orange-900 dark:text-orange-100">
+                  {result.totalInactive?.toLocaleString() || 0}
                 </p>
               </div>
 
               <div className="rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
-                <p className="text-sm text-yellow-600 dark:text-yellow-400">Data Tidak Cocok</p>
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">Data Tidak Sesuai</p>
                 <p className="mt-1 text-2xl font-bold text-yellow-900 dark:text-yellow-100">
                   {result.totalUnmatched.toLocaleString()}
                 </p>
               </div>
             </div>
 
-            {result.totalUnmatched > 0 && (
+            {(result.totalUnmatched > 0 || result.totalInactive > 0) && (
               <div className="mt-4 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
                 <div className="flex items-start gap-3">
                   <DownloadIcon className="h-5 w-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
                   <div className="flex-1">
                     <p className="font-semibold text-yellow-900 dark:text-yellow-100">
-                      Data Tidak Cocok
+                      Data Tidak Sesuai & Pegawai Tidak Aktif
                     </p>
                     <p className="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
-                      Terdapat {result.totalUnmatched} data yang tidak cocok dengan jabatan di database.
+                      Terdapat {result.totalUnmatched} data tidak sesuai dan {result.totalInactive || 0} pegawai tidak aktif.
                       File log telah dibuat di folder <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-800">storage/sync-logs/</code>
                     </p>
                   </div>

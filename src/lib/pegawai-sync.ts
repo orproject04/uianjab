@@ -34,8 +34,9 @@ export interface PegawaiData {
 export interface SyncResult {
   totalFetched: number;
   totalMatched: number;
-  totalUpdated: number;
+  totalInactive: number; // Pegawai dengan status != ACTIVE
   unmatchedRecords: UnmatchedRecord[];
+  inactiveRecords: UnmatchedRecord[]; // Pegawai tidak aktif
   errors: string[];
   logFilePaths?: {
     json?: string;
@@ -49,6 +50,7 @@ export interface UnmatchedRecord {
   name: string;
   jabatan_name: string;
   unit_organisasi_name: string;
+  status?: string; // Status pegawai
   reason: string;
 }
 
@@ -62,8 +64,8 @@ export async function saveSyncHistory(result: SyncResult): Promise<number> {
         sync_type,
         total_fetched,
         total_matched,
-        total_updated,
         total_unmatched,
+        total_inactive,
         errors,
         log_file_json,
         log_file_csv,
@@ -74,8 +76,8 @@ export async function saveSyncHistory(result: SyncResult): Promise<number> {
         'pegawai',
         result.totalFetched,
         result.totalMatched,
-        result.totalUpdated,
         result.unmatchedRecords.length,
+        result.totalInactive,
         result.errors.length > 0 ? result.errors : null,
         result.logFilePaths?.json || null,
         result.logFilePaths?.csv || null,
@@ -101,14 +103,6 @@ export async function fetchPegawaiData(
   const timeout = parseInt(process.env.EXTERNAL_API_TIMEOUT || '60000');
   
   const url = `${baseUrl}?per_page=${perPage}&page=${page}`;
-  
-  console.log('[FETCH_PEGAWAI] Starting fetch:', {
-    url,
-    page,
-    perPage,
-    timeout,
-    hasToken: !!process.env.EXTERNAL_API_TOKEN,
-  });
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -143,12 +137,6 @@ export async function fetchPegawaiData(
     }
     
     const data = await response.json();
-    console.log('[FETCH_PEGAWAI] Success:', {
-      page,
-      dataCount: data.data?.length || 0,
-      totalPages: data.meta?.last_page,
-    });
-    
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
@@ -226,8 +214,9 @@ export async function syncPegawaiToPetaJabatan(
   const result: SyncResult = {
     totalFetched: 0,
     totalMatched: 0,
-    totalUpdated: 0,
+    totalInactive: 0,
     unmatchedRecords: [],
+    inactiveRecords: [],
     errors: [],
     syncedBy: syncedBy,
   };
@@ -250,10 +239,27 @@ export async function syncPegawaiToPetaJabatan(
     
     result.totalFetched = allPegawai.length;
     
-    // Step 3: Filter only ACTIVE pegawai
+    // Step 3: Filter ACTIVE and track INACTIVE pegawai
     if (onProgress) onProgress(38, 100, 'Memfilter pegawai aktif...');
+    
     const activePegawai = allPegawai.filter(p => p.status === 'ACTIVE');
-    console.log(`[SYNC] Total fetched: ${allPegawai.length}, Active: ${activePegawai.length}`);
+    const inactivePegawai = allPegawai.filter(p => p.status !== 'ACTIVE');
+    
+    result.totalInactive = inactivePegawai.length;
+    
+    // Track inactive pegawai as records
+    for (const pegawai of inactivePegawai) {
+      result.inactiveRecords.push({
+        nip: pegawai.nip,
+        name: pegawai.name,
+        jabatan_name: pegawai.jabatan_name,
+        unit_organisasi_name: pegawai.unit_organisasi_name,
+        status: pegawai.status,
+        reason: `Status pegawai: ${pegawai.status} (Tidak Aktif)`,
+      });
+    }
+    
+    console.log(`[SYNC] Total fetched: ${allPegawai.length}, Active: ${activePegawai.length}, Inactive: ${inactivePegawai.length}`);
     
     // Step 4: Group pegawai by jabatan and unit kerja
     if (onProgress) onProgress(40, 100, 'Mengelompokkan data pegawai...');
@@ -321,7 +327,7 @@ export async function syncPegawaiToPetaJabatan(
                WHERE id = $3`,
               [JSON.stringify(namaPejabat), bezetting, row.id]
             );
-            result.totalUpdated++;
+            // Note: totalUpdated removed - not tracked anymore
           }
           
           result.totalMatched += pegawaiList.length;
@@ -333,6 +339,7 @@ export async function syncPegawaiToPetaJabatan(
               name: pegawai.name,
               jabatan_name: pegawai.jabatan_name,
               unit_organisasi_name: pegawai.unit_organisasi_name,
+              status: pegawai.status,
               reason: 'Tidak ditemukan jabatan dengan nama dan unit kerja yang cocok di database',
             });
           }
@@ -348,10 +355,11 @@ export async function syncPegawaiToPetaJabatan(
       }
     }
     
-    // Step 6: Write unmatched records to log file
-    if (result.unmatchedRecords.length > 0) {
-      if (onProgress) onProgress(92, 100, 'Menulis log unmatched records...');
-      const logPaths = await writeUnmatchedLog(result.unmatchedRecords);
+    // Step 6: Write unmatched and inactive records to log file
+    if (result.unmatchedRecords.length > 0 || result.inactiveRecords.length > 0) {
+      if (onProgress) onProgress(92, 100, 'Menulis log records...');
+      const combinedRecords = [...result.unmatchedRecords, ...result.inactiveRecords];
+      const logPaths = await writeUnmatchedLog(combinedRecords);
       result.logFilePaths = logPaths;
     }
     
@@ -385,17 +393,9 @@ async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: s
       ? process.env.SYNC_LOGS_DIR
       : join(process.cwd(), 'storage', 'sync-logs');
     
-    console.log('[SYNC_LOG] Environment check:', {
-      cwd: process.cwd(),
-      SYNC_LOGS_DIR: process.env.SYNC_LOGS_DIR || '(not set)',
-      resolvedStorageDir: storageDir,
-      recordCount: records.length,
-    });
-    
     // Create directory if not exists
     try {
       await mkdir(storageDir, { recursive: true });
-      console.log('[SYNC_LOG] Directory ensured:', storageDir);
     } catch (mkdirError: any) {
       console.error('[SYNC_LOG] Failed to create directory:', {
         path: storageDir,
@@ -418,7 +418,6 @@ async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: s
     // Write JSON file
     try {
       await writeFile(filepath, JSON.stringify(logData, null, 2), 'utf-8');
-      console.log('[SYNC_LOG] ✓ JSON file written successfully:', filepath);
       result.json = filepath;
     } catch (writeError: any) {
       console.error('[SYNC_LOG] Failed to write JSON file:', {
@@ -434,15 +433,14 @@ async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: s
     const csvFilepath = join(storageDir, csvFilename);
     
     const csvLines = [
-      'NIP,Nama,Jabatan,Unit Organisasi,Alasan',
+      'NIP,Nama,Jabatan,Unit Organisasi,Status,Alasan',
       ...records.map(r => 
-        `"${r.nip}","${r.name}","${r.jabatan_name}","${r.unit_organisasi_name}","${r.reason}"`
+        `"${r.nip}","${r.name}","${r.jabatan_name}","${r.unit_organisasi_name}","${r.status || 'ACTIVE'}","${r.reason}"`
       ),
     ];
     
     try {
       await writeFile(csvFilepath, csvLines.join('\n'), 'utf-8');
-      console.log('[SYNC_LOG] ✓ CSV file written successfully:', csvFilepath);
       result.csv = csvFilepath;
     } catch (writeError: any) {
       console.error('[SYNC_LOG] Failed to write CSV file:', {
