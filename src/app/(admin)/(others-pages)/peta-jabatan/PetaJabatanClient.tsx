@@ -254,7 +254,8 @@ export default function PetaJabatanClient() {
   const [translate, setTranslate] = useState<{ x: number; y: number } | null>(null);
   const [currentZoom, setCurrentZoom] = useState<number | null>(null); // Dynamic zoom for search navigation
   const lastCenteredIndexRef = useRef<number>(-1); // Track last centered index to prevent loops
-  const [isFullscreenPanelOpen, setIsFullscreenPanelOpen] = useState(true); // Control fullscreen panel visibility
+  const [isFullscreenPanelOpen, setIsFullscreenPanelOpen] = useState(false); // Control fullscreen panel visibility - default collapsed on mobile
+  const [isIOS, setIsIOS] = useState(false); // Detect iOS devices
 
   // Persesjen documents state
   const [petaJabatanDoc, setPetaJabatanDoc] = useState<string | null>(null);
@@ -439,6 +440,12 @@ export default function PetaJabatanClient() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Detect iOS devices
+  useEffect(() => {
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(iOS);
+  }, []);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver(([entry]) => {
@@ -450,7 +457,7 @@ export default function PetaJabatanClient() {
 
   useEffect(() => {
     const onFs = () => {
-      const fs = !!document.fullscreenElement;
+      const fs = !!document.fullscreenElement || !!(document as any).webkitFullscreenElement;
       setIsFullscreen(fs);
       if (containerRef.current) {
         containerRef.current.style.height = fs ? "100vh" : (window.innerWidth < 640 ? "80vh" : "70vh");
@@ -468,6 +475,24 @@ export default function PetaJabatanClient() {
 
   const enterFullscreen = async () => {
     if (!containerRef.current) return;
+    
+    // For iOS devices, use alternative approach (expand to full viewport)
+    if (isIOS) {
+      setIsFullscreen(true);
+      if (containerRef.current) {
+        containerRef.current.style.position = 'fixed';
+        containerRef.current.style.top = '0';
+        containerRef.current.style.left = '0';
+        containerRef.current.style.width = '100vw';
+        containerRef.current.style.height = '100vh';
+        containerRef.current.style.zIndex = '9999';
+        containerRef.current.style.background = '#fff';
+        // Prevent scrolling on body
+        document.body.style.overflow = 'hidden';
+      }
+      return;
+    }
+    
     try {
       // Try standard Fullscreen API
       if (containerRef.current.requestFullscreen) {
@@ -483,10 +508,38 @@ export default function PetaJabatanClient() {
       }
     } catch (e) {
       console.error('Fullscreen error:', e);
+      // Fallback to iOS-style fullscreen
+      setIsFullscreen(true);
+      if (containerRef.current) {
+        containerRef.current.style.position = 'fixed';
+        containerRef.current.style.top = '0';
+        containerRef.current.style.left = '0';
+        containerRef.current.style.width = '100vw';
+        containerRef.current.style.height = '100vh';
+        containerRef.current.style.zIndex = '9999';
+        containerRef.current.style.background = '#fff';
+        document.body.style.overflow = 'hidden';
+      }
     }
   };
 
   const exitFullscreen = async () => {
+    // For iOS or custom fullscreen mode
+    if (isIOS || (isFullscreen && !document.fullscreenElement && !(document as any).webkitFullscreenElement)) {
+      setIsFullscreen(false);
+      if (containerRef.current) {
+        containerRef.current.style.position = '';
+        containerRef.current.style.top = '';
+        containerRef.current.style.left = '';
+        containerRef.current.style.width = '';
+        containerRef.current.style.height = window.innerWidth < 640 ? '80vh' : '70vh';
+        containerRef.current.style.zIndex = '';
+        // Restore body scrolling
+        document.body.style.overflow = '';
+      }
+      return;
+    }
+    
     try {
       if (document.exitFullscreen && document.fullscreenElement) {
         await document.exitFullscreen();
@@ -495,6 +548,17 @@ export default function PetaJabatanClient() {
       }
     } catch (e) {
       console.error('Exit fullscreen error:', e);
+      // Fallback
+      setIsFullscreen(false);
+      if (containerRef.current) {
+        containerRef.current.style.position = '';
+        containerRef.current.style.top = '';
+        containerRef.current.style.left = '';
+        containerRef.current.style.width = '';
+        containerRef.current.style.height = window.innerWidth < 640 ? '80vh' : '70vh';
+        containerRef.current.style.zIndex = '';
+        document.body.style.overflow = '';
+      }
     }
   };
 
@@ -1163,8 +1227,8 @@ export default function PetaJabatanClient() {
     
     console.log('📺 Fullscreen state changed:', isFullscreen);
     
-    // Auto-open panel when entering fullscreen
-    if (isFullscreen) {
+    // Auto-open panel when entering fullscreen (only on desktop)
+    if (isFullscreen && window.innerWidth >= 640) {
       setIsFullscreenPanelOpen(true);
     }
     
@@ -1806,24 +1870,24 @@ export default function PetaJabatanClient() {
 
             {/* Control Panel (collapsible) */}
             {isFullscreenPanelOpen && (
-              <div className="absolute top-16 right-4 z-50 w-80">
-                <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-3 space-y-3">
+              <div className="absolute top-16 right-4 z-50 w-72 sm:w-80 max-w-[calc(100vw-2rem)]">
+                <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-2.5 sm:p-3 space-y-2 sm:space-y-3">
                   {/* Header with Exit Button */}
                   <div className="flex items-center justify-between pb-2 border-b">
-                    <span className="text-sm font-semibold text-gray-700">Filter & Pencarian</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-700">Filter & Pencarian</span>
                     <button
                       onClick={exitFullscreen}
-                      className="p-1.5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                      className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded transition-colors touch-manipulation"
                       title="Exit Fullscreen"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
                   
-                  {/* Row 1: Scope and Mode Filters */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  {/* Row 1: Scope and Mode Filters - More compact on mobile */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <Segmented
                       value={scope}
                       onChange={setScope}
@@ -1838,10 +1902,10 @@ export default function PetaJabatanClient() {
                     />
                   </div>
                   
-                  {/* Row 2: Search Input */}
-                  <div className="flex items-center gap-2">
+                  {/* Row 2: Search Input - More compact on mobile */}
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <input
-                      placeholder="Cari Jabatan atau Nama"
+                      placeholder="Cari..."
                       value={filterText}
                       onChange={(e) => {
                         const newValue = e.target.value;
@@ -1851,41 +1915,41 @@ export default function PetaJabatanClient() {
                           handleReset();
                         }
                       }}
-                      className="flex-1 px-3 py-2 rounded border text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded border text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       autoFocus={false}
                     />
                     <button
                       onClick={handleReset}
-                      className="px-3 py-2 rounded border text-sm hover:bg-gray-50 whitespace-nowrap"
+                      className="px-2 sm:px-3 py-1.5 sm:py-2 rounded border text-xs sm:text-sm hover:bg-gray-50 whitespace-nowrap"
                       title="Reset"
                     >
                       Reset
                     </button>
                   </div>
                   
-                  {/* Row 3: Search Results Navigation */}
+                  {/* Row 3: Search Results Navigation - More compact */}
                   {searchMatches.length > 0 && (
-                    <div className="flex items-center justify-between pt-2 border-t bg-green-50 -mx-3 -mb-3 px-3 py-2 rounded-b-lg">
-                      <span className="text-sm text-green-700 font-medium">
+                    <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t bg-green-50 -mx-2.5 sm:-mx-3 -mb-2.5 sm:-mb-3 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-b-lg">
+                      <span className="text-xs sm:text-sm text-green-700 font-medium">
                         {searchMatches.length} hasil ({currentMatchIndex + 1}/{searchMatches.length})
                       </span>
                       {searchMatches.length > 1 && (
-                        <div className="flex gap-1">
+                        <div className="flex gap-0.5 sm:gap-1">
                           <button
                             onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
-                            className="p-1.5 hover:bg-green-100 rounded transition-colors"
+                            className="p-1 sm:p-1.5 hover:bg-green-100 active:bg-green-200 rounded transition-colors touch-manipulation"
                             title="Previous"
                           >
-                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                           </button>
                           <button
                             onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
-                            className="p-1.5 hover:bg-green-100 rounded transition-colors"
+                            className="p-1 sm:p-1.5 hover:bg-green-100 active:bg-green-200 rounded transition-colors touch-manipulation"
                             title="Next"
                           >
-                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                           </button>
