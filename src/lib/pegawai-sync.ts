@@ -355,6 +355,46 @@ export async function syncPegawaiToPetaJabatan(
       }
     }
     
+    // Step 5.5: Check and set default for Sekretaris Jenderal DPD RI if not matched
+    if (onProgress) onProgress(91, 100, 'Memeriksa Sekretaris Jenderal...');
+    try {
+      const { rows: sekjenRows } = await pool.query(
+        `SELECT id, pejabat 
+         FROM peta_jabatan 
+         WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI')`
+      );
+      
+      if (sekjenRows.length > 0) {
+        for (const sekjen of sekjenRows) {
+          const pejabat = sekjen.pejabat;
+          // Check if pejabat is empty or null
+          if (!pejabat || (Array.isArray(pejabat) && pejabat.length === 0)) {
+            // Set default Sekjen data
+            const defaultSekjen = [
+              {
+                "nip": "70070207",
+                "name": "H. MOHAMMAD IQBAL, S.I.K, M.H.",
+                "role": "PNS"
+              }
+            ];
+            
+            await pool.query(
+              `UPDATE peta_jabatan 
+               SET pejabat = $1::jsonb,
+                   bezetting = 1
+               WHERE id = $2`,
+              [JSON.stringify(defaultSekjen), sekjen.id]
+            );
+            
+            console.log('[SYNC] Set default Sekretaris Jenderal DPD RI');
+          }
+        }
+      }
+    } catch (sekjenError: any) {
+      console.error('[SYNC] Error setting default Sekjen:', sekjenError);
+      // Don't throw - continue with sync
+    }
+    
     // Step 6: Write unmatched and inactive records to log file
     if (result.unmatchedRecords.length > 0 || result.inactiveRecords.length > 0) {
       if (onProgress) onProgress(92, 100, 'Menulis log records...');

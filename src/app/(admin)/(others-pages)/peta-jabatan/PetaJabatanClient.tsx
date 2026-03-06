@@ -251,6 +251,10 @@ export default function PetaJabatanClient() {
   const hasFocusedOnce = useRef(false);
   const [highlightUpdate, setHighlightUpdate] = useState(0); // Counter to force re-render for highlight
   const [showTips, setShowTips] = useState(false); // State for tips tooltip visibility
+  const [translate, setTranslate] = useState<{ x: number; y: number } | null>(null);
+  const [currentZoom, setCurrentZoom] = useState<number | null>(null); // Dynamic zoom for search navigation
+  const lastCenteredIndexRef = useRef<number>(-1); // Track last centered index to prevent loops
+  const [isFullscreenPanelOpen, setIsFullscreenPanelOpen] = useState(true); // Control fullscreen panel visibility
 
   // Persesjen documents state
   const [petaJabatanDoc, setPetaJabatanDoc] = useState<string | null>(null);
@@ -361,6 +365,37 @@ export default function PetaJabatanClient() {
 
     return map;
   }, [buildPathForRow]);
+
+  // Reset handler function
+  const handleReset = useCallback(() => {
+    // Clear only peta jabatan specific sessionStorage keys
+    sessionStorage.removeItem('petaJabatan_filterText');
+    sessionStorage.removeItem('petaJabatan_lastClickedPath');
+    sessionStorage.removeItem('petaJabatan_collapseMap');
+    sessionStorage.removeItem('petaJabatan_scope');
+    sessionStorage.removeItem('petaJabatan_fungsionalMode');
+    sessionStorage.removeItem('petaJabatan_returnFromAnjab');
+
+    // Reset all state to defaults
+    setFilterText("");
+    setLastClickedPath(null);
+    setSearchMatches([]);
+    setCurrentMatchIndex(0);
+    setCurrentZoom(null);
+    setScope("PUSAT");
+    setFungsionalMode("STRUKTURAL");
+    hasFocusedOnce.current = false;
+    
+    // Collapse all nodes to initial state
+    const initialCollapseMap: Record<string, boolean> = {};
+    for (const r of allRows) {
+      initialCollapseMap[r.id] = true; // true = collapsed
+    }
+    setCollapseMap(initialCollapseMap);
+
+    // Force reload the data to ensure clean state
+    load();
+  }, [allRows]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -508,6 +543,7 @@ export default function PetaJabatanClient() {
     if (!filterText.trim() || rows.length === 0) {
       setSearchMatches([]);
       setCurrentMatchIndex(0);
+      setCurrentZoom(null); // Reset zoom when search cleared
       return;
     }
 
@@ -515,40 +551,60 @@ export default function PetaJabatanClient() {
     const timeoutId = setTimeout(() => {
       const lcFilter = filterText.trim().toLowerCase();
       const matches: string[] = [];
-      const expandMap: Record<string, boolean> = {};
 
-      // Initialize all as collapsed
-      for (const r of rows) expandMap[r.id] = true;
-
-      // Find all matching nodes
+      // Find all matching nodes (don't expand yet)
       for (const row of rows) {
         const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
         const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
         const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
+        const pejabatMatch = (row.pejabat || []).some(p => 
+          (p.name || "").toLowerCase().includes(lcFilter)
+        );
 
-        if (nameMatch || slugMatch || unitMatch) {
+        if (nameMatch || slugMatch || unitMatch || pejabatMatch) {
           matches.push(row.id);
-
-          // Expand this node and all its ancestors
-          let current: APIRow | undefined = row;
-          while (current) {
-            expandMap[current.id] = false; // false = expanded
-            current = current.parent_id ? rows.find(r => r.id === current!.parent_id) : undefined;
-          }
         }
       }
 
       setSearchMatches(matches);
       setCurrentMatchIndex(0);
-
-      // Apply the expand map
+      
+      // Reset centered ref when new search starts
       if (matches.length > 0) {
-        setCollapseMap(expandMap);
+        lastCenteredIndexRef.current = -1;
       }
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
   }, [filterText, rows]);
+
+  // ==== Show only current match (collapse all others) ====
+  useEffect(() => {
+    if (searchMatches.length === 0) return;
+    
+    const currentMatchId = searchMatches[currentMatchIndex];
+    if (!currentMatchId) return;
+
+    const expandMap: Record<string, boolean> = {};
+    
+    // Collapse everything first
+    for (const r of rows) expandMap[r.id] = true;
+
+    // Find the current match row and expand only its path
+    const currentRow = rows.find(r => r.id === currentMatchId);
+    if (currentRow) {
+      let current: APIRow | undefined = currentRow;
+      while (current) {
+        expandMap[current.id] = false; // false = expanded
+        current = current.parent_id ? rows.find(r => r.id === current!.parent_id) : undefined;
+      }
+    }
+
+    setCollapseMap(expandMap);
+    
+    // Reset centered ref when collapsemap changes for search
+    lastCenteredIndexRef.current = -1;
+  }, [currentMatchIndex, searchMatches, rows]);
 
   // ---------- Breakpoints (berbasis lebar kontainer) ----------
   // Adjusted for 14-inch laptops (~1366px width)
@@ -699,16 +755,55 @@ export default function PetaJabatanClient() {
   const lcFilter = filterText.trim().toLowerCase();
   const filteredRoots: D3Node[] = useMemo(() => {
     if (!lcFilter) return roots;
+    
+    // If we have search matches and a valid currentMatchIndex, show only the path to that node
+    if (searchMatches.length > 0 && currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
+      const currentMatchId = searchMatches[currentMatchIndex];
+      
+      // Build path set from root to current match (using rows for real nodes)
+      const pathIds = new Set<string>();
+      const currentRow = rows.find(r => r.id === currentMatchId);
+      if (currentRow) {
+        let current: APIRow | undefined = currentRow;
+        while (current) {
+          pathIds.add(current.id);
+          current = current.parent_id ? rows.find(r => r.id === current!.parent_id) : undefined;
+        }
+      }
+      
+      // Walk tree and keep nodes that are in path OR are ghost/synthetic with children in path
+      const walkPath = (n: D3Node): D3Node | null => {
+        // Check children first
+        const kids = n.children.map(walkPath).filter(Boolean) as D3Node[];
+        
+        // Include node if:
+        // 1. It's in the path (real node that matches)
+        // 2. It's a ghost/synthetic node AND has children in the path
+        const isInPath = pathIds.has(n._id);
+        const isGhostWithKids = (n._ghost || n._syntheticSimple) && kids.length > 0;
+        
+        if (isInPath || isGhostWithKids) {
+          return { ...n, children: kids };
+        }
+        
+        return null;
+      };
+      
+      return roots.map(walkPath).filter(Boolean) as D3Node[];
+    }
+    
+    // Original filter logic when no specific match is selected
     const match = (n: D3Node) =>
       (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
-      (n._slug || "").toLowerCase().includes(lcFilter);
+      (n._slug || "").toLowerCase().includes(lcFilter) ||
+      (n.pejabat || []).some(p => (p.name || "").toLowerCase().includes(lcFilter));
     const walk = (n: D3Node): D3Node | null => {
       const kids = n.children.map(walk).filter(Boolean) as D3Node[];
       if (match(n) || kids.length) return { ...n, children: kids };
       return null;
     };
     return roots.map(walk).filter(Boolean) as D3Node[];
-  }, [roots, lcFilter]);
+  }, [roots, lcFilter, searchMatches, currentMatchIndex, rows]);
 
   // ==== Convert to RawNodeDatum ====
   function collectIds(node: RawNodeDatum): string[] {
@@ -884,34 +979,50 @@ export default function PetaJabatanClient() {
       if (pathStr === targetPath) {
         // Found the target node
         const y = depth * nodeSize.y;
+        console.log(`Found target at depth ${depth}, xOffset ${xOffset}`);
         return { x: xOffset, y };
       }
 
       // Check children
       if (node.children && node.children.length > 0) {
-        // Calculate the total width of all children subtrees
-        let currentX = xOffset;
+        // Calculate total width of all children
+        let totalWidth = 0;
+        const childWidths: number[] = [];
+        
+        for (let i = 0; i < node.children.length; i++) {
+          const childWidth = calculateSubtreeWidth(node.children[i]);
+          childWidths.push(childWidth);
+          totalWidth += childWidth;
+          
+          // Add spacing between siblings (except after the last one)
+          if (i < node.children.length - 1) {
+            totalWidth += nodeSize.x * separation.siblings;
+          }
+        }
+
+        // Start position: parent center - half of total width
+        let currentX = xOffset - (totalWidth / 2);
 
         for (let i = 0; i < node.children.length; i++) {
           const child = node.children[i];
           const childAttrs = child.attributes as any;
           const childPathStr = childAttrs?.pathStr || "";
 
-          // Calculate subtree width for this child
-          const subtreeWidth = calculateSubtreeWidth(child);
-          const childCenterX = currentX + (subtreeWidth / 2);
+          // Center position of this child's subtree
+          const childCenterX = currentX + (childWidths[i] / 2);
 
           if (childPathStr === targetPath) {
             const y = (depth + 1) * nodeSize.y;
+            console.log(`Found target child at depth ${depth + 1}, childCenterX ${childCenterX}`);
             return { x: childCenterX, y };
           }
 
-          // Recursively search in children
+          // Recursively search in this child's subtree
           const result = findNodePosition(targetPath, [child], depth + 1, childCenterX);
           if (result) return result;
 
           // Move to next sibling position
-          currentX += subtreeWidth;
+          currentX += childWidths[i];
           if (i < node.children.length - 1) {
             currentX += nodeSize.x * separation.siblings;
           }
@@ -921,53 +1032,171 @@ export default function PetaJabatanClient() {
     return null;
   }, [nodeSize, separation, calculateSubtreeWidth]);
 
-  // Calculate translate to center on last clicked node
-  const translate = useMemo(() => {
-    const defaultTranslate = { x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110 };
-
-    if (!lastClickedPath || rd3Data.length === 0 || !containerSize.w) {
-      return defaultTranslate;
+  // Effect: Scroll to node when currentMatchIndex changes (navigation)
+  useEffect(() => {
+    // Skip if no matches
+    if (searchMatches.length === 0) {
+      return;
     }
-
-    // Find the node position
-    const nodePos = findNodePosition(lastClickedPath, rd3Data);
-
-    if (!nodePos) {
-      console.log('Node position not found for path:', lastClickedPath);
-      return defaultTranslate;
+    
+    // Skip if already centered this index (and it's a valid index)
+    if (currentMatchIndex === lastCenteredIndexRef.current) {
+      console.log('🔍 Already centered index', currentMatchIndex, ', skipping');
+      return;
     }
+    
+    if (!containerRef.current || !containerSize.w) return;
+    
+    const matchId = searchMatches[currentMatchIndex];
+    if (!matchId) return;
+    
+    console.log('🔍 Navigation: Attempting to center match index:', currentMatchIndex, 'ID:', matchId);
+    
+    // Use longer timeout to ensure tree is fully rendered after collapse changes
+    const timeoutId = setTimeout(() => {
+      // Re-check after timeout
+      if (!containerRef.current || !containerSize.w || rd3Data.length === 0 || rows.length === 0) {
+        console.log('❌ Dependencies not ready, skipping');
+        return;
+      }
+      
+      // Find the matching row to get path
+      const matchRow = rows.find(r => r.id === matchId);
+      if (!matchRow) {
+        console.log('❌ Row not found for matchId:', matchId);
+        return;
+      }
+     
+      const matchPath = buildPathForRow(matchRow, rows);
+      console.log('✓ Found match path:', matchPath);
+      
+      // Find node position in tree coordinates (starting from x=0 center)
+      const nodePos = findNodePosition(matchPath, rd3Data);
+      
+      if (nodePos) {
+        console.log('✓ Found node position in tree coords:', nodePos);
+        console.log('Current translate:', translate);
+        console.log('Container size:', { w: containerSize.w, h: containerRef.current.clientHeight });
+        
+        // Calculate distance from center to determine if we need to adjust zoom
+        const distanceFromCenter = Math.abs(nodePos.x);
+        const containerHalfWidth = containerSize.w / 2;
+        
+        // If node is far from center, we might need to zoom out
+        // Calculate required zoom to fit the node
+        let zoom = initialZoom;
+        const maxDistance = containerHalfWidth * 0.7; // Use 70% of half width as comfort zone
+        
+        if ((distanceFromCenter * zoom) > maxDistance) {
+          // Node is too far, adjust zoom
+          zoom = maxDistance / distanceFromCenter;
+          zoom = Math.max(zoom, 0.3); // Minimum zoom 0.3
+          zoom = Math.min(zoom, initialZoom); // Don't zoom in more than initial
+          console.log(`📏 Node is far (${distanceFromCenter}px), adjusting zoom from ${initialZoom} to ${zoom}`);
+        }
+        
+        // Calculate new translate to center the node
+        const centerX = containerSize.w / 2;
+        const centerY = containerRef.current.clientHeight / 2;
+        
+        const newTranslate = {
+          x: centerX - (nodePos.x * zoom),
+          y: centerY - (nodePos.y * zoom)
+        };
+        
+        console.log('✅ Setting new translate:', newTranslate, `(zoom: ${zoom}, will center node at`, nodePos, ')');
+        
+        // Mark this index as centered BEFORE updating state
+        lastCenteredIndexRef.current = currentMatchIndex;
+        
+        // Update both translate and zoom together
+        setTranslate(newTranslate);
+        setCurrentZoom(zoom);
+        
+      } else {
+        console.log('❌ Node position not found for path:', matchPath);
+        console.log('Available rd3Data length:', rd3Data.length);
+        if (rd3Data.length > 0 && rd3Data[0].attributes) {
+          console.log('First node path:', (rd3Data[0].attributes as any).pathStr);
+        }
+      }
+    }, 800); // Longer timeout for tree rendering after collapse changes
+    
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMatchIndex, searchMatches, rd3Data, collapseMap]); // Trigger when rd3Data or collapseMap changes
 
-    console.log('Focusing on node:', lastClickedPath, 'at position:', nodePos);
-
-    // Calculate translate to center the node
-    // X: center the node horizontally in the viewport
-    // Y: center the node vertically in the viewport
-    const centerX = containerSize.w / 2;
-    const centerY = (isFullscreen ? window.innerHeight : (bp.isMobile ? window.innerHeight * 0.8 : window.innerHeight * 0.7)) / 2;
-
-    // Adjust for zoom level (we'll use a slightly higher zoom)
-    const targetZoom = Math.min(initialZoom * 1.3, 1.2); // Zoom in a bit more
-    const adjustedX = centerX - (nodePos.x * targetZoom);
-    const adjustedY = centerY - (nodePos.y * targetZoom);
-
-    const finalTranslate = {
-      x: Math.max(24, adjustedX),
-      y: Math.max(bp.isMobile ? 80 : 110, adjustedY)
-    };
-
-    console.log('Calculated translate:', finalTranslate, 'zoom:', targetZoom);
-
-    return finalTranslate;
-  }, [containerSize, bp.isMobile, lastClickedPath, rd3Data, findNodePosition, initialZoom, isFullscreen]);
-
-  // Calculate zoom level - slightly higher if we have a target node
-  const zoomLevel = useMemo(() => {
-    if (lastClickedPath && rd3Data.length > 0) {
-      // Lower max zoom to prevent horizontal overflow
-      return Math.min(initialZoom * 1.2, 0.9); // Zoom in 20% more, max 0.9
+  // Effect: Focus on root node after reset (when no search)
+  useEffect(() => {
+    // Only run if there's no search and container is ready
+    if (searchMatches.length > 0 || !containerRef.current || !containerSize.w) return;
+    
+    // If filterText is empty and we haven't focused on root yet, center on root
+    if (!filterText && !hasFocusedOnce.current && translate) {
+      console.log('🏠 Focusing on root node (Setjen)');
+      
+      const timeoutId = setTimeout(() => {
+        if (!containerRef.current || !containerSize.w) return;
+        
+        // Center on root at x=0, y=0
+        const centerX = containerSize.w / 2;
+        const centerY = containerRef.current.clientHeight / 2;
+        
+        const newTranslate = {
+          x: centerX,
+          y: centerY - 100 // Slight offset to show root better
+        };
+        
+        console.log('✅ Centering on root:', newTranslate);
+        setTranslate(newTranslate);
+        setCurrentZoom(null); // Reset to initial zoom
+        hasFocusedOnce.current = true;
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
     }
-    return initialZoom;
-  }, [lastClickedPath, rd3Data.length, initialZoom]);
+  }, [searchMatches, filterText, containerSize.w, translate]);
+
+  // Re-center when entering/exiting fullscreen
+  useEffect(() => {
+    if (!containerRef.current || !containerSize.w) return;
+    
+    console.log('📺 Fullscreen state changed:', isFullscreen);
+    
+    // Auto-open panel when entering fullscreen
+    if (isFullscreen) {
+      setIsFullscreenPanelOpen(true);
+    }
+    
+    // Re-center on root when entering/exiting fullscreen
+    const timeoutId = setTimeout(() => {
+      if (!containerRef.current || !containerSize.w) return;
+      
+      const centerX = containerSize.w / 2;
+      const centerY = isFullscreen 
+        ? window.innerHeight / 2  // Use full viewport height in fullscreen
+        : containerRef.current.clientHeight / 2;
+      
+      const newTranslate = {
+        x: centerX,
+        y: centerY - 100
+      };
+      
+      console.log('✅ Re-centering for fullscreen mode:', newTranslate);
+      setTranslate(newTranslate);
+      setCurrentZoom(null);
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [isFullscreen, containerSize.w]);
+
+  // Initialize translate once
+  useEffect(() => {
+    if (!translate && containerSize.w) {
+      const defaultTranslate = { x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110 };
+      setTranslate(defaultTranslate);
+    }
+  }, [translate, containerSize.w, bp.isMobile]);
 
   // ==== Custom Node Renderer ====
   const renderNode = useCallback((props: CustomNodeElementProps) => {
@@ -993,7 +1222,7 @@ export default function PetaJabatanClient() {
       const centerY = 0;
 
       return (
-        <g>
+        <g data-node-id={attrs.id}>
           <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
             fill="#E8F5D9" stroke="#6DB980" strokeWidth={1}
             style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
@@ -1158,7 +1387,7 @@ export default function PetaJabatanClient() {
     }
 
     return (
-      <g>
+      <g data-node-id={attrs.id}>
         {/* KARTU - Clickable except toggle button */}
         <rect x={xLeft} y={yTop} width={cardW} height={cardH}
           rx={8} ry={8} fill="#ffffff"
@@ -1261,33 +1490,20 @@ export default function PetaJabatanClient() {
           {/* Baris 1: Search + Reset */}
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <input
-              placeholder="Cari Jabatan"
+              placeholder="Cari Jabatan atau Nama Pejabat"
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                setFilterText(newValue);
+                // Trigger reset if input is cleared
+                if (newValue === "") {
+                  handleReset();
+                }
+              }}
               className="px-3 py-2 rounded border text-sm"
             />
             <button
-              onClick={() => {
-                // Clear only peta jabatan specific sessionStorage keys
-                sessionStorage.removeItem('petaJabatan_filterText');
-                sessionStorage.removeItem('petaJabatan_lastClickedPath');
-                sessionStorage.removeItem('petaJabatan_collapseMap');
-                sessionStorage.removeItem('petaJabatan_scope');
-                sessionStorage.removeItem('petaJabatan_fungsionalMode');
-                sessionStorage.removeItem('petaJabatan_returnFromAnjab');
-
-                // Reset all state to defaults
-                setFilterText("");
-                setLastClickedPath(null);
-                setSearchMatches([]);
-                setCurrentMatchIndex(0);
-                setScope("PUSAT");
-                setFungsionalMode("STRUKTURAL");
-                hasFocusedOnce.current = false;
-
-                // Force reload the data to ensure clean state
-                load();
-              }}
+              onClick={handleReset}
               className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
             >
               Reset
@@ -1354,33 +1570,20 @@ export default function PetaJabatanClient() {
           </div>
           <div className="flex items-center gap-2">
             <input
-              placeholder="Cari Jabatan"
+              placeholder="Cari Jabatan atau Nama Pejabat"
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                setFilterText(newValue);
+                // Trigger reset if input is cleared
+                if (newValue === "") {
+                  handleReset();
+                }
+              }}
               className="px-3 py-2 rounded border text-sm w-[320px]"
             />
             <button
-              onClick={() => {
-                // Clear only peta jabatan specific sessionStorage keys
-                sessionStorage.removeItem('petaJabatan_filterText');
-                sessionStorage.removeItem('petaJabatan_lastClickedPath');
-                sessionStorage.removeItem('petaJabatan_collapseMap');
-                sessionStorage.removeItem('petaJabatan_scope');
-                sessionStorage.removeItem('petaJabatan_fungsionalMode');
-                sessionStorage.removeItem('petaJabatan_returnFromAnjab');
-
-                // Reset all state to defaults
-                setFilterText("");
-                setLastClickedPath(null);
-                setSearchMatches([]);
-                setCurrentMatchIndex(0);
-                setScope("PUSAT");
-                setFungsionalMode("STRUKTURAL");
-                hasFocusedOnce.current = false;
-
-                // Force reload the data to ensure clean state
-                load();
-              }}
+              onClick={handleReset}
               className="px-2 py-2 rounded border text-sm hover:bg-gray-50"
             >
               Reset
@@ -1579,6 +1782,123 @@ export default function PetaJabatanClient() {
         }}
         className="rounded custom-scrollbar"
       >
+        {/* Fullscreen Controls - Top Right */}
+        {isFullscreen && (
+          <>
+            {/* Toggle Button (always visible) */}
+            <button
+              onClick={() => setIsFullscreenPanelOpen(!isFullscreenPanelOpen)}
+              className="absolute top-4 right-4 z-50 p-2.5 bg-white rounded-lg shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              title={isFullscreenPanelOpen ? "Sembunyikan Panel" : "Tampilkan Panel"}
+            >
+              {isFullscreenPanelOpen ? (
+                // Collapse/Hide icon (chevron right or minimize)
+                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              ) : (
+                // Menu/Show icon (hamburger)
+                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+
+            {/* Control Panel (collapsible) */}
+            {isFullscreenPanelOpen && (
+              <div className="absolute top-16 right-4 z-50 w-80">
+                <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-3 space-y-3">
+                  {/* Header with Exit Button */}
+                  <div className="flex items-center justify-between pb-2 border-b">
+                    <span className="text-sm font-semibold text-gray-700">Filter & Pencarian</span>
+                    <button
+                      onClick={exitFullscreen}
+                      className="p-1.5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                      title="Exit Fullscreen"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Row 1: Scope and Mode Filters */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Segmented
+                      value={scope}
+                      onChange={setScope}
+                      options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
+                      size="sm"
+                    />
+                    <Segmented
+                      value={fungsionalMode}
+                      onChange={setFungsionalMode}
+                      options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
+                      size="sm"
+                    />
+                  </div>
+                  
+                  {/* Row 2: Search Input */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      placeholder="Cari Jabatan atau Nama"
+                      value={filterText}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setFilterText(newValue);
+                        // Trigger reset if input is cleared
+                        if (newValue === "") {
+                          handleReset();
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 rounded border text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      autoFocus={false}
+                    />
+                    <button
+                      onClick={handleReset}
+                      className="px-3 py-2 rounded border text-sm hover:bg-gray-50 whitespace-nowrap"
+                      title="Reset"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  
+                  {/* Row 3: Search Results Navigation */}
+                  {searchMatches.length > 0 && (
+                    <div className="flex items-center justify-between pt-2 border-t bg-green-50 -mx-3 -mb-3 px-3 py-2 rounded-b-lg">
+                      <span className="text-sm text-green-700 font-medium">
+                        {searchMatches.length} hasil ({currentMatchIndex + 1}/{searchMatches.length})
+                      </span>
+                      {searchMatches.length > 1 && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
+                            className="p-1.5 hover:bg-green-100 rounded transition-colors"
+                            title="Previous"
+                          >
+                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
+                            className="p-1.5 hover:bg-green-100 rounded transition-colors"
+                            title="Next"
+                          >
+                            <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
         {/* Loading indicator */}
         {loading && (
           <div className="w-full h-full flex items-center justify-center">
@@ -1595,14 +1915,14 @@ export default function PetaJabatanClient() {
             <Tree
               data={rd3Data}
               orientation="vertical"
-              translate={translate}
+              translate={translate || { x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110 }}
               zoomable
               collapsible={false}
-              zoom={zoomLevel}
+              zoom={currentZoom || initialZoom}
               pathFunc="step"
               nodeSize={nodeSize}
               separation={separation}
-              transitionDuration={bp.isMobile ? 200 : 300}
+              transitionDuration={500}
               scaleExtent={{ min: 0.1, max: 2 }}
               renderCustomNodeElement={renderNode}
               enableLegacyTransitions={false}
@@ -1611,7 +1931,7 @@ export default function PetaJabatanClient() {
         ) : (
           !loading && (
             <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
-              {rows.length === 0 ? "Data kosong." : "Tidak ada yang cocok dengan filter/cari."}
+              {rows.length === 0 ? "Data kosong" : "Tidak ada yang cocok"}
             </div>
           )
         )}

@@ -250,7 +250,7 @@ const AppSidebar: React.FC = () => {
                 { id: "sync-pegawai", name: "Sinkronisasi Data Pegawai", slug: "sync-pegawai", path: "/sync-pegawai" }
             ]
         }] : []),
-        {name: "Anjab", icon: <ListIcon/>, subItems: anjabSubs},
+        {name: "Anjab dan ABK", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
         ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
         ...((isAdmin || isAdminJf) ? [{
@@ -261,7 +261,7 @@ const AppSidebar: React.FC = () => {
                 ...(isAdmin ? [{ id: "persesjen", name: "Persesjen", slug: "persesjen", path: "/persesjen" }] : [])
             ]
         }] : []),
-        {name: "Usulan Perbaikan Dokumen Anjab", icon: <MailIcon/>, path: "/feedback", subItems: []}
+        {name: "Usulan Perbaikan Anjab dan ABK", icon: <MailIcon/>, path: "/feedback", subItems: []}
     ], [isAdmin, isAdminJf, anjabSubs]);
     const othersItems: NavItem[] = [];
 
@@ -921,7 +921,7 @@ const AppSidebar: React.FC = () => {
         const hasSubItems = !!subItem.subItems?.length;
         const isNestedOpen = openNestedSubmenus[subItem.path];
         const href = `/${(subItem.path || "").replace(/^\/+/, "")}`;
-        const showDotsMenu = parentName === "Anjab"; // Only show dots menu for Anjab children
+        const showDotsMenu = parentName === "Anjab dan ABK"; // Only show dots menu for Anjab dan ABK children
 
         return (
             <li key={`${subItem.path}-${subItem.id}`}>
@@ -1002,7 +1002,7 @@ const AppSidebar: React.FC = () => {
     const renderMenuItems = (items: NavItem[], menuType: "main" | "others") => (
         <ul className="flex flex-col gap-1">
             {items.map((nav, index) => {
-                const isAnjab = nav.name === "Anjab";
+                const isAnjab = nav.name === "Anjab dan ABK";
                 const hasChildren = isAnjab || !!nav.subItems?.length;
 
                 return (
