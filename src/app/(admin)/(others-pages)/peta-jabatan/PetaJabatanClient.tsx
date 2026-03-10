@@ -33,6 +33,13 @@ type APIRow = {
   pejabat?: PegawaiInfo[];
 };
 
+// Type for search matches with name-level granularity
+type SearchMatch = {
+  nodeId: string;
+  matchedNameIndices: number[]; // indices of matched pejabat names, empty if jabatan name matched
+  matchType: 'jabatan' | 'pejabat'; // what was matched
+};
+
 // ---- Node internal + ghost
 type D3Node = {
   _id: string;
@@ -241,7 +248,7 @@ export default function PetaJabatanClient() {
   const [scope, setScope] = useState<ScopeOpt>("PUSAT");
   const [fungsionalMode, setFungsionalMode] = useState<FungsionalOpt>("STRUKTURAL");
   const [filterText, setFilterText] = useState("");
-  const [searchMatches, setSearchMatches] = useState<string[]>([]); // IDs of matching nodes
+  const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([]); // Detailed match info
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -260,6 +267,9 @@ export default function PetaJabatanClient() {
   // Persesjen documents state
   const [petaJabatanDoc, setPetaJabatanDoc] = useState<string | null>(null);
   const [kelasJabatanDoc, setKelasJabatanDoc] = useState<string | null>(null);
+
+  // Copy to clipboard state - track which name was just copied
+  const [copiedNameId, setCopiedNameId] = useState<string | null>(null);
 
 
   // Save state to sessionStorage whenever it changes
@@ -614,19 +624,36 @@ export default function PetaJabatanClient() {
     // Debounce search for better performance
     const timeoutId = setTimeout(() => {
       const lcFilter = filterText.trim().toLowerCase();
-      const matches: string[] = [];
+      const matches: SearchMatch[] = [];
 
-      // Find all matching nodes (don't expand yet)
+      // Find all matching nodes with detailed info
       for (const row of rows) {
         const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
         const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
         const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
-        const pejabatMatch = (row.pejabat || []).some(p => 
-          (p.name || "").toLowerCase().includes(lcFilter)
-        );
+        
+        // Check which pejabat names match
+        const matchedNameIndices: number[] = [];
+        (row.pejabat || []).forEach((p, idx) => {
+          if ((p.name || "").toLowerCase().includes(lcFilter)) {
+            matchedNameIndices.push(idx);
+          }
+        });
 
-        if (nameMatch || slugMatch || unitMatch || pejabatMatch) {
-          matches.push(row.id);
+        if (nameMatch || slugMatch || unitMatch) {
+          // Jabatan name matched - highlight whole card
+          matches.push({
+            nodeId: row.id,
+            matchedNameIndices: [],
+            matchType: 'jabatan'
+          });
+        } else if (matchedNameIndices.length > 0) {
+          // Only pejabat name(s) matched - highlight specific names
+          matches.push({
+            nodeId: row.id,
+            matchedNameIndices,
+            matchType: 'pejabat'
+          });
         }
       }
 
@@ -646,8 +673,8 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     if (searchMatches.length === 0) return;
     
-    const currentMatchId = searchMatches[currentMatchIndex];
-    if (!currentMatchId) return;
+    const currentMatch = searchMatches[currentMatchIndex];
+    if (!currentMatch) return;
 
     const expandMap: Record<string, boolean> = {};
     
@@ -655,7 +682,7 @@ export default function PetaJabatanClient() {
     for (const r of rows) expandMap[r.id] = true;
 
     // Find the current match row and expand only its path
-    const currentRow = rows.find(r => r.id === currentMatchId);
+    const currentRow = rows.find(r => r.id === currentMatch.nodeId);
     if (currentRow) {
       let current: APIRow | undefined = currentRow;
       while (current) {
@@ -822,11 +849,11 @@ export default function PetaJabatanClient() {
     
     // If we have search matches and a valid currentMatchIndex, show only the path to that node
     if (searchMatches.length > 0 && currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
-      const currentMatchId = searchMatches[currentMatchIndex];
+      const currentMatch = searchMatches[currentMatchIndex];
       
       // Build path set from root to current match (using rows for real nodes)
       const pathIds = new Set<string>();
-      const currentRow = rows.find(r => r.id === currentMatchId);
+      const currentRow = rows.find(r => r.id === currentMatch.nodeId);
       if (currentRow) {
         let current: APIRow | undefined = currentRow;
         while (current) {
@@ -1111,10 +1138,10 @@ export default function PetaJabatanClient() {
     
     if (!containerRef.current || !containerSize.w) return;
     
-    const matchId = searchMatches[currentMatchIndex];
-    if (!matchId) return;
+    const currentMatch = searchMatches[currentMatchIndex];
+    if (!currentMatch) return;
     
-    console.log('🔍 Navigation: Attempting to center match index:', currentMatchIndex, 'ID:', matchId);
+    console.log('🔍 Navigation: Attempting to center match index:', currentMatchIndex, 'Match:', currentMatch);
     
     // Use longer timeout to ensure tree is fully rendered after collapse changes
     const timeoutId = setTimeout(() => {
@@ -1125,9 +1152,9 @@ export default function PetaJabatanClient() {
       }
       
       // Find the matching row to get path
-      const matchRow = rows.find(r => r.id === matchId);
+      const matchRow = rows.find(r => r.id === currentMatch.nodeId);
       if (!matchRow) {
-        console.log('❌ Row not found for matchId:', matchId);
+        console.log('❌ Row not found for matchId:', currentMatch.nodeId);
         return;
       }
      
@@ -1261,6 +1288,44 @@ export default function PetaJabatanClient() {
       setTranslate(defaultTranslate);
     }
   }, [translate, containerSize.w, bp.isMobile]);
+
+  // Copy to clipboard function
+  const handleCopyName = useCallback((name: string, nodeId: string, idx: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Remove role suffix if present (text in parentheses)
+    const cleanName = name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    
+    // Try to copy to clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cleanName)
+        .then(() => {
+          const copyId = `${nodeId}-${idx}`;
+          setCopiedNameId(copyId);
+          setTimeout(() => setCopiedNameId(null), 2000); // Reset after 2 seconds
+        })
+        .catch(err => {
+          console.error('Failed to copy:', err);
+          // Fallback for older browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = cleanName;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.select();
+          try {
+            document.execCommand('copy');
+            const copyId = `${nodeId}-${idx}`;
+            setCopiedNameId(copyId);
+            setTimeout(() => setCopiedNameId(null), 2000);
+          } catch (err2) {
+            console.error('Fallback copy failed:', err2);
+          }
+          document.body.removeChild(textArea);
+        });
+    }
+  }, []);
 
   // ==== Custom Node Renderer ====
   const renderNode = useCallback((props: CustomNodeElementProps) => {
@@ -1425,20 +1490,28 @@ export default function PetaJabatanClient() {
     const isLastClicked = sessionLastClicked === pathStr;
 
     // Check if this node matches current search
-    const isSearchMatch = searchMatches.includes(attrs.id);
-    const isCurrentMatch = isSearchMatch && searchMatches[currentMatchIndex] === attrs.id;
+    const currentMatch = searchMatches.find(m => m.nodeId === attrs.id);
+    const isSearchMatch = !!currentMatch;
+    const isCurrentSearchMatch = isSearchMatch && searchMatches[currentMatchIndex]?.nodeId === attrs.id;
+    const matchedNameIndices = currentMatch?.matchedNameIndices || [];
+    const matchType = currentMatch?.matchType || 'jabatan';
 
     // Determine border style based on state
     let borderColor = "#6DB980"; // default green
     let borderWidth = 1;
     let shadowFilter = "drop-shadow(0 2px 3px rgba(0,0,0,0.08))";
 
-    if (isCurrentMatch) {
-      // Current search match - green with pulsing effect
+    if (isCurrentSearchMatch && matchType === 'jabatan') {
+      // Current search match for jabatan name - green with pulsing effect
       borderColor = "#10B981";
       borderWidth = 4;
       shadowFilter = "drop-shadow(0 4px 8px rgba(16,185,129,0.4))";
-    } else if (isSearchMatch) {
+    } else if (isCurrentSearchMatch && matchType === 'pejabat') {
+      // Current search match for pejabat name - use orange for card
+      borderColor = "#F59E0B";
+      borderWidth = 2;
+      shadowFilter = "drop-shadow(0 3px 6px rgba(245,158,11,0.3))";
+    } else if (isSearchMatch && matchType === 'jabatan') {
       // Other search matches - yellow
       borderColor = "#F59E0B";
       borderWidth = 2;
@@ -1500,27 +1573,124 @@ export default function PetaJabatanClient() {
         </g>
 
         {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
-        <g style={{ pointerEvents: 'none' }}>
+        <g>
           {namesArr.length > 0 ? (
             namesArr.map((name, idx) => {
               const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
               const isEselonCentered = rankJenis(attrs.jenis) <= 4;
               const textAlign = isEselonCentered ? "middle" : "start";
               const textX = isEselonCentered ? centerX : xLeft + padX + 10;
+              
+              // ID for tracking copied state
+              const copyId = `${attrs.id}-${idx}`;
+              const isCopied = copiedNameId === copyId;
+              
+              // Check if this specific name is matched in search
+              const isNameMatched = matchType === 'pejabat' && matchedNameIndices.includes(idx);
+              const isCurrentNameMatch = isCurrentSearchMatch && isNameMatched;
+              
+              // Determine border color for this name box
+              let nameBorderColor = "#c4c4c4"; // default gray
+              let nameBorderWidth = 1;
+              
+              if (isCurrentNameMatch) {
+                // This specific name matches current search - bright yellow/gold
+                nameBorderColor = "#F59E0B";
+                nameBorderWidth = 3;
+              } else if (isNameMatched) {
+                // This name matches but not current index - lighter yellow
+                nameBorderColor = "#FBBF24";
+                nameBorderWidth = 2;
+              }
+              
+              // Copy button position (on the right side of the box)
+              const buttonSize = bp.isMobile ? 20 : 22;
+              const buttonX = xLeft + padX + (cardW - padX * 2) - buttonSize - 6;
+              const buttonY = yBoxStart + (textFieldH - buttonSize) / 2;
 
               return (
                 <g key={idx}>
-                  {/* Kotak untuk setiap nama */}
+                  {/* Kotak untuk setiap nama - with conditional border */}
                   <rect x={xLeft + padX} y={yBoxStart}
                     width={cardW - padX * 2} height={textFieldH}
-                    rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
-                  {/* Text nama */}
+                    rx={6} ry={6} 
+                    fill={isCurrentNameMatch ? "#FEF3C7" : "#ffffff"} 
+                    stroke={nameBorderColor} 
+                    strokeWidth={nameBorderWidth}
+                    style={{ 
+                      pointerEvents: 'none',
+                      filter: isCurrentNameMatch ? "drop-shadow(0 2px 4px rgba(245,158,11,0.3))" : "none"
+                    }} />
+                  
+                  {/* Text nama - selectable and copyable */}
                   <text x={textX} y={yBoxStart + textFieldH / 2}
                     textAnchor={textAlign} alignmentBaseline="central"
                     fill="#111827" strokeWidth={1}
-                    style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ 
+                      fontSize: bp.isMobile ? "11px" : "12px", 
+                      fontWeight: 200,
+                      userSelect: 'text',
+                      WebkitUserSelect: 'text',
+                      MozUserSelect: 'text',
+                      msUserSelect: 'text',
+                      cursor: 'text',
+                      pointerEvents: 'auto'
+                    }}>
                     {name}
                   </text>
+                  
+                  {/* Copy button */}
+                  <g 
+                    transform={`translate(${buttonX}, ${buttonY})`}
+                    onClick={(e) => handleCopyName(name, attrs.id, idx, e)}
+                    style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                  >
+                    {/* Button background */}
+                    <rect 
+                      width={buttonSize} 
+                      height={buttonSize} 
+                      rx={4} 
+                      ry={4}
+                      fill={isCopied ? "#10B981" : "#f3f4f6"}
+                      stroke={isCopied ? "#059669" : "#d1d5db"}
+                      strokeWidth={1}
+                      style={{ transition: 'all 0.2s' }}
+                    />
+                    
+                    {isCopied ? (
+                      /* Checkmark icon when copied */
+                      <path
+                        d="M6 11 L9 14 L16 7"
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    ) : (
+                      /* Copy icon */
+                      <g>
+                        <rect
+                          x={5}
+                          y={6}
+                          width={9}
+                          height={11}
+                          rx={1.5}
+                          ry={1.5}
+                          fill="none"
+                          stroke="#6b7280"
+                          strokeWidth={1.5}
+                        />
+                        <path
+                          d="M8 6 V5 Q8 4 9 4 H15 Q16 4 16 5 V14 Q16 15 15 15 H14"
+                          fill="none"
+                          stroke="#6b7280"
+                          strokeWidth={1.5}
+                        />
+                      </g>
+                    )}
+                  </g>
                 </g>
               );
             })
@@ -1544,7 +1714,7 @@ export default function PetaJabatanClient() {
         )}
       </g>
     );
-  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen]);
+  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen, copiedNameId, handleCopyName]);
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
