@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
@@ -102,6 +102,8 @@ export default function DashboardPage() {
     const [selectedBiro, setSelectedBiro] = useState<{ value: string; label: string } | null>(null);
     const [selectedJenis, setSelectedJenis] = useState<{ value: string; label: string } | null>(null);
     const [selectedLokasi, setSelectedLokasi] = useState<{ value: string; label: string } | null>(null);
+    const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
+    const [expandedSubJenis, setExpandedSubJenis] = useState<string | null>(null);
 
     // Responsive YAxis width: mobile -> 150, desktop -> 220
     const [yAxisWidth, setYAxisWidth] = useState<number>(220);
@@ -1038,7 +1040,7 @@ export default function DashboardPage() {
                             </button>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 grid-flow-row-dense">
                         {displayByJenis.map((item, index) => {
                             // Use API-provided deduped jumlah_jabatan when available;
                             // fallback to deduping by nama_jabatan in byNamaJabatan
@@ -1056,66 +1058,260 @@ export default function DashboardPage() {
                             // Split jenis on '/' to show secondary label on a second line
                             const jenisParts = String(item.jenis || '').split('/').map(s => s.trim()).filter(Boolean);
 
+                            const isExpandable = /pelaksana|fungsional/i.test(item.jenis || '');
+                            const isExpanded = expandedJenis === item.jenis;
+
+                            let details: any[] = [];
+                            if (isExpanded) {
+                                const map: Record<string, { nama: string; bezetting: number; kebutuhan: number; selisih: number; subItems: any[] }> = {};
+                                for (const d of byNamaJabatan) {
+                                    if ((d.jenis_jabatan || '') !== item.jenis) continue;
+                                    let baseNama = String(d.nama_jabatan || '').trim();
+                                    const originalNama = baseNama;
+                                    const isFungsional = /fungsional/i.test(item.jenis || '');
+
+                                    if (isFungsional) {
+                                        baseNama = baseNama.replace(/\s+(?:ahli\s+pertama|ahli\s+muda|ahli\s+madya|ahli\s+utama|pertama|muda|madya|utama|pelaksana\s+lanjutan|pelaksana|penyelia|terampil|mahir)(?:\s*\([^)]*\))?$/i, '').trim();
+                                    }
+                                    if (!baseNama) continue;
+                                    const key = baseNama.toLowerCase();
+                                    if (!map[key]) map[key] = { nama: baseNama, bezetting: 0, kebutuhan: 0, selisih: 0, subItems: [] };
+                                    map[key].bezetting += Number(d.bezetting || 0);
+                                    map[key].kebutuhan += Number(d.kebutuhan || 0);
+                                    map[key].selisih += Number(d.selisih || 0);
+
+                                    if (isFungsional) {
+                                        const subKey = originalNama.toLowerCase();
+                                        const existingSub = map[key].subItems.find(s => s.originalNama.toLowerCase() === subKey);
+                                        if (existingSub) {
+                                            existingSub.bezetting += Number(d.bezetting || 0);
+                                            existingSub.kebutuhan += Number(d.kebutuhan || 0);
+                                            existingSub.selisih += Number(d.selisih || 0);
+                                        } else {
+                                            map[key].subItems.push({
+                                                originalNama,
+                                                bezetting: Number(d.bezetting || 0),
+                                                kebutuhan: Number(d.kebutuhan || 0),
+                                                selisih: Number(d.selisih || 0)
+                                            });
+                                        }
+                                    }
+                                }
+                                details = Object.values(map).sort((a: any, b: any) => a.nama.localeCompare(b.nama, 'id'));
+                                details.forEach(d => {
+                                    if (d.subItems) {
+                                        d.subItems.sort((a: any, b: any) => a.originalNama.localeCompare(b.originalNama, 'id'));
+                                    }
+                                });
+                            }
+
                             return (
-                                <div key={index} className="relative group">
-                                    <button
-                                        onClick={() => {
-                                            // Set the Jenis filter (behaves like the Jenis dropdown)
-                                            setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
-                                        }}
-                                        className="bg-gradient-to-br from-brand-100/60 to-blue-light-100/60 dark:bg-gray-700/50 rounded-xl p-4 border-2 border-white dark:border-white/90 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer text-left w-full group-hover:border-brand-500 dark:group-hover:border-brand-400"
-                                    >
-                                        <div className="flex items-start justify-between mb-3">
-                                            <div className="flex-1">
-                                                <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
-                                                    {jenisParts[0]}
-                                                    {jenisParts.length > 1 && (
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                                            {jenisParts.slice(1).join(' / ')}
+                                <Fragment key={index}>
+                                    <div className={`relative group flex flex-col h-full bg-white dark:bg-gray-800 rounded-xl transition-all ${isExpanded ? 'ring-2 ring-brand-500 border-brand-500 shadow-md' : ''}`}>
+                                        <div className="flex-1 w-full flex flex-col bg-gradient-to-br from-brand-100/60 to-blue-light-100/60 dark:bg-gray-700/50 rounded-xl p-4 border-2 border-transparent hover:border-white shadow-sm hover:shadow-lg transition-all duration-200 group-hover:-translate-y-0.5 relative z-10">
+                                            <button
+                                                onClick={() => {
+                                                    // Set the Jenis filter (behaves like the Jenis dropdown)
+                                                    setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
+                                                }}
+                                                className="w-full text-left outline-none cursor-pointer flex-1 flex flex-col"
+                                            >
+                                                <div className="flex items-start justify-between mb-3 w-full">
+                                                    <div className="flex-1 mr-2">
+                                                        <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
+                                                            {jenisParts[0]}
+                                                            {jenisParts.length > 1 && (
+                                                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                    {jenisParts.slice(1).join(' / ')}
+                                                                </div>
+                                                            )}
+                                                        </h4>
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                                                                {jumlahJabatan}
+                                                            </span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400">jabatan</span>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm"
+                                                        style={{ backgroundColor: `${COLORS[index % COLORS.length]}20`, color: COLORS[index % COLORS.length] }}
+                                                    >
+                                                        {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "💼" : index === 3 ? "⚙️" : index === 4 ? "📋" : "🖥️"}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5 mt-auto w-full">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-gray-600 dark:text-gray-400">Bezetting</span>
+                                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                                            {(item.bezetting ?? 0).toLocaleString("id-ID")}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-gray-600 dark:text-gray-400">Kebutuhan</span>
+                                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                                            {(item.kebutuhan ?? 0).toLocaleString("id-ID")}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-200 dark:border-gray-600">
+                                                        <span className="text-gray-600 dark:text-gray-400">Selisih</span>
+                                                        <span className={`font-semibold ${(item.selisih === 0)
+                                                            ? 'text-green-600 dark:text-green-400'
+                                                            : (item.selisih > 0)
+                                                                ? 'text-red-600 dark:text-red-400'
+                                                                : 'text-yellow-600 dark:text-yellow-400'
+                                                            }`}>
+                                                            {item.selisih > 0 ? '+' : ''}{(item.selisih ?? 0).toLocaleString("id-ID")}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            {isExpandable && (
+                                                <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600 flex justify-center relative z-20 w-full">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpandedJenis(isExpanded ? null : (item.jenis || null));
+                                                        }}
+                                                        className={`p-2 rounded-full transition-colors ${isExpanded
+                                                            ? 'text-white bg-brand-600 hover:bg-brand-700 shadow-md'
+                                                            : 'text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:text-gray-400 dark:hover:text-brand-400 dark:hover:bg-gray-700'
+                                                            }`}
+                                                        title={isExpanded ? "Tutup Detail" : "Buka Detail"}
+                                                    >
+                                                        {isExpanded ? (
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                                        ) : (
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {isExpanded && (
+                                        <div className="col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4 w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden animate-fadeIn relative z-0 mt-2 mb-4">
+                                            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                                                <h4 className="text-base font-semibold text-gray-900 dark:text-white">Detail {item.jenis}</h4>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Pilih jabatan untuk memfilter tabel</p>
+                                            </div>
+                                            <div className="p-4 max-h-[400px] overflow-y-auto w-full">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                    {details.map((d, i) => {
+                                                        const isFungsional = /fungsional/i.test(item.jenis || '');
+                                                        const hasSubItems = isFungsional && d.subItems && d.subItems.length > 1; // display if more than 1 variation exists or at least something unique
+                                                        const isSubExpanded = expandedSubJenis === d.nama;
+
+                                                        return (
+                                                            <Fragment key={i}>
+                                                                <div className={`flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400 hover:shadow-md transition-all group/btn relative ${isSubExpanded ? 'ring-2 ring-brand-400 border-brand-400 dark:border-brand-500' : ''}`}>
+                                                                    <div className="flex flex-col h-full cursor-pointer p-3"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
+                                                                            setSearchNama(d.nama);
+                                                                            setCurrentPage(1);
+                                                                            setTimeout(() => {
+                                                                                document.getElementById('total-jabatan-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                                            }, 100);
+                                                                        }}
+                                                                    >
+                                                                        <div className="flex justify-between items-start w-full gap-2 mb-2">
+                                                                            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-normal w-full" style={{ wordBreak: 'break-word' }}>
+                                                                                {d.nama}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-end w-full text-xs mt-auto">
+                                                                            <div className="flex flex-col gap-1">
+                                                                                <span className="text-gray-500 dark:text-gray-400">Bezetting: {(d.bezetting || 0).toLocaleString('id-ID')}</span>
+                                                                                <span className="text-gray-500 dark:text-gray-400">Kebutuhan: {(d.kebutuhan || 0).toLocaleString('id-ID')}</span>
+                                                                            </div>
+                                                                            <div className={`px-2 py-1 rounded-md font-bold ${(d.selisih === 0) ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' :
+                                                                                (d.selisih > 0) ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400'
+                                                                                }`}>
+                                                                                {d.selisih > 0 ? '+' : ''}{(d.selisih || 0).toLocaleString('id-ID')}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {hasSubItems && (
+                                                                            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-700 flex justify-center w-full" onClick={e => e.stopPropagation()}>
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setExpandedSubJenis(isSubExpanded ? null : d.nama);
+                                                                                    }}
+                                                                                    className={`p-1.5 rounded-full transition-colors ${isSubExpanded
+                                                                                        ? 'text-white bg-brand-600 hover:bg-brand-700 shadow-sm'
+                                                                                        : 'text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:text-gray-400 dark:hover:text-brand-400 dark:hover:bg-gray-700'
+                                                                                        }`}
+                                                                                    title={isSubExpanded ? "Tutup Rincian" : "Lihat Rincian Jabatan"}
+                                                                                >
+                                                                                    {isSubExpanded ? (
+                                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                                                                    ) : (
+                                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                                                    )}
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {isSubExpanded && hasSubItems && (
+                                                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 w-full animate-fadeIn bg-gradient-to-br from-brand-50/50 to-white dark:from-gray-800/80 dark:to-gray-800 border border-brand-200 dark:border-gray-600 shadow-sm rounded-xl p-4 mt-1">
+                                                                        <div className="flex items-center gap-2 mb-3 text-brand-600 dark:text-brand-400 pb-2 border-b border-brand-100/50 dark:border-gray-700">
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                                            <h5 className="text-sm font-semibold">Rincian: {d.nama}</h5>
+                                                                        </div>
+                                                                        <div className="flex flex-wrap gap-3">
+                                                                            {d.subItems.map((sub: any, idx: number) => (
+                                                                                <button
+                                                                                    key={idx}
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setSelectedJenis({ value: item.jenis || '', label: item.jenis || '' });
+                                                                                        setSearchNama(sub.originalNama);
+                                                                                        setCurrentPage(1);
+                                                                                        setTimeout(() => {
+                                                                                            document.getElementById('total-jabatan-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                                                        }, 100);
+                                                                                    }}
+                                                                                    className="flex-grow sm:flex-grow-0 sm:basis-[220px] max-w-full flex-shrink-0 flex flex-col text-left p-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:border-brand-400 dark:hover:border-brand-500 hover:shadow-sm transition-all"
+                                                                                >
+                                                                                    <div className="text-[13px] font-medium text-gray-800 dark:text-gray-200 mb-2 whitespace-normal leading-relaxed">
+                                                                                        {sub.originalNama}
+                                                                                    </div>
+                                                                                    <div className="flex justify-between items-end w-full text-[11px] mt-auto">
+                                                                                        <div className="flex flex-col gap-0.5">
+                                                                                            <span className="text-gray-500 dark:text-gray-400">Bezetting: {(sub.bezetting || 0).toLocaleString('id-ID')}</span>
+                                                                                            <span className="text-gray-500 dark:text-gray-400">Kebutuhan: {(sub.kebutuhan || 0).toLocaleString('id-ID')}</span>
+                                                                                        </div>
+                                                                                        <div className={`px-1.5 py-0.5 rounded font-bold ${(sub.selisih === 0) ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20' :
+                                                                                            (sub.selisih > 0) ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20' : 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
+                                                                                            }`}>
+                                                                                            {sub.selisih > 0 ? '+' : ''}{(sub.selisih || 0).toLocaleString('id-ID')}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </Fragment>
+                                                        );
+                                                    })}
+                                                    {details.length === 0 && (
+                                                        <div className="col-span-full py-8 text-center text-gray-500 dark:text-gray-400">
+                                                            Tidak ada data detail.
                                                         </div>
                                                     )}
-                                                </h4>
-                                                <div className="flex items-baseline gap-2">
-                                                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                                                        {jumlahJabatan}
-                                                    </span>
-                                                    <span className="text-xs text-gray-500 dark:text-gray-400">jabatan</span>
                                                 </div>
                                             </div>
-                                            <div
-                                                className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm"
-                                                style={{ backgroundColor: `${COLORS[index % COLORS.length]}20`, color: COLORS[index % COLORS.length] }}
-                                            >
-                                                {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "💼" : index === 3 ? "⚙️" : index === 4 ? "📋" : "🖥️"}
-                                            </div>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="text-gray-600 dark:text-gray-400">Bezetting</span>
-                                                <span className="font-semibold text-gray-900 dark:text-white">
-                                                    {(item.bezetting ?? 0).toLocaleString("id-ID")}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="text-gray-600 dark:text-gray-400">Kebutuhan</span>
-                                                <span className="font-semibold text-gray-900 dark:text-white">
-                                                    {(item.kebutuhan ?? 0).toLocaleString("id-ID")}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-200 dark:border-gray-600">
-                                                <span className="text-gray-600 dark:text-gray-400">Selisih</span>
-                                                <span className={`font-semibold ${(item.selisih === 0)
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : (item.selisih > 0)
-                                                        ? 'text-red-600 dark:text-red-400'
-                                                        : 'text-yellow-600 dark:text-yellow-400'
-                                                    }`}>
-                                                    {item.selisih > 0 ? '+' : ''}{(item.selisih ?? 0).toLocaleString("id-ID")}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </button>
-                                </div>
+                                    )}
+                                </Fragment>
                             );
                         })}
                     </div>
