@@ -299,6 +299,7 @@ export async function GET(req: NextRequest) {
                     jabatan_id,
                     bezetting,
                     kebutuhan_pegawai,
+                    pejabat,
                     is_pusat,
                     order_index,
                     ARRAY[
@@ -318,6 +319,7 @@ export async function GET(req: NextRequest) {
                     c.jabatan_id,
                     c.bezetting,
                     c.kebutuhan_pegawai,
+                    c.pejabat,
                     c.is_pusat,
                     c.order_index,
                     t.sort_path || (
@@ -332,6 +334,7 @@ export async function GET(req: NextRequest) {
                 COALESCE(t.jenis_jabatan, 'Tidak Ditentukan') as jenis_jabatan,
                 j.kelas_jabatan,
                 t.bezetting,
+                t.pejabat,
                 t.kebutuhan_pegawai as kebutuhan,
                 (t.bezetting - t.kebutuhan_pegawai) as selisih
             FROM tree t
@@ -423,15 +426,28 @@ export async function GET(req: NextRequest) {
                 kebutuhan: Number(r.kebutuhan ?? 0),
                 selisih: Number(r.selisih ?? 0),
             })),
-            byNamaJabatan: byNamaJabatan.map((r: any) => ({
-                nama_jabatan: r.nama_jabatan,
-                unit_kerja: r.unit_kerja,
-                jenis_jabatan: r.jenis_jabatan,
-                kelas_jabatan: r.kelas_jabatan ?? null,
-                bezetting: Number(r.bezetting ?? 0),
-                kebutuhan: Number(r.kebutuhan ?? 0),
-                selisih: Number(r.selisih ?? 0),
-            })),
+            byNamaJabatan: byNamaJabatan.map((r: any) => {
+                let pns = 0;
+                let pppk = 0;
+                if (r.pejabat && Array.isArray(r.pejabat)) {
+                    for (const p of r.pejabat) {
+                        const role = (p.role || 'PNS').toUpperCase();
+                        if (role === 'PPPK') pppk++;
+                        else pns++;
+                    }
+                }
+                return {
+                    nama_jabatan: r.nama_jabatan,
+                    unit_kerja: r.unit_kerja,
+                    jenis_jabatan: r.jenis_jabatan,
+                    kelas_jabatan: r.kelas_jabatan ?? null,
+                    bezetting: Number(r.bezetting ?? 0),
+                    bezetting_pns: pns,
+                    bezetting_pppk: pppk,
+                    kebutuhan: Number(r.kebutuhan ?? 0),
+                    selisih: Number(r.selisih ?? 0),
+                };
+            }),
             // For verification: lists of normalized unique names
             all_unique_names: allNames,
             byJenis_names: byJenisNames,

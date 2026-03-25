@@ -33,6 +33,8 @@ type BreakdownItem = {
     nama_jabatan?: string;
     jenis_jabatan?: string;
     bezetting: number;
+    bezetting_pns?: number;
+    bezetting_pppk?: number;
     kebutuhan: number;
     selisih: number;
 };
@@ -506,6 +508,8 @@ export default function DashboardPage() {
                 <th>Unit Kerja</th>
                 <th>Kelas Jabatan</th>
                 <th>Bezetting</th>
+                <th>PNS</th>
+                <th>PPPK</th>
                 <th>Kebutuhan</th>
                 <th>Selisih</th>
             </tr>
@@ -513,19 +517,27 @@ export default function DashboardPage() {
         <tbody>`;
 
             let totalBezetting = 0;
+            let totalPNS = 0;
+            let totalPPPK = 0;
             let totalKebutuhan = 0;
             let totalSelisih = 0;
 
             rows.forEach((r: any, i: number) => {
                 const bezVal = Number(r.bezetting ?? 0);
+                const pnsVal = Number(r.bezetting_pns ?? 0);
+                const pppkVal = Number(r.bezetting_pppk ?? 0);
                 const kebVal = Number(r.kebutuhan ?? 0);
                 const selVal = Number(r.selisih ?? 0);
 
                 totalBezetting += bezVal;
+                totalPNS += pnsVal;
+                totalPPPK += pppkVal;
                 totalKebutuhan += kebVal;
                 totalSelisih += selVal;
 
                 const bez = bezVal.toLocaleString('id-ID');
+                const pns = pnsVal.toLocaleString('id-ID');
+                const pppk = pppkVal.toLocaleString('id-ID');
                 const keb = kebVal.toLocaleString('id-ID');
                 const sel = selVal.toLocaleString('id-ID');
                 const nama = String(r.nama_jabatan || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -537,17 +549,21 @@ export default function DashboardPage() {
                 <td>${nama}</td>
                 <td>${unit}</td>
                 <td class="center">${kelas}</td>
-                <td class="right">${bez}</td>
-                <td class="right">${keb}</td>
-                <td class="right">${sel}</td>
+                <td class="center">${bez}</td>
+                <td class="center">${pns}</td>
+                <td class="center">${pppk}</td>
+                <td class="center">${keb}</td>
+                <td class="center">${sel}</td>
             </tr>`;
             });
 
             html += `            <tr class="total-row">
                 <td colspan="4" class="center">TOTAL</td>
-                <td class="right">${totalBezetting.toLocaleString('id-ID')}</td>
-                <td class="right">${totalKebutuhan.toLocaleString('id-ID')}</td>
-                <td class="right">${totalSelisih.toLocaleString('id-ID')}</td>
+                <td class="center">${totalBezetting.toLocaleString('id-ID')}</td>
+                <td class="center">${totalPNS.toLocaleString('id-ID')}</td>
+                <td class="center">${totalPPPK.toLocaleString('id-ID')}</td>
+                <td class="center">${totalKebutuhan.toLocaleString('id-ID')}</td>
+                <td class="center">${totalSelisih.toLocaleString('id-ID')}</td>
             </tr>
         </tbody>
     </table>
@@ -964,6 +980,8 @@ export default function DashboardPage() {
                                         setSelectedBiro(null);
                                         setSelectedJenis(null);
                                         setSelectedLokasi(null);
+                                        setSearchNama('');
+                                        setCurrentPage(1);
                                     }}
                                     className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all font-medium flex items-center justify-center gap-2"
                                 >
@@ -1025,7 +1043,11 @@ export default function DashboardPage() {
                         <div className="ml-auto flex items-center gap-2">
                             {selectedJenis && !isAdminJf && (
                                 <button
-                                    onClick={() => setSelectedJenis(null)}
+                                    onClick={() => {
+                                        setSelectedJenis(null);
+                                        setSearchNama('');
+                                        setCurrentPage(1);
+                                    }}
                                     className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
                                 >
                                     Reset Filter
@@ -1055,6 +1077,9 @@ export default function DashboardPage() {
                                 return set.size;
                             })());
 
+                            const pns = byNamaJabatan.filter(j => (j.jenis_jabatan || '') === (item.jenis || '')).reduce((acc, curr) => acc + (curr.bezetting_pns || 0), 0);
+                            const pppk = byNamaJabatan.filter(j => (j.jenis_jabatan || '') === (item.jenis || '')).reduce((acc, curr) => acc + (curr.bezetting_pppk || 0), 0);
+
                             // Split jenis on '/' to show secondary label on a second line
                             const jenisParts = String(item.jenis || '').split('/').map(s => s.trim()).filter(Boolean);
 
@@ -1063,7 +1088,7 @@ export default function DashboardPage() {
 
                             let details: any[] = [];
                             if (isExpanded) {
-                                const map: Record<string, { nama: string; bezetting: number; kebutuhan: number; selisih: number; subItems: any[] }> = {};
+                                const map: Record<string, { nama: string; bezetting: number; bezetting_pns: number; bezetting_pppk: number; kebutuhan: number; selisih: number; subItems: any[] }> = {};
                                 for (const d of byNamaJabatan) {
                                     if ((d.jenis_jabatan || '') !== item.jenis) continue;
                                     let baseNama = String(d.nama_jabatan || '').trim();
@@ -1075,8 +1100,10 @@ export default function DashboardPage() {
                                     }
                                     if (!baseNama) continue;
                                     const key = baseNama.toLowerCase();
-                                    if (!map[key]) map[key] = { nama: baseNama, bezetting: 0, kebutuhan: 0, selisih: 0, subItems: [] };
+                                    if (!map[key]) map[key] = { nama: baseNama, bezetting: 0, bezetting_pns: 0, bezetting_pppk: 0, kebutuhan: 0, selisih: 0, subItems: [] };
                                     map[key].bezetting += Number(d.bezetting || 0);
+                                    map[key].bezetting_pns += Number(d.bezetting_pns || 0);
+                                    map[key].bezetting_pppk += Number(d.bezetting_pppk || 0);
                                     map[key].kebutuhan += Number(d.kebutuhan || 0);
                                     map[key].selisih += Number(d.selisih || 0);
 
@@ -1085,12 +1112,16 @@ export default function DashboardPage() {
                                         const existingSub = map[key].subItems.find(s => s.originalNama.toLowerCase() === subKey);
                                         if (existingSub) {
                                             existingSub.bezetting += Number(d.bezetting || 0);
+                                            existingSub.bezetting_pns += Number(d.bezetting_pns || 0);
+                                            existingSub.bezetting_pppk += Number(d.bezetting_pppk || 0);
                                             existingSub.kebutuhan += Number(d.kebutuhan || 0);
                                             existingSub.selisih += Number(d.selisih || 0);
                                         } else {
                                             map[key].subItems.push({
                                                 originalNama,
                                                 bezetting: Number(d.bezetting || 0),
+                                                bezetting_pns: Number(d.bezetting_pns || 0),
+                                                bezetting_pppk: Number(d.bezetting_pppk || 0),
                                                 kebutuhan: Number(d.kebutuhan || 0),
                                                 selisih: Number(d.selisih || 0)
                                             });
@@ -1141,11 +1172,17 @@ export default function DashboardPage() {
                                                     </div>
                                                 </div>
                                                 <div className="space-y-1.5 mt-auto w-full">
-                                                    <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-gray-600 dark:text-gray-400">Bezetting</span>
-                                                        <span className="font-semibold text-gray-900 dark:text-white">
-                                                            {(item.bezetting ?? 0).toLocaleString("id-ID")}
-                                                        </span>
+                                                    <div className="flex flex-col w-full">
+                                                        <div className="flex items-center justify-between text-xs w-full">
+                                                            <span className="text-gray-600 dark:text-gray-400">Bezetting</span>
+                                                            <span className="font-semibold text-gray-900 dark:text-white">
+                                                                {(item.bezetting ?? 0).toLocaleString("id-ID")}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-2 text-[10px] ml-3 mt-0.5 text-gray-500 dark:text-gray-400 font-medium">
+                                                            <span>PNS: {pns.toLocaleString('id-ID')}</span>
+                                                            <span>PPPK: {pppk.toLocaleString('id-ID')}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center justify-between text-xs">
                                                         <span className="text-gray-600 dark:text-gray-400">Kebutuhan</span>
@@ -1224,8 +1261,14 @@ export default function DashboardPage() {
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex justify-between items-end w-full text-xs mt-auto">
-                                                                            <div className="flex flex-col gap-1">
-                                                                                <span className="text-gray-500 dark:text-gray-400">Bezetting: {(d.bezetting || 0).toLocaleString('id-ID')}</span>
+                                                                            <div className="flex flex-col gap-1 w-full">
+                                                                                <div className="flex flex-col w-full">
+                                                                                    <span className="text-gray-500 dark:text-gray-400">Bezetting: {(d.bezetting || 0).toLocaleString('id-ID')}</span>
+                                                                                    <div className="flex gap-2 text-[10px] ml-3 mt-0.5 text-gray-500 dark:text-gray-400 font-medium">
+                                                                                        <span>PNS: {(d.bezetting_pns || 0).toLocaleString('id-ID')}</span>
+                                                                                        <span>PPPK: {(d.bezetting_pppk || 0).toLocaleString('id-ID')}</span>
+                                                                                    </div>
+                                                                                </div>
                                                                                 <span className="text-gray-500 dark:text-gray-400">Kebutuhan: {(d.kebutuhan || 0).toLocaleString('id-ID')}</span>
                                                                             </div>
                                                                             <div className={`px-2 py-1 rounded-md font-bold ${(d.selisih === 0) ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' :
@@ -1284,8 +1327,14 @@ export default function DashboardPage() {
                                                                                         {sub.originalNama}
                                                                                     </div>
                                                                                     <div className="flex justify-between items-end w-full text-[11px] mt-auto">
-                                                                                        <div className="flex flex-col gap-0.5">
-                                                                                            <span className="text-gray-500 dark:text-gray-400">Bezetting: {(sub.bezetting || 0).toLocaleString('id-ID')}</span>
+                                                                                        <div className="flex flex-col gap-0.5 w-full">
+                                                                                            <div className="flex flex-col w-full">
+                                                                                                <span className="text-gray-500 dark:text-gray-400">Bezetting: {(sub.bezetting || 0).toLocaleString('id-ID')}</span>
+                                                                                                <div className="flex gap-1.5 text-[9px] ml-3 mt-0.5 mb-0.5 text-gray-500 dark:text-gray-400 font-medium">
+                                                                                                    <span>PNS: {(sub.bezetting_pns || 0).toLocaleString('id-ID')}</span>
+                                                                                                    <span>PPPK: {(sub.bezetting_pppk || 0).toLocaleString('id-ID')}</span>
+                                                                                                </div>
+                                                                                            </div>
                                                                                             <span className="text-gray-500 dark:text-gray-400">Kebutuhan: {(sub.kebutuhan || 0).toLocaleString('id-ID')}</span>
                                                                                         </div>
                                                                                         <div className={`px-1.5 py-0.5 rounded font-bold ${(sub.selisih === 0) ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20' :
@@ -1375,6 +1424,11 @@ export default function DashboardPage() {
                                             Unit Kerja {sortField === 'unit_kerja' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                                         </div>
                                     </th>
+                                    <th onClick={() => toggleSort('kelas_jabatan')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center select-none">
+                                            Kelas Jabatan {sortField === 'kelas_jabatan' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                                        </div>
+                                    </th>
 
                                     <th onClick={() => toggleSort('bezetting')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
                                         <div className="flex items-center justify-center gap-2 select-none">
@@ -1382,6 +1436,16 @@ export default function DashboardPage() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                             </svg>
                                             Bezetting {sortField === 'bezetting' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                                        </div>
+                                    </th>
+                                    <th onClick={() => toggleSort('bezetting_pns')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center select-none">
+                                            PNS {sortField === 'bezetting_pns' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                                        </div>
+                                    </th>
+                                    <th onClick={() => toggleSort('bezetting_pppk')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center select-none">
+                                            PPPK {sortField === 'bezetting_pppk' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                                         </div>
                                     </th>
                                     <th onClick={() => toggleSort('kebutuhan')} className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
@@ -1424,10 +1488,25 @@ export default function DashboardPage() {
                                                 {item.unit_kerja}
                                             </div>
                                         </td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-center">
+                                            <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                                {item.kelas_jabatan ?? '-'}
+                                            </span>
+                                        </td>
 
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             <span className="text-xs font-medium text-gray-900 dark:text-white">
                                                 {(item.bezetting ?? 0).toLocaleString("id-ID")}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-center">
+                                            <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                                {(item.bezetting_pns ?? 0).toLocaleString("id-ID")}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-center">
+                                            <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                                {(item.bezetting_pppk ?? 0).toLocaleString("id-ID")}
                                             </span>
                                         </td>
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
