@@ -32,6 +32,7 @@ type BreakdownItem = {
     unit_kerja?: string;
     nama_jabatan?: string;
     jenis_jabatan?: string;
+    kelas_jabatan?: string | number;
     bezetting: number;
     bezetting_pns?: number;
     bezetting_pppk?: number;
@@ -453,6 +454,43 @@ export default function DashboardPage() {
             setSortField(field);
             setSortDir('desc');
         }
+    }
+
+    function handleExportCSV() {
+        if (!data || !data.byNamaJabatan) return;
+        
+        let csvContent = "nama_unit,nama_jabatan,abk,pns,pppk\n";
+        
+        const rowsToExport = data.byNamaJabatan;
+        
+        rowsToExport.forEach(row => {
+            const unit = String(row.unit_kerja || '').replace(/"/g, '""');
+            const jabatan = String(row.nama_jabatan || '').replace(/"/g, '""');
+            const abk = Number(row.kebutuhan ?? 0);
+            const pns = Number(row.bezetting_pns ?? 0);
+            const pppk = Number(row.bezetting_pppk ?? 0);
+            
+            csvContent += `"${unit}","${jabatan}",${abk},${pns},${pppk}\n`;
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        const filename = `jabatan_${yyyy}-${mm}-${dd}_${hh}${min}${ss}.csv`;
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     // Prepare and trigger print using hidden iframe approach
@@ -892,15 +930,26 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </div>
-                    <button
-                        onClick={() => loadData()}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white rounded-xl hover:from-brand-700 hover:to-brand-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Refresh Data
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <button
+                            onClick={handleExportCSV}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm hover:shadow font-medium"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export CSV
+                        </button>
+                        <button
+                            onClick={() => loadData()}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white rounded-xl hover:from-brand-700 hover:to-brand-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Refresh Data
+                        </button>
+                    </div>
                 </div>
 
                 {/* Filters */}
