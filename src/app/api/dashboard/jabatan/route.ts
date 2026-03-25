@@ -296,6 +296,7 @@ export async function GET(req: NextRequest) {
                     nama_jabatan,
                     unit_kerja,
                     jenis_jabatan,
+                    jabatan_id,
                     bezetting,
                     kebutuhan_pegawai,
                     is_pusat,
@@ -314,6 +315,7 @@ export async function GET(req: NextRequest) {
                     c.nama_jabatan,
                     c.unit_kerja,
                     c.jenis_jabatan,
+                    c.jabatan_id,
                     c.bezetting,
                     c.kebutuhan_pegawai,
                     c.is_pusat,
@@ -328,10 +330,12 @@ export async function GET(req: NextRequest) {
                 COALESCE(t.nama_jabatan, 'Tidak Ada Nama') as nama_jabatan,
                 COALESCE(t.unit_kerja, 'Tidak Ada Unit') as unit_kerja,
                 COALESCE(t.jenis_jabatan, 'Tidak Ditentukan') as jenis_jabatan,
+                j.kelas_jabatan,
                 t.bezetting,
                 t.kebutuhan_pegawai as kebutuhan,
                 (t.bezetting - t.kebutuhan_pegawai) as selisih
             FROM tree t
+            LEFT JOIN jabatan j ON t.jabatan_id = j.id
             ${treeWhereClause}
             ORDER BY t.sort_path
         `;
@@ -423,6 +427,7 @@ export async function GET(req: NextRequest) {
                 nama_jabatan: r.nama_jabatan,
                 unit_kerja: r.unit_kerja,
                 jenis_jabatan: r.jenis_jabatan,
+                kelas_jabatan: r.kelas_jabatan ?? null,
                 bezetting: Number(r.bezetting ?? 0),
                 kebutuhan: Number(r.kebutuhan ?? 0),
                 selisih: Number(r.selisih ?? 0),

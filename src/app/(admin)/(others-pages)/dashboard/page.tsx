@@ -121,19 +121,19 @@ export default function DashboardPage() {
     const skipNextLoadRef = useRef(false);
     const lastFetchUrlRef = useRef<string | null>(null);
     const isInitialMount = useRef(true);
-    
+
     useEffect(() => {
         // Skip on initial mount - let the role-based effect handle first load
         if (isInitialMount.current) {
             isInitialMount.current = false;
             return;
         }
-        
+
         if (skipNextLoadRef.current) {
             skipNextLoadRef.current = false;
             return;
         }
-        
+
         // compute same URL as loadData to detect redundant fetches
         const params = new URLSearchParams();
         if (selectedBiro?.value) params.append("biro", selectedBiro.value);
@@ -161,12 +161,12 @@ export default function DashboardPage() {
     useEffect(() => {
         if (meLoading) return; // wait until user info resolved
         if (hasLoadedOnce.current) return; // already loaded once
-        
+
         // clear last fetch marker so the normal load effect doesn't skip the new load
         lastFetchUrlRef.current = null;
         hasLoadedOnce.current = true;
         // force reload without cache to ensure fresh summary data
-        loadData(true).catch(() => {});
+        loadData(true).catch(() => { });
     }, [meLoading]);
 
     async function loadData(forceNoCache: boolean = false): Promise<DashboardData | null> {
@@ -261,7 +261,7 @@ export default function DashboardPage() {
 
     const { summary, byJenis, byLokasi, byBiro, byNamaJabatan, filters } = data;
 
-    
+
 
     // Handler to save overrides: collect overrides entries and call API
     async function handleSaveOverrides() {
@@ -386,12 +386,12 @@ export default function DashboardPage() {
     const getSortedByNama = () => {
         const arr = [...byNamaJabatan];
         const field = sortField;
-        
+
         // If no sort field is set, return original order from API
         if (!field) {
             return arr;
         }
-        
+
         const dir = sortDir === 'desc' ? -1 : 1;
         arr.sort((a: any, b: any) => {
             const va = (a as any)[field];
@@ -491,24 +491,25 @@ export default function DashboardPage() {
 </head>
 <body>
     <h2>Total Jabatan</h2>`;
-            
+
             if (filterLines.length > 0) {
                 html += `    <p><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
             }
-            
+
             html += `    <table>
         <thead>
             <tr>
                 <th>No</th>
                 <th>Jabatan</th>
                 <th>Unit Kerja</th>
+                <th>Kelas Jabatan</th>
                 <th>Bezetting</th>
                 <th>Kebutuhan</th>
                 <th>Selisih</th>
             </tr>
         </thead>
         <tbody>`;
-            
+
             let totalBezetting = 0;
             let totalKebutuhan = 0;
             let totalSelisih = 0;
@@ -527,11 +528,13 @@ export default function DashboardPage() {
                 const sel = selVal.toLocaleString('id-ID');
                 const nama = String(r.nama_jabatan || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const unit = String(r.unit_kerja || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                
+                const kelas = String(r.kelas_jabatan || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
                 html += `            <tr>
                 <td class="center">${i + 1}</td>
                 <td>${nama}</td>
                 <td>${unit}</td>
+                <td class="center">${kelas}</td>
                 <td class="right">${bez}</td>
                 <td class="right">${keb}</td>
                 <td class="right">${sel}</td>
@@ -539,7 +542,7 @@ export default function DashboardPage() {
             });
 
             html += `            <tr class="total-row">
-                <td colspan="3" class="center">TOTAL</td>
+                <td colspan="4" class="center">TOTAL</td>
                 <td class="right">${totalBezetting.toLocaleString('id-ID')}</td>
                 <td class="right">${totalKebutuhan.toLocaleString('id-ID')}</td>
                 <td class="right">${totalSelisih.toLocaleString('id-ID')}</td>
@@ -620,11 +623,11 @@ export default function DashboardPage() {
 </head>
 <body>
     <h2>Total Per Jenis Jabatan</h2>`;
-            
+
             if (filterLines.length > 0) {
                 html += `    <p><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
             }
-            
+
             html += `    <table>
         <thead>
             <tr>
@@ -637,7 +640,7 @@ export default function DashboardPage() {
             </tr>
         </thead>
         <tbody>`;
-            
+
             let totalJenisJabatan = 0;
             let totalBezetting = 0;
             let totalKebutuhan = 0;
@@ -659,7 +662,7 @@ export default function DashboardPage() {
                 const keb = kebVal.toLocaleString('id-ID');
                 const sel = selVal.toLocaleString('id-ID');
                 const jenis = String(r.jenis || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                
+
                 html += `            <tr>
                 <td class="center">${i + 1}</td>
                 <td>${jenis}</td>
@@ -1234,7 +1237,7 @@ export default function DashboardPage() {
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             {(/fungsional/i).test(String(item.jenis_jabatan || '')) ? (
                                                 (() => {
-                                                    const key = `${String(item.nama_jabatan||'').trim()}|||${String(item.unit_kerja||'').trim()}`;
+                                                    const key = `${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
                                                     const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.kebutuhan ?? 0));
                                                     const displayed = existing === '' ? '' : String(existing);
                                                     return (
