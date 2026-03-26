@@ -423,7 +423,7 @@ export default function DashboardPage() {
     function handleExportCSV() {
         if (!data || !data.byNamaJabatan) return;
         
-        let csvContent = "nama_unit,nama_jabatan,abk,pns,pppk\n";
+        let csvContent = "nama_unit,nama_jabatan,abk,cpns,pns,pppk\n";
         
         const rowsToExport = data.byNamaJabatan;
         
@@ -431,10 +431,11 @@ export default function DashboardPage() {
             const unit = String(row.unit_kerja || '').replace(/"/g, '""');
             const jabatan = String(row.nama_jabatan || '').replace(/"/g, '""');
             const abk = Number(row.kebutuhan ?? 0);
+            const cpns = 0;
             const pns = Number(row.bezetting_pns ?? 0);
             const pppk = Number(row.bezetting_pppk ?? 0);
             
-            csvContent += `"${unit}","${jabatan}",${abk},${pns},${pppk}\n`;
+            csvContent += `"${unit}","${jabatan}",${abk},${cpns},${pns},${pppk}\n`;
         });
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -465,6 +466,7 @@ export default function DashboardPage() {
             nama_unit: row.unit_kerja || '',
             nama_jabatan: row.nama_jabatan || '',
             abk: Number(row.kebutuhan ?? 0),
+            cpns: 0,
             pns: Number(row.bezetting_pns ?? 0),
             pppk: Number(row.bezetting_pppk ?? 0)
         }));
