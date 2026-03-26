@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
 import { useMe } from "@/context/MeContext";
+import * as XLSX from "xlsx";
 import {
     BarChart,
     Bar,
@@ -107,6 +108,7 @@ export default function DashboardPage() {
     const [selectedLokasi, setSelectedLokasi] = useState<{ value: string; label: string } | null>(null);
     const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
     const [expandedSubJenis, setExpandedSubJenis] = useState<string | null>(null);
+    const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
     // Responsive YAxis width: mobile -> 150, desktop -> 220
     const [yAxisWidth, setYAxisWidth] = useState<number>(220);
@@ -148,18 +150,6 @@ export default function DashboardPage() {
         if (lastFetchUrlRef.current === url) return; // already fetched this exact URL
         loadData();
     }, [selectedBiro, selectedJenis, selectedLokasi]);
-
-    // If current user is admin-jf, auto-select and restrict jenis filter to fungsional
-    useEffect(() => {
-        if (!isAdminJf) return;
-        const list = (data?.filters?.jenisList || []);
-        const found = list.find((j: string) => /fungsional/i.test(String(j || '')));
-        if (!found) return;
-        setSelectedJenis((prev) => {
-            if (prev && /fungsional/i.test(String(prev.value || ''))) return prev;
-            return { value: found, label: 'JABATAN FUNGSIONAL' };
-        });
-    }, [isAdminJf, data]);
 
     // Initial load after user authentication completes
     const hasLoadedOnce = useRef(false);
@@ -286,19 +276,6 @@ export default function DashboardPage() {
             const j = await res.json().catch(() => ({}));
             if (!res.ok || j?.error) throw new Error(j?.error || `HTTP ${res.status}`);
             const newData = await loadData(true);
-            // Ensure admin-jf keeps the jenis filter set to an actual fungsional value if available,
-            // otherwise clear the filter to avoid showing an empty table.
-            if (isAdminJf) {
-                const list = newData?.filters?.jenisList || [];
-                const found = list.find((jj: string) => /fungsional/i.test(String(jj || '')));
-                // Prevent the selectedJenis change from triggering another automatic loadData()
-                skipNextLoadRef.current = true;
-                if (found) {
-                    setSelectedJenis({ value: found, label: 'JABATAN FUNGSIONAL' });
-                } else {
-                    setSelectedJenis(null);
-                }
-            }
             setOverrides({});
             setUnsavedChanges(false);
             console.log('Perubahan kebutuhan fungsional telah disimpan.');
@@ -357,20 +334,7 @@ export default function DashboardPage() {
         return (b.kebutuhan || 0) - (a.kebutuhan || 0);
     });
 
-    // For admin-jf users, show only a single aggregated "JABATAN FUNGSIONAL" card
-    const displayByJenis = (isAdminJf)
-        ? (() => {
-            const fRows = sortedByJenis.filter((r) => /fungsional/i.test(String(r.jenis || '')));
-            const agg = {
-                jenis: 'JABATAN FUNGSIONAL',
-                jumlah_jabatan: fRows.reduce((s, r) => s + (Number((r as any).jumlah_jabatan) || 0), 0),
-                bezetting: fRows.reduce((s, r) => s + (Number((r as any).bezetting) || 0), 0),
-                kebutuhan: fRows.reduce((s, r) => s + (Number((r as any).kebutuhan) || 0), 0),
-                selisih: fRows.reduce((s, r) => s + (Number((r as any).selisih) || 0), 0),
-            } as any;
-            return [agg];
-        })()
-        : sortedByJenis;
+    const displayByJenis = sortedByJenis;
 
     // Dedupe by (nama_jabatan, unit_kerja) to avoid exact duplicate rows
     const dedupeByNamaUnitMap: Record<string, BreakdownItem> = {};
@@ -491,6 +455,35 @@ export default function DashboardPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setExportMenuOpen(false);
+    }
+
+    function handleExportExcel() {
+        if (!data || !data.byNamaJabatan) return;
+        const rowsToExport = data.byNamaJabatan;
+        const normalizedData = rowsToExport.map(row => ({
+            nama_unit: row.unit_kerja || '',
+            nama_jabatan: row.nama_jabatan || '',
+            abk: Number(row.kebutuhan ?? 0),
+            pns: Number(row.bezetting_pns ?? 0),
+            pppk: Number(row.bezetting_pppk ?? 0)
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(normalizedData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Jabatan");
+        
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        const filename = `jabatan_${yyyy}-${mm}-${dd}_${hh}${min}${ss}.xlsx`;
+        
+        XLSX.writeFile(wb, filename);
+        setExportMenuOpen(false);
     }
 
     // Prepare and trigger print using hidden iframe approach
@@ -781,19 +774,8 @@ export default function DashboardPage() {
 
 
     // Convert filters to react-select format
-    const biroOptions = (isAdminJf)
-        ? filters.biroList
-            .filter((biro) => /^\s*Biro\b/i.test(String(biro || '')))
-            .map((biro) => ({ value: biro, label: biro }))
-        : filters.biroList.map((biro) => ({ value: biro, label: biro }));
-    const jenisOptions = (isAdminJf)
-        ? (() => {
-            // Restrict to a single fungsional option for admin-jf only if the API provides one.
-            const found = (filters.jenisList || []).find((j: string) => /fungsional/i.test(String(j || '')));
-            if (found) return [{ value: found, label: 'JABATAN FUNGSIONAL' }];
-            return [] as { value: string; label: string }[];
-        })()
-        : filters.jenisList.map((jenis) => ({ value: jenis, label: jenis }));
+    const biroOptions = filters.biroList.map((biro) => ({ value: biro, label: biro }));
+    const jenisOptions = filters.jenisList.map((jenis) => ({ value: jenis, label: jenis }));
     const lokasiOptions = [
         { value: "pusat", label: "Pusat" },
         { value: "daerah", label: "Daerah" },
@@ -931,15 +913,46 @@ export default function DashboardPage() {
                         </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3">
-                        <button
-                            onClick={handleExportCSV}
-                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm hover:shadow font-medium"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Export CSV
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm hover:shadow font-medium"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Export
+                                <svg className={`w-4 h-4 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {exportMenuOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
+                                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                                        <button
+                                            onClick={handleExportCSV}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Export ke CSV
+                                        </button>
+                                        <button
+                                            onClick={handleExportExcel}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Export ke Excel
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                         <button
                             onClick={() => loadData()}
                             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white rounded-xl hover:from-brand-700 hover:to-brand-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
@@ -985,7 +998,6 @@ export default function DashboardPage() {
                                 className="react-select-container"
                             />
                         </div>
-                        {!isAdminJf && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1003,7 +1015,6 @@ export default function DashboardPage() {
                                     className="react-select-container"
                                 />
                             </div>
-                        )}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1022,7 +1033,7 @@ export default function DashboardPage() {
                                 className="react-select-container"
                             />
                         </div>
-                        {!isAdminJf && (selectedBiro || selectedJenis || selectedLokasi) && (
+                        {(selectedBiro || selectedJenis || selectedLokasi) && (
                             <div className="flex items-end">
                                 <button
                                     onClick={() => {
@@ -1090,7 +1101,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Rincian jumlah untuk setiap jenis jabatan</p>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-                            {selectedJenis && !isAdminJf && (
+                            {selectedJenis && (
                                 <button
                                     onClick={() => {
                                         setSelectedJenis(null);

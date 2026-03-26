@@ -37,12 +37,7 @@ export async function GET(req: NextRequest) {
         const params: any[] = [];
         let paramIndex = 1;
 
-        // Special-case: if the caller is an admin-jf and didn't explicitly supply a jenis_jabatan,
-        // restrict results to fungsional by default so the UI only needs to call the API once.
         let effectiveJenisFilter = jenisJabatanFilter;
-        if (!effectiveJenisFilter && user && user.role === 'admin-jf') {
-            effectiveJenisFilter = '__ADMIN_JF__';
-        }
 
         // Jika ada filter biro, gunakan recursive CTE untuk mendapatkan semua child nodes
         let biroFilterCTE = "";
@@ -70,14 +65,9 @@ export async function GET(req: NextRequest) {
         }
 
         if (effectiveJenisFilter) {
-            if (effectiveJenisFilter === '__ADMIN_JF__') {
-                // restrict to any jenis_jabatan that contains 'fungsional' (case-insensitive)
-                whereConditions.push(`lower(coalesce(jenis_jabatan,'')) LIKE '%fungsional%'`);
-            } else {
-                whereConditions.push(`jenis_jabatan = $${paramIndex}`);
-                params.push(effectiveJenisFilter);
-                paramIndex++;
-            }
+            whereConditions.push(`jenis_jabatan = $${paramIndex}`);
+            params.push(effectiveJenisFilter);
+            paramIndex++;
         }
 
         if (lokasiFilter) {
@@ -271,12 +261,8 @@ export async function GET(req: NextRequest) {
             treeParams.push(biroFilter);
         }
         if (effectiveJenisFilter) {
-            if (effectiveJenisFilter === '__ADMIN_JF__') {
-                treeWhereConditions.push(`lower(coalesce(t.jenis_jabatan,'')) LIKE '%fungsional%'`);
-            } else {
-                // Use literal value in WHERE clause to avoid param index mismatch
-                treeWhereConditions.push(`t.jenis_jabatan = '${effectiveJenisFilter.replace(/'/g, "''")}'`);
-            }
+            // Use literal value in WHERE clause to avoid param index mismatch
+            treeWhereConditions.push(`t.jenis_jabatan = '${effectiveJenisFilter.replace(/'/g, "''")}'`);
         }
         if (lokasiFilter) {
             if (lokasiFilter.toLowerCase() === "pusat") {
