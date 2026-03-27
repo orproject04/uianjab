@@ -44,7 +44,6 @@ export async function DELETE(
         );
         if (existsSync(physicalPath)) {
           await unlink(physicalPath);
-          console.log(`Deleted file: ${physicalPath}`);
         }
       } catch (err) {
         console.error(`Failed to delete file ${filePath}:`, err);

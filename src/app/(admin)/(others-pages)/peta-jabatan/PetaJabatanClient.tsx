@@ -598,7 +598,6 @@ export default function PetaJabatanClient() {
 
     // If we have a last clicked path and haven't focused yet, expand to that path
     if (lastClickedPath && rows.length > 0 && !hasFocusedOnce.current) {
-      console.log('Expanding path to:', lastClickedPath);
       const expandedMap = expandNodesAlongPath(lastClickedPath, rows);
       setCollapseMap(expandedMap);
       hasFocusedOnce.current = true;
@@ -1070,7 +1069,6 @@ export default function PetaJabatanClient() {
       if (pathStr === targetPath) {
         // Found the target node
         const y = depth * nodeSize.y;
-        console.log(`Found target at depth ${depth}, xOffset ${xOffset}`);
         return { x: xOffset, y };
       }
 
@@ -1104,7 +1102,6 @@ export default function PetaJabatanClient() {
 
           if (childPathStr === targetPath) {
             const y = (depth + 1) * nodeSize.y;
-            console.log(`Found target child at depth ${depth + 1}, childCenterX ${childCenterX}`);
             return { x: childCenterX, y };
           }
 
@@ -1132,7 +1129,6 @@ export default function PetaJabatanClient() {
     
     // Skip if already centered this index (and it's a valid index)
     if (currentMatchIndex === lastCenteredIndexRef.current) {
-      console.log('🔍 Already centered index', currentMatchIndex, ', skipping');
       return;
     }
     
@@ -1141,33 +1137,26 @@ export default function PetaJabatanClient() {
     const currentMatch = searchMatches[currentMatchIndex];
     if (!currentMatch) return;
     
-    console.log('🔍 Navigation: Attempting to center match index:', currentMatchIndex, 'Match:', currentMatch);
     
     // Use longer timeout to ensure tree is fully rendered after collapse changes
     const timeoutId = setTimeout(() => {
       // Re-check after timeout
       if (!containerRef.current || !containerSize.w || rd3Data.length === 0 || rows.length === 0) {
-        console.log('❌ Dependencies not ready, skipping');
         return;
       }
       
       // Find the matching row to get path
       const matchRow = rows.find(r => r.id === currentMatch.nodeId);
       if (!matchRow) {
-        console.log('❌ Row not found for matchId:', currentMatch.nodeId);
         return;
       }
      
       const matchPath = buildPathForRow(matchRow, rows);
-      console.log('✓ Found match path:', matchPath);
       
       // Find node position in tree coordinates (starting from x=0 center)
       const nodePos = findNodePosition(matchPath, rd3Data);
       
       if (nodePos) {
-        console.log('✓ Found node position in tree coords:', nodePos);
-        console.log('Current translate:', translate);
-        console.log('Container size:', { w: containerSize.w, h: containerRef.current.clientHeight });
         
         // Calculate distance from center to determine if we need to adjust zoom
         const distanceFromCenter = Math.abs(nodePos.x);
@@ -1183,7 +1172,6 @@ export default function PetaJabatanClient() {
           zoom = maxDistance / distanceFromCenter;
           zoom = Math.max(zoom, 0.3); // Minimum zoom 0.3
           zoom = Math.min(zoom, initialZoom); // Don't zoom in more than initial
-          console.log(`📏 Node is far (${distanceFromCenter}px), adjusting zoom from ${initialZoom} to ${zoom}`);
         }
         
         // Calculate new translate to center the node
@@ -1195,7 +1183,6 @@ export default function PetaJabatanClient() {
           y: centerY - (nodePos.y * zoom)
         };
         
-        console.log('✅ Setting new translate:', newTranslate, `(zoom: ${zoom}, will center node at`, nodePos, ')');
         
         // Mark this index as centered BEFORE updating state
         lastCenteredIndexRef.current = currentMatchIndex;
@@ -1205,10 +1192,7 @@ export default function PetaJabatanClient() {
         setCurrentZoom(zoom);
         
       } else {
-        console.log('❌ Node position not found for path:', matchPath);
-        console.log('Available rd3Data length:', rd3Data.length);
         if (rd3Data.length > 0 && rd3Data[0].attributes) {
-          console.log('First node path:', (rd3Data[0].attributes as any).pathStr);
         }
       }
     }, 800); // Longer timeout for tree rendering after collapse changes
@@ -1224,7 +1208,6 @@ export default function PetaJabatanClient() {
     
     // If filterText is empty and we haven't focused on root yet, center on root
     if (!filterText && !hasFocusedOnce.current && translate) {
-      console.log('🏠 Focusing on root node (Setjen)');
       
       const timeoutId = setTimeout(() => {
         if (!containerRef.current || !containerSize.w) return;
@@ -1238,7 +1221,6 @@ export default function PetaJabatanClient() {
           y: centerY - 100 // Slight offset to show root better
         };
         
-        console.log('✅ Centering on root:', newTranslate);
         setTranslate(newTranslate);
         setCurrentZoom(null); // Reset to initial zoom
         hasFocusedOnce.current = true;
@@ -1252,7 +1234,6 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     if (!containerRef.current || !containerSize.w) return;
     
-    console.log('📺 Fullscreen state changed:', isFullscreen);
     
     // Auto-open panel when entering fullscreen (only on desktop)
     if (isFullscreen && window.innerWidth >= 640) {
@@ -1273,7 +1254,6 @@ export default function PetaJabatanClient() {
         y: centerY - 100
       };
       
-      console.log('✅ Re-centering for fullscreen mode:', newTranslate);
       setTranslate(newTranslate);
       setCurrentZoom(null);
     }, 300);
@@ -1471,7 +1451,6 @@ export default function PetaJabatanClient() {
           // Small delay after exit fullscreen
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (err) {
-          console.log('Exit fullscreen before navigation:', err);
         }
       }
 

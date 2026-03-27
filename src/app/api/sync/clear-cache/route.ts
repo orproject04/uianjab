@@ -77,7 +77,6 @@ export async function DELETE(req: NextRequest) {
       try {
         await unlink(fullPath);
         deletedCount++;
-        console.log('[SYNC CLEAR CACHE] Deleted:', fullPath);
       } catch (deleteError: any) {
         errors.push(`Failed to delete ${file}: ${deleteError.message}`);
         console.error('[SYNC CLEAR CACHE] Delete error:', deleteError);
@@ -94,7 +93,6 @@ export async function DELETE(req: NextRequest) {
       try {
         await unlink(fullPath);
         deletedCount++;
-        console.log('[SYNC CLEAR CACHE] Deleted:', fullPath);
       } catch (deleteError: any) {
         errors.push(`Failed to delete ${file}: ${deleteError.message}`);
         console.error('[SYNC CLEAR CACHE] Delete error:', deleteError);

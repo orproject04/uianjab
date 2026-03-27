@@ -259,7 +259,6 @@ export async function syncPegawaiToPetaJabatan(
       });
     }
     
-    console.log(`[SYNC] Total fetched: ${allPegawai.length}, Active: ${activePegawai.length}, Inactive: ${inactivePegawai.length}`);
     
     // Step 4: Group pegawai by jabatan and unit kerja
     if (onProgress) onProgress(40, 100, 'Mengelompokkan data pegawai...');
@@ -386,7 +385,6 @@ export async function syncPegawaiToPetaJabatan(
               [JSON.stringify(defaultSekjen), sekjen.id]
             );
             
-            console.log('[SYNC] Set default Sekretaris Jenderal DPD RI');
           }
         }
       }

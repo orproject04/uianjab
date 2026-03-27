@@ -56,7 +56,6 @@ export async function GET(req: NextRequest) {
         // Ambil user info dari Keycloak
         const userinfo = await getUserInfo(config, tokenSet.access_token);
         
-        console.log('Keycloak userinfo:', userinfo);
 
         // Extract user data dari Keycloak
         // Gunakan email jika ada, atau fallback ke preferred_username@keycloak.local
@@ -64,7 +63,6 @@ export async function GET(req: NextRequest) {
         if (!email && userinfo.preferred_username) {
             // Jika tidak ada email, gunakan preferred_username sebagai email
             email = `${userinfo.preferred_username}@keycloak.local`;
-            console.log('No email in userinfo, using fallback:', email);
         }
         
         const fullName = userinfo.name as string || userinfo.preferred_username as string || '';
@@ -108,7 +106,6 @@ export async function GET(req: NextRequest) {
             userRole = newUser.role;
             userName = newUser.full_name;
             
-            console.log('Created new user from SSO:', email);
         } else {
             // User sudah ada
             const user = rows[0];
@@ -124,7 +121,6 @@ export async function GET(req: NextRequest) {
                 [keycloakSub, fullName, userId]
             );
 
-            console.log('Existing user logged in via SSO:', email);
         }
 
         // Generate JWT tokens untuk aplikasi
