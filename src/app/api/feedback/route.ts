@@ -23,11 +23,15 @@ export async function GET(req: NextRequest) {
           f.unit_kerja, 
           f.usulan_perbaikan, 
           f.created_at,
+          f.status,
+          f.admin_notes,
+          f.rating,
+          f.rating_comment,
           u.full_name as user_name,
           u.email as user_email
         FROM feedback f
         LEFT JOIN user_anjab u ON f.user_id = u.id
-        ORDER BY f.created_at ASC
+        ORDER BY f.created_at DESC
       `;
     } else {
       query = `
@@ -38,12 +42,16 @@ export async function GET(req: NextRequest) {
           f.unit_kerja, 
           f.usulan_perbaikan, 
           f.created_at,
+          f.status,
+          f.admin_notes,
+          f.rating,
+          f.rating_comment,
           u.full_name as user_name,
           u.email as user_email
         FROM feedback f
         LEFT JOIN user_anjab u ON f.user_id = u.id
         WHERE f.user_id = $1
-        ORDER BY f.created_at ASC
+        ORDER BY f.created_at DESC
       `;
       params = [user.id];
     }
@@ -102,9 +110,9 @@ export async function POST(req: NextRequest) {
 
     // Insert feedback
     const result = await pool.query(
-      `INSERT INTO feedback (user_id, nama_jabatan, unit_kerja, usulan_perbaikan, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
-       RETURNING id, user_id, nama_jabatan, unit_kerja, usulan_perbaikan, created_at`,
+      `INSERT INTO feedback (user_id, nama_jabatan, unit_kerja, usulan_perbaikan, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'diusulkan', NOW(), NOW())
+       RETURNING id, user_id, nama_jabatan, unit_kerja, usulan_perbaikan, status, created_at`,
       [user.id, nama_jabatan.trim(), unit_kerja.trim(), usulan_perbaikan.trim()]
     );
 
@@ -119,6 +127,80 @@ export async function POST(req: NextRequest) {
     console.error('Error creating feedback:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to create feedback' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Update feedback status or rating
+export async function PUT(req: NextRequest) {
+  try {
+    const user = await getUserFromReq(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, status, admin_notes, rating, rating_comment } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    }
+
+    // Check existing feedback
+    const existing = await pool.query('SELECT * FROM feedback WHERE id = $1', [id]);
+    if (existing.rowCount === 0) {
+      return NextResponse.json({ error: 'Feedback not found' }, { status: 404 });
+    }
+
+    const currentFeedback = existing.rows[0];
+
+    // If regular user trying to update status or admin_notes
+    if (user.role !== 'admin') {
+      if (status !== undefined || admin_notes !== undefined) {
+         return NextResponse.json({ error: 'Unauthorized to update status' }, { status: 403 });
+      }
+      if (currentFeedback.user_id !== user.id) {
+         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+    }
+
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (status !== undefined && user.role === 'admin') {
+      updates.push(`status = $${idx++}`);
+      values.push(status);
+    }
+    if (admin_notes !== undefined && user.role === 'admin') {
+      updates.push(`admin_notes = $${idx++}`);
+      values.push(admin_notes);
+    }
+    if (rating !== undefined) {
+      updates.push(`rating = $${idx++}`);
+      values.push(rating);
+    }
+    if (rating_comment !== undefined) {
+      updates.push(`rating_comment = $${idx++}`);
+      values.push(rating_comment);
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const query = `UPDATE feedback SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+    const result = await pool.query(query, values);
+
+    return NextResponse.json({ message: 'Feedback updated', data: result.rows[0] });
+  } catch (error: any) {
+    console.error('Error updating feedback:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to update feedback' },
       { status: 500 }
     );
   }
