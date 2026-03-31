@@ -24,10 +24,10 @@ interface Feedback {
 type TabType = 'submit' | 'history';
 
 export default function FeedbackPage() {
-  const { me, isAdmin, isAdminJf, loading: meLoading } = useMe();
+  const { me, isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
   const router = useRouter();
   // Admin-JF is treated as regular user for feedback
-  const isActualAdmin = isAdmin && !isAdminJf;
+  const isActualAdmin = isAdmin && !isAdminJf && !isAdminAKK;
   // Change default to history
   const [activeTab, setActiveTab] = useState<TabType>('history');
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);

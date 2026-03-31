@@ -14,6 +14,7 @@ type MeCtx = {
     refresh: () => Promise<void>;
     isAdmin: boolean;
     isAdminJf: boolean;
+    isAdminAKK: boolean;
 };
 
 const Ctx = createContext<MeCtx | null>(null);
@@ -75,6 +76,7 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
         refresh: load,
         isAdmin: (me?.role ?? "user") === "admin",
         isAdminJf: (me?.role ?? "user") === "admin-jf",
+        isAdminAKK: (me?.role ?? "user") === "admin-akk",
     }), [me, loading, error]);
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

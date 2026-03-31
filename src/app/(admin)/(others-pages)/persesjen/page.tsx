@@ -18,7 +18,7 @@ type Persesjen = {
 
 export default function PeresjenPage() {
   const router = useRouter();
-  const { me, isAdmin, isAdminJf, loading: meLoading } = useMe();
+  const { me, isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
   const [data, setData] = useState<Persesjen[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadLoading, setUploadLoading] = useState(false);

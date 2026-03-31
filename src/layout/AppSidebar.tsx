@@ -57,7 +57,7 @@ type NavItem = {
 const AppSidebar: React.FC = () => {
     const {isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar} = useSidebar();
     const pathname = usePathname();
-    const {isAdmin, isAdminJf, loading: meLoading} = useMe();
+    const {isAdmin, isAdminJf, isAdminAKK, loading: meLoading} = useMe();
 
     // Check if we're on mobile
     const [isMobile, setIsMobile] = useState(false);
@@ -252,7 +252,7 @@ const AppSidebar: React.FC = () => {
         }] : []),
         {name: "Anjab dan ABK", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
-        ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
+        ...((isAdmin || isAdminJf || isAdminAKK) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
         ...((isAdmin || isAdminJf) ? [{
             name: "Dokumen",
             icon: <DocsIcon/>,
@@ -262,7 +262,7 @@ const AppSidebar: React.FC = () => {
             ]
         }] : []),
         {name: "Usulan Perbaikan Anjab dan ABK", icon: <MailIcon/>, path: "/feedback", subItems: []}
-    ], [isAdmin, isAdminJf, anjabSubs]);
+    ], [isAdmin, isAdminJf, isAdminAKK, anjabSubs]);
     const othersItems: NavItem[] = [];
 
     const isExactActive = useCallback(

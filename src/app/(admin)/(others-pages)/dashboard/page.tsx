@@ -80,14 +80,14 @@ type SummaryCardProps = {
 const COLORS = ["#8FC54A", "#80C15D", "#6DB980", "#3CA8CD", "#48ADBC", "#83C7E8"];
 
 export default function DashboardPage() {
-    const { isAdmin, isAdminJf, loading: meLoading } = useMe();
+    const { isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
     const router = useRouter();
 
     useEffect(() => {
-        if (!meLoading && !(isAdmin || isAdminJf)) {
+        if (!meLoading && !(isAdmin || isAdminJf || isAdminAKK)) {
             router.replace("/");
         }
-    }, [meLoading, isAdmin, isAdminJf, router]);
+    }, [meLoading, isAdmin, isAdminJf, isAdminAKK, router]);
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -203,7 +203,7 @@ export default function DashboardPage() {
         );
     }
 
-    if (!(isAdmin || isAdminJf)) {
+    if (!(isAdmin || isAdminJf || isAdminAKK)) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
@@ -261,12 +261,12 @@ export default function DashboardPage() {
     // Handler to save overrides: collect overrides entries and call API
     async function handleSaveOverrides() {
         try {
-            const edits: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number }> = [];
+            const edits: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }> = [];
             for (const key of Object.keys(overrides)) {
                 const [nama, unit] = key.split('|||');
                 const raw = overrides[key];
                 const num = raw === '' ? 0 : Number(raw);
-                edits.push({ nama_jabatan: nama || '', unit_kerja: unit || '', kebutuhan_khusus: Number.isFinite(num) ? num : 0 });
+                edits.push({ nama_jabatan: nama || '', unit_kerja: unit || '', kebutuhan_khusus: Number.isFinite(num) ? num : 0, bezetting_input: Number.isFinite(num) ? num : 0 });
             }
             if (!edits.length) return;
             // send to API
@@ -1455,7 +1455,7 @@ export default function DashboardPage() {
                                 <button
                                     onClick={() => { if (unsavedChanges) handleSaveOverrides(); else handlePrintTotalJabatan(); }}
                                     className={`px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 ${unsavedChanges ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
-                                    title={unsavedChanges ? 'Simpan perubahan kebutuhan fungsional' : 'Print tabel Total Jabatan'}
+                                    title={unsavedChanges ? 'Simpan perubahan' : 'Print tabel Total Jabatan'}
                                 >
                                     {unsavedChanges ? 'Simpan' : 'Print'}
                                 </button>
@@ -1556,9 +1556,52 @@ export default function DashboardPage() {
                                         </td>
 
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                            <span className="text-xs font-medium text-gray-900 dark:text-white">
-                                                {(item.bezetting ?? 0).toLocaleString("id-ID")}
-                                            </span>
+                                            {(() => {
+                                                    const key = `${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
+                                                    const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
+                                                    const displayed = existing === '' ? '' : String(existing);
+                                                    if (!(isAdminAKK)) {
+                                                        return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
+                                                    }
+                                                    return (
+                                                        <input
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            className="w-28 text-center rounded border px-2 py-1 text-sm"
+                                                            value={displayed}
+                                                            onFocus={() => {
+                                                                // if current displayed value is '0', clear it so typing '12' doesn't produce '012'
+                                                                const curr = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
+                                                                if ((curr === 0 || curr === '0') && !overrides.hasOwnProperty(key)) {
+                                                                    setOverrides((prev) => ({ ...prev, [key]: '' }));
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                // if user focused and left without typing, remove temporary override so original value shows again
+                                                                if (overrides.hasOwnProperty(key) && overrides[key] === '') {
+                                                                    setOverrides((prev) => {
+                                                                        const next = { ...prev } as Record<string, string | number>;
+                                                                        delete next[key];
+                                                                        return next;
+                                                                    });
+                                                                }
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                // allow only digits and control keys while typing
+                                                                if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
+                                                                    e.preventDefault();
+                                                                }
+                                                            }}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value;
+                                                                // keep raw string while editing; we'll coerce when saving
+                                                                setOverrides((prev) => ({ ...prev, [key]: raw }));
+                                                                setUnsavedChanges(true);
+                                                            }}
+                                                        />
+                                                    );
+                                                })()}
                                         </td>
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             <span className="text-xs font-medium text-gray-900 dark:text-white">
@@ -1576,6 +1619,9 @@ export default function DashboardPage() {
                                                     const key = `${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
                                                     const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.kebutuhan ?? 0));
                                                     const displayed = existing === '' ? '' : String(existing);
+                                                    if (!(isAdmin || isAdminJf)) {
+                                                        return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
+                                                    }
                                                     return (
                                                         <input
                                                             type="text"
@@ -1880,7 +1926,7 @@ export default function DashboardPage() {
 }
 
 // Save overrides to server
-async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number }>) {
+async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }>) {
     const res = await apiFetch('/api/dashboard/jabatan/overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

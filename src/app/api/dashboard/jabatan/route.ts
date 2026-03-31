@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         }
 
         // allow both full admin and admin-jf (special role limited to fungsional dashboard)
-        if (!hasRole(user, ["admin", "admin-jf"])) {
+        if (!hasRole(user, ["admin", "admin-jf", "admin-akk"])) {
             return NextResponse.json(
                 { error: "Forbidden, hanya admin yang dapat mengakses data ini" },
                 { status: 403 }
