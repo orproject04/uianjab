@@ -54,20 +54,19 @@ const AdminLayoutClient: React.FC<{ children: React.ReactNode }> = ({children}) 
         );
     }
 
-    const mainContentMargin = isMobileOpen
-        ? "ml-0"
+    const sidebarPadding = isMobileOpen
+        ? "pl-0"
         : isExpanded || isHovered
-            ? "lg:ml-[380px]"
-            : "lg:ml-[90px]";
-
+            ? "lg:pl-[350px]"
+            : "lg:pl-[90px]";
 
     return (
-        <div className="min-h-screen xl:flex">
+        <div className={`min-h-screen overflow-x-hidden transition-all duration-300 ease-in-out ${sidebarPadding}`}>
             <AppSidebar/>
             <Backdrop/>
-            <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${mainContentMargin}`}>
+            <div className="flex flex-col min-h-screen">
                 <AppHeader/>
-                <div id="admin-content" style={{paddingTop: 'var(--header-height)'}} className="flex-1 p-4 mx-auto max-w-7xl md:p-6 lg:p-8 w-full">{children}</div>
+                <div id="admin-content" style={{paddingTop: 'var(--header-height)'}} className="flex-1 p-4 md:p-6 lg:p-8">{children}</div>
             </div>
         </div>
     );

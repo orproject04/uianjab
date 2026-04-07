@@ -261,13 +261,40 @@ export default function DashboardPage() {
     // Handler to save overrides: collect overrides entries and call API
     async function handleSaveOverrides() {
         try {
-            const edits: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }> = [];
+            // Merge bezetting|||... and kebutuhan|||... entries per (nama_jabatan, unit_kerja)
+            const mergedMap: Record<string, { nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }> = {};
             for (const key of Object.keys(overrides)) {
-                const [nama, unit] = key.split('|||');
+                let type: 'bezetting' | 'kebutuhan' | null = null;
+                let rest = key;
+                if (key.startsWith('bezetting|||')) { type = 'bezetting'; rest = key.slice('bezetting|||'.length); }
+                else if (key.startsWith('kebutuhan|||')) { type = 'kebutuhan'; rest = key.slice('kebutuhan|||'.length); }
+                else { type = 'bezetting'; } // legacy fallback (no prefix)
+
+                const parts = rest.split('|||');
+                const nama = parts[0] || '';
+                const unit = parts[1] || '';
+                const pairKey = `${nama}|||${unit}`;
                 const raw = overrides[key];
                 const num = raw === '' ? 0 : Number(raw);
-                edits.push({ nama_jabatan: nama || '', unit_kerja: unit || '', kebutuhan_khusus: Number.isFinite(num) ? num : 0, bezetting_input: Number.isFinite(num) ? num : 0 });
+                const val = Number.isFinite(num) ? num : 0;
+
+                if (!mergedMap[pairKey]) {
+                    // Look up current values from data as defaults
+                    const existing = byNamaJabatan.find(it =>
+                        String(it.nama_jabatan || '').trim() === nama &&
+                        String(it.unit_kerja || '').trim() === unit
+                    );
+                    mergedMap[pairKey] = {
+                        nama_jabatan: nama,
+                        unit_kerja: unit,
+                        kebutuhan_khusus: Number(existing?.kebutuhan ?? 0),
+                        bezetting_input: Number(existing?.bezetting ?? 0),
+                    };
+                }
+                if (type === 'kebutuhan') mergedMap[pairKey].kebutuhan_khusus = val;
+                else mergedMap[pairKey].bezetting_input = val;
             }
+            const edits = Object.values(mergedMap);
             if (!edits.length) return;
             // send to API
             // Prevent automatic effects from reloading data while we perform a controlled reload
@@ -1557,7 +1584,7 @@ export default function DashboardPage() {
 
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             {(() => {
-                                                    const key = `${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
+                                                    const key = `bezetting|||${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
                                                     const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
                                                     const displayed = existing === '' ? '' : String(existing);
                                                     if (!(isAdminAKK)) {
@@ -1599,6 +1626,7 @@ export default function DashboardPage() {
                                                                 setOverrides((prev) => ({ ...prev, [key]: raw }));
                                                                 setUnsavedChanges(true);
                                                             }}
+                                                            // bezetting input — uses prefixed key 'bezetting|||...' to avoid collision with kebutuhan
                                                         />
                                                     );
                                                 })()}
@@ -1616,10 +1644,12 @@ export default function DashboardPage() {
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             {(/fungsional/i).test(String(item.jenis_jabatan || '')) ? (
                                                 (() => {
-                                                    const key = `${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
+                                                    // Use separate prefix 'kebutuhan|||' to avoid colliding with the 'bezetting|||' key
+                                                    const key = `kebutuhan|||${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
                                                     const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.kebutuhan ?? 0));
                                                     const displayed = existing === '' ? '' : String(existing);
-                                                    if (!(isAdmin || isAdminJf)) {
+                                                    // Only admin-jf (or superadmin) can edit kebutuhan fungsional; admin-akk is read-only
+                                                    if (!(isAdminJf || (isAdmin && !isAdminAKK))) {
                                                         return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
                                                     }
                                                     return (

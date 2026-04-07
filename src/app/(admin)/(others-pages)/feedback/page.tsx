@@ -6,6 +6,13 @@ import { useMe } from '@/context/MeContext';
 import Swal from 'sweetalert2';
 import { ChevronDownIcon, ChevronUpIcon, ArrowRightIcon } from '@/icons';
 
+interface StatusHistoryEntry {
+  status: string;
+  changed_at: string;
+  changed_by: string;
+  notes?: string;
+}
+
 interface Feedback {
   id: string;
   user_id: string;
@@ -15,6 +22,7 @@ interface Feedback {
   created_at: string;
   status?: 'diusulkan' | 'ditindaklanjuti' | 'ditolak' | 'diterima';
   admin_notes?: string;
+  status_history?: StatusHistoryEntry[];
   rating?: number;
   rating_comment?: string;
   user_name?: string;
@@ -309,7 +317,7 @@ export default function FeedbackPage() {
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'diterima':
-        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Diterima</span>;
+        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Selesai</span>;
       case 'ditolak':
         return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Ditolak</span>;
       case 'ditindaklanjuti':
@@ -669,19 +677,16 @@ export default function FeedbackPage() {
 
                     <div className="flex-1 min-w-0">
                       {/* Header Info */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white sm:truncate">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex flex-col gap-1 min-w-0 flex-1">
+                          <h3 className="font-semibold text-base sm:text-lg text-gray-900 dark:text-white break-words">
                             {item.nama_jabatan}
                           </h3>
-                          <span className="hidden sm:inline text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
-                            •
-                          </span>
-                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400 sm:truncate">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400 break-words">
                             {item.unit_kerja}
                           </span>
                         </div>
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 mt-1">
                            {getStatusBadge(item.status)}
                         </div>
                       </div>
@@ -719,32 +724,31 @@ export default function FeedbackPage() {
                               <h4 className="text-sm font-semibold text-brand-800 dark:text-brand-300">Ubah Status Usulan</h4>
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                                <select 
+                                <select
                                   value={adminFormData.status}
                                   onChange={(e) => setAdminFormData(prev => ({ ...prev, status: e.target.value }))}
                                   className="w-full sm:w-64 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700"
                                 >
-                                  <option value="diusulkan">Diusulkan</option>
                                   <option value="ditindaklanjuti">Ditindaklanjuti</option>
-                                  <option value="diterima">Diterima</option>
                                   <option value="ditolak">Ditolak</option>
                                 </select>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Gunakan tombol &quot;Tandai Selesai&quot; untuk menyelesaikan usulan</p>
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Keterangan Admin (Opsional)</label>
-                                <textarea 
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Catatan Admin (Opsional)</label>
+                                <textarea
                                   value={adminFormData.admin_notes}
                                   onChange={(e) => setAdminFormData(prev => ({ ...prev, admin_notes: e.target.value }))}
                                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 resize-y"
                                   rows={3}
-                                  placeholder="Tambahkan catatan mengapa usulan ditolak, diterima, dll..."
+                                  placeholder="Tambahkan catatan terkait perubahan status ini..."
                                 />
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap gap-2">
                                 <button
                                   onClick={() => handleAdminUpdate(item.id)}
                                   disabled={adminSubmitting}
-                                  className="px-4 py-2 bg-brand-600 text-white text-sm rounded-md hover:bg-brand-700"
+                                  className="px-4 py-2 bg-brand-600 text-white text-sm rounded-md hover:bg-brand-700 disabled:opacity-60"
                                 >
                                   {adminSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
                                 </button>
@@ -757,24 +761,98 @@ export default function FeedbackPage() {
                               </div>
                             </div>
                           ) : (
-                            isActualAdmin && (
-                              <div>
+                            isActualAdmin && (item.status !== 'diterima' && item.status !== 'ditolak') && (
+                              <div className="flex flex-wrap gap-2">
                                 <button
                                   onClick={() => {
-                                    setAdminFormData({ status: item.status || 'diusulkan', admin_notes: item.admin_notes || '' });
+                                    setAdminFormData({ status: 'ditindaklanjuti', admin_notes: '' });
                                     setAdminEditId(item.id);
                                   }}
-                                  className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+                                  className="text-sm px-3 py-1.5 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors font-medium"
                                 >
-                                  Tindak Lanjuti Usulan
+                                  Tindak Lanjuti
+                                </button>
+                                <button
+                                  disabled={adminSubmitting}
+                                  onClick={async () => {
+                                    const result = await Swal.fire({
+                                      title: 'Tandai Selesai?',
+                                      text: 'Usulan akan ditandai sebagai selesai dan tidak dapat diubah lagi.',
+                                      icon: 'question',
+                                      showCancelButton: true,
+                                      confirmButtonText: 'Ya, Tandai Selesai',
+                                      cancelButtonText: 'Batal',
+                                      input: 'textarea',
+                                      inputLabel: 'Catatan penutup (opsional)',
+                                      inputPlaceholder: 'Tambahkan catatan penutup...',
+                                    });
+                                    if (result.isConfirmed) {
+                                      setAdminSubmitting(true);
+                                      try {
+                                        const res = await fetch('/api/feedback', {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ id: item.id, mark_selesai: true, admin_notes: result.value || '' })
+                                        });
+                                        if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+                                        Swal.fire('Selesai!', 'Usulan telah ditandai selesai.', 'success');
+                                        loadFeedback();
+                                      } catch (err: any) {
+                                        Swal.fire('Error', err.message || 'Gagal memperbarui status', 'error');
+                                      } finally {
+                                        setAdminSubmitting(false);
+                                      }
+                                    }
+                                  }}
+                                  className="text-sm px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium disabled:opacity-60"
+                                >
+                                  ✓ Tandai Selesai
                                 </button>
                               </div>
                             )
                           )}
 
+                          {/* Status History Timeline (Admin View) */}
+                          {isActualAdmin && item.status_history && item.status_history.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Riwayat Perubahan Status</p>
+                              <div className="space-y-2 border-l-2 border-gray-200 dark:border-gray-700 pl-3">
+                                {item.status_history.map((h, i) => (
+                                  <div key={i} className="relative">
+                                    <div className={`absolute -left-[1.1rem] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-800 ${
+                                      h.status === 'diterima' ? 'bg-green-500' :
+                                      h.status === 'ditolak' ? 'bg-red-500' :
+                                      h.status === 'ditindaklanjuti' ? 'bg-yellow-500' : 'bg-blue-500'
+                                    }`} />
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 capitalize">
+                                          {h.status === 'diterima' ? 'Selesai' : h.status}
+                                        </span>
+                                        <span className="text-xs text-gray-400">·</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{formatDate(h.changed_at)}</span>
+                                        <span className="text-xs text-gray-400">·</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{h.changed_by}</span>
+                                      </div>
+                                      {h.notes && (
+                                        <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-300 italic">&ldquo;{h.notes}&rdquo;</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Admin Notes View */}
-                          {item.admin_notes && !isActualAdmin && (
+                          {item.admin_notes && !isActualAdmin && (item.status === 'diterima') && (
                             <div className="p-4 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-200 dark:border-brand-800">
+                              <p className="text-sm font-medium text-brand-800 dark:text-brand-300 mb-1">Catatan Admin:</p>
+                              <p className="text-sm text-gray-700 dark:text-gray-300">{item.admin_notes}</p>
+                            </div>
+                          )}
+                          {item.admin_notes && !isActualAdmin && (item.status === 'ditolak') && (
+                            <div className="p-4 bg-red-50 dark:bg-brand-900/20 rounded-lg border border-red-200 dark:border-brand-800">
                               <p className="text-sm font-medium text-brand-800 dark:text-brand-300 mb-1">Catatan Admin:</p>
                               <p className="text-sm text-gray-700 dark:text-gray-300">{item.admin_notes}</p>
                             </div>

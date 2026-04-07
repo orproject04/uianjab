@@ -2,9 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 import { getUserFromReq } from '@/lib/auth';
 
+// Ensure status_history column exists — run immediately at module load
+// so GET queries never hit a missing column error
+const _migration = pool.query(`
+  ALTER TABLE feedback
+  ADD COLUMN IF NOT EXISTS status_history JSONB NOT NULL DEFAULT '[]'::jsonb
+`).catch(() => {/* column already exists */});
+
 // GET - List feedback records
 export async function GET(req: NextRequest) {
   try {
+    // Wait for migration in case module just loaded
+    await _migration.catch(() => {});
+
     const user = await getUserFromReq(req);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,6 +35,7 @@ export async function GET(req: NextRequest) {
           f.created_at,
           f.status,
           f.admin_notes,
+          f.status_history,
           f.rating,
           f.rating_comment,
           u.full_name as user_name,
@@ -44,6 +55,7 @@ export async function GET(req: NextRequest) {
           f.created_at,
           f.status,
           f.admin_notes,
+          f.status_history,
           f.rating,
           f.rating_comment,
           u.full_name as user_name,
@@ -141,7 +153,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { id, status, admin_notes, rating, rating_comment } = body;
+    const { id, status, admin_notes, rating, rating_comment, mark_selesai } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
@@ -157,7 +169,7 @@ export async function PUT(req: NextRequest) {
 
     // If regular user trying to update status or admin_notes
     if (user.role !== 'admin') {
-      if (status !== undefined || admin_notes !== undefined) {
+      if (status !== undefined || admin_notes !== undefined || mark_selesai) {
          return NextResponse.json({ error: 'Unauthorized to update status' }, { status: 403 });
       }
       if (currentFeedback.user_id !== user.id) {
@@ -165,18 +177,62 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const updates = [];
-    const values = [];
+    // ---- Admin status update logic ----
+    if (user.role === 'admin' && (status !== undefined || mark_selesai)) {
+      // Lock: cannot change if already diterima or ditolak
+      const lockedStatuses = ['diterima', 'ditolak'];
+      if (lockedStatuses.includes(currentFeedback.status)) {
+        return NextResponse.json(
+          { error: `Usulan dengan status "${currentFeedback.status}" tidak dapat diubah lagi` },
+          { status: 400 }
+        );
+      }
+
+      // Determine new status
+      const newStatus = mark_selesai ? 'diterima' : status;
+
+      // Validate allowed status transitions
+      const allowedStatuses = ['ditindaklanjuti', 'ditolak', 'diterima'];
+      if (!allowedStatuses.includes(newStatus)) {
+        return NextResponse.json(
+          { error: 'Status tidak valid. Admin hanya dapat mengubah ke: ditindaklanjuti, ditolak, atau diterima (selesai)' },
+          { status: 400 }
+        );
+      }
+
+      // Build new history entry
+      const historyEntry: Record<string, unknown> = {
+        status: newStatus,
+        changed_at: new Date().toISOString(),
+        changed_by: user.full_name || user.email || 'Admin',
+      };
+      if (admin_notes?.trim()) {
+        historyEntry.notes = admin_notes.trim();
+      }
+
+      // Append to existing history
+      const existingHistory: unknown[] = Array.isArray(currentFeedback.status_history)
+        ? currentFeedback.status_history
+        : [];
+      const newHistory = [...existingHistory, historyEntry];
+
+      // Update status, admin_notes (latest), and history
+      const result = await pool.query(
+        `UPDATE feedback 
+         SET status = $1, admin_notes = $2, status_history = $3::jsonb, updated_at = NOW()
+         WHERE id = $4
+         RETURNING *`,
+        [newStatus, admin_notes?.trim() || currentFeedback.admin_notes || null, JSON.stringify(newHistory), id]
+      );
+
+      return NextResponse.json({ message: 'Status usulan berhasil diperbarui', data: result.rows[0] });
+    }
+
+    // ---- Rating update logic (regular user) ----
+    const updates: string[] = [];
+    const values: unknown[] = [];
     let idx = 1;
 
-    if (status !== undefined && user.role === 'admin') {
-      updates.push(`status = $${idx++}`);
-      values.push(status);
-    }
-    if (admin_notes !== undefined && user.role === 'admin') {
-      updates.push(`admin_notes = $${idx++}`);
-      values.push(admin_notes);
-    }
     if (rating !== undefined) {
       updates.push(`rating = $${idx++}`);
       values.push(rating);
