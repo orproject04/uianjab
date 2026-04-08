@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 import { getUserFromReq } from '@/lib/auth';
 
-// Ensure status_history column exists — run immediately at module load
-// so GET queries never hit a missing column error
-const _migration = pool.query(`
-  ALTER TABLE feedback
-  ADD COLUMN IF NOT EXISTS status_history JSONB NOT NULL DEFAULT '[]'::jsonb
-`).catch(() => {/* column already exists */});
+// Ensure required columns exist — run immediately at module load
+const _migration = Promise.all([
+  pool.query(`
+    ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS status_history JSONB NOT NULL DEFAULT '[]'::jsonb
+  `),
+  pool.query(`
+    ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ
+  `),
+]).catch(() => {/* columns already exist */});
 
 // GET - List feedback records
 export async function GET(req: NextRequest) {
@@ -26,13 +31,14 @@ export async function GET(req: NextRequest) {
     // If admin, show all feedback. Otherwise, only show user's own feedback
     if (user.role === 'admin') {
       query = `
-        SELECT 
-          f.id, 
+        SELECT
+          f.id,
           f.user_id,
-          f.nama_jabatan, 
-          f.unit_kerja, 
-          f.usulan_perbaikan, 
+          f.nama_jabatan,
+          f.unit_kerja,
+          f.usulan_perbaikan,
           f.created_at,
+          COALESCE(f.updated_at, f.created_at) as updated_at,
           f.status,
           f.admin_notes,
           f.status_history,
@@ -46,13 +52,14 @@ export async function GET(req: NextRequest) {
       `;
     } else {
       query = `
-        SELECT 
-          f.id, 
+        SELECT
+          f.id,
           f.user_id,
-          f.nama_jabatan, 
-          f.unit_kerja, 
-          f.usulan_perbaikan, 
+          f.nama_jabatan,
+          f.unit_kerja,
+          f.usulan_perbaikan,
           f.created_at,
+          COALESCE(f.updated_at, f.created_at) as updated_at,
           f.status,
           f.admin_notes,
           f.status_history,
