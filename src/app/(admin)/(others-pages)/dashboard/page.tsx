@@ -437,6 +437,23 @@ export default function DashboardPage() {
         .slice(0, 10)
         .map(d => ({ ...d, abs_selisih: Math.abs(d.selisih || 0), display_label: d.display_label || `${d.nama_jabatan} — ${d.unit_kerja}` }));
 
+    // Rekap by Kelas Jabatan — group byNamaJabatan and sum bezetting per kelas
+    const byKelasJabatanMap: Record<string, number> = {};
+    for (const item of byNamaJabatan) {
+        const kelas = String(item.kelas_jabatan ?? '-').trim() || '-';
+        byKelasJabatanMap[kelas] = (byKelasJabatanMap[kelas] || 0) + Number(item.bezetting ?? 0);
+    }
+    const rekapKelasList = Object.entries(byKelasJabatanMap)
+        .sort(([a], [b]) => {
+            const na = Number(a); const nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return nb - na;
+            if (!isNaN(na)) return -1;
+            if (!isNaN(nb)) return 1;
+            return 0;
+        })
+        .map(([kelas, persediaan], i) => ({ no: i + 1, kelas, persediaan }));
+    const totalPersediaanKelas = rekapKelasList.reduce((sum, r) => sum + r.persediaan, 0);
+
     function toggleSort(field: string) {
         if (sortField === field) {
             setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -664,6 +681,72 @@ export default function DashboardPage() {
         }
     }
 
+    // Print function for Rekap Kelas Jabatan
+    function handlePrintRekapKelas() {
+        let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Rekap Kelas Jabatan</title>
+    <style>
+        @page { margin: 2cm; size: A4 portrait; }
+        body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
+        h2 { text-align: center; margin: 0 0 4px 0; font-size: 14px; font-weight: bold; text-transform: uppercase; }
+        p.sub { text-align: center; margin: 0 0 16px 0; font-size: 11px; }
+        table { border-collapse: collapse; width: 60%; margin: 0 auto; font-size: 11px; }
+        th, td { border: 1px solid #000; padding: 5px 10px; text-align: center; }
+        th { background: #d0d0d0; font-weight: bold; text-transform: uppercase; }
+        .total-row td { font-weight: bold; background: #f0f0f0; }
+        .sub-header td { background: #e0e0e0; font-size: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Rekap Persediaan Pegawai Berdasarkan Kelas Jabatan</h2>
+    <p class="sub">Data Bezetting per Kelas Jabatan</p>
+    <table>
+        <thead>
+            <tr>
+                <th>No.</th>
+                <th>Kelas Jabatan</th>
+                <th>Persediaan Pegawai</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+        rekapKelasList.forEach((r, i) => {
+            html += `
+            <tr>
+                <td>${i + 1}.</td>
+                <td>${r.kelas}</td>
+                <td>${r.persediaan.toLocaleString('id-ID')}</td>
+            </tr>`;
+        });
+
+        html += `
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="2">TOTAL</td>
+                <td>${totalPersediaanKelas.toLocaleString('id-ID')}</td>
+            </tr>
+        </tfoot>
+    </table>
+</body>
+</html>`;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) return;
+        doc.open(); doc.write(html); doc.close();
+        iframe.contentWindow?.focus();
+        setTimeout(() => {
+            iframe.contentWindow?.print();
+            setTimeout(() => document.body.removeChild(iframe), 1000);
+        }, 400);
+    }
+
     // Print function for Total Per Jenis Jabatan using hidden iframe approach
     function handlePrintJenisJabatan() {
         try {
@@ -857,6 +940,62 @@ export default function DashboardPage() {
         );
     };
 
+    // Narrower Y-axis tick renderer for side-by-side panels (width=190)
+    const renderYAxisTickNarrow = (props: any) => {
+    const { x, y, payload } = props;
+
+    const raw: string = String(payload?.value ?? "");
+    const labelSource = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
+
+    const maxLen = 22;
+    const words = String(labelSource).split(/\s+/);
+    const lines: string[] = [];
+
+    let current = "";
+
+    for (const w of words) {
+        if ((current + " " + w).trim().length <= maxLen) {
+            current = (current + " " + w).trim();
+        } else {
+            if (current) lines.push(current);
+            current = w;
+        }
+    }
+
+    if (current) lines.push(current);
+
+    if (lines.length > 4) {
+        const first = lines.slice(0, 3);
+        let last = lines.slice(3).join(" ");
+
+        if (last.length > maxLen) {
+            last = last.slice(0, maxLen - 3) + "...";
+        }
+
+        lines.length = 0;
+        lines.push(...first, last);
+    }
+
+    const anchorX = x - 4;
+    const lineGap = 11;
+
+    return (
+        <text
+            x={anchorX}
+            y={y}
+            textAnchor="end"
+            fontSize={9}
+            fill="#374151"
+            dominantBaseline="middle"
+        >
+            {lines.map((ln, i) => (
+                <tspan key={i} x={anchorX} dy={i === 0 ? 0 : lineGap}>
+                    {ln}
+                </tspan>
+            ))}
+        </text>
+    );
+};
     // Custom styles for react-select dark mode
     const selectStyles = {
         control: (base: any, state: any) => ({
@@ -1848,8 +1987,112 @@ export default function DashboardPage() {
                     })()}
                 </div>
 
-                {/* Top Jabatan (Selisih Positif) */}
+                {/* Rekap Kelas Jabatan — Chart */}
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-6">
+                        <div>
+                            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">Distribusi Persediaan Pegawai per Kelas Jabatan</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Jumlah bezetting pegawai berdasarkan kelas jabatan</p>
+                        </div>
+                        <button
+                            onClick={handlePrintRekapKelas}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-brand-600 text-white hover:bg-brand-700 transition-colors flex-shrink-0 ml-4"
+                            title="Print rekap tabel kelas jabatan"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Print Rekap
+                        </button>
+                    </div>
+
+                    {/* Summary pills */}
+                    <div className="flex flex-wrap gap-3 mb-6">
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Total Pegawai</span>
+                            <span className="text-base font-bold text-brand-600 dark:text-brand-400">{totalPersediaanKelas.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Kelas Terbanyak</span>
+                            <span className="text-base font-bold text-blue-light-600 dark:text-blue-light-400">
+                                {rekapKelasList.length > 0 ? `Kelas ${rekapKelasList.reduce((m, r) => r.persediaan > m.persediaan ? r : m, rekapKelasList[0]).kelas}` : '-'}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Jumlah Kelas</span>
+                            <span className="text-base font-bold text-gray-700 dark:text-gray-300">{rekapKelasList.length}</span>
+                        </div>
+                    </div>
+
+                    {/* Bar chart — sorted ascending (1→17, then -) so it reads like a distribution */}
+                    <ResponsiveContainer width="100%" height={320}>
+                        <BarChart
+                            data={[...rekapKelasList].sort((a, b) => {
+                                const na = Number(a.kelas); const nb = Number(b.kelas);
+                                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                                if (!isNaN(na)) return -1;
+                                return 1;
+                            })}
+                            margin={{ top: 16, right: 16, left: 0, bottom: 8 }}
+                        >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                            <XAxis
+                                dataKey="kelas"
+                                tick={{ fontSize: 11, fill: '#6b7280' }}
+                                tickLine={false}
+                                axisLine={false}
+                                label={{ value: 'Kelas Jabatan', position: 'insideBottom', offset: -2, fontSize: 11, fill: '#9ca3af' }}
+                                height={40}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 11, fill: '#6b7280' }}
+                                tickLine={false}
+                                axisLine={false}
+                                width={48}
+                            />
+                            <Tooltip
+                                cursor={{ fill: 'rgba(99,102,241,0.06)' }}
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                        const d = payload[0].payload;
+                                        const pct = totalPersediaanKelas > 0 ? ((d.persediaan / totalPersediaanKelas) * 100).toFixed(1) : '0';
+                                        return (
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+                                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Kelas Jabatan {d.kelas}</p>
+                                                <p className="text-sm font-bold text-brand-600 dark:text-brand-400">{d.persediaan.toLocaleString('id-ID')} pegawai</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{pct}% dari total</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
+                            <Bar dataKey="persediaan" name="Persediaan Pegawai" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                                {[...rekapKelasList].sort((a, b) => {
+                                    const na = Number(a.kelas); const nb = Number(b.kelas);
+                                    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                                    if (!isNaN(na)) return -1;
+                                    return 1;
+                                }).map((entry, idx) => {
+                                    // gradient intensity: higher kelas = deeper blue-teal
+                                    const maxVal = Math.max(...rekapKelasList.map(r => r.persediaan), 1);
+                                    const intensity = entry.persediaan / maxVal;
+                                    const r = Math.round(60 + (1 - intensity) * 120);
+                                    const g = Math.round(168 - (1 - intensity) * 60);
+                                    const b = Math.round(205 - (1 - intensity) * 40);
+                                    return <Cell key={`kelas-${idx}`} fill={`rgb(${r},${g},${b})`} />;
+                                })}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Top Jabatan side-by-side */}
+                <div className="flex gap-4 flex-col lg:flex-row">
+
+                {/* Top Jabatan (Selisih Positif) */}
+                <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-blue-light-500 to-blue-light-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1863,45 +2106,43 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting melebihi kebutuhan pegawai</p>
                         </div>
                     </div>
-                    <ResponsiveContainer width="100%" height={chartHeight}>
-                        <BarChart data={topPositive} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis type="number" tick={{ fontSize: 12 }} />
+                    <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topPositive} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                             <YAxis
                                 dataKey="display_label"
                                 type="category"
-                                width={yAxisWidth}
-                                tick={renderYAxisTick}
+                                width={190}
+                                tick={renderYAxisTickNarrow}
+                                interval={0}
+                                tickLine={false}
+                                axisLine={false}
                             />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'rgba(255, 245, 245, 0.97)',
-                                    border: '1px solid #fee2e2',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
-                                }}
+                                cursor={{ fill: 'rgba(60,168,205,0.08)' }}
                                 content={({ active, payload }) => {
                                     if (active && payload && payload.length) {
                                         return (
-                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
                                                 <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
                                                 <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-[#3CA8CD] font-semibold">Kelebihan: +{payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
                                     return null;
                                 }}
                             />
-                            <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 8, 8, 0]} />
+                            <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 6, 6, 0]} barSize={20} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
                 {/* Top Jabatan (Selisih Negatif) */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-400 to-brand-500 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1913,43 +2154,42 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
                         </div>
                     </div>
-                    <ResponsiveContainer width="100%" height={chartHeight}>
-                        <BarChart data={topNegative} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis type="number" tick={{ fontSize: 12 }} domain={[0, 'dataMax']} />
+                    <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topNegative} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 'dataMax']} />
                             <YAxis
                                 dataKey="display_label"
                                 type="category"
-                                width={yAxisWidth}
-                                tick={renderYAxisTick}
+                                width={190}
+                                tick={renderYAxisTickNarrow}
+                                interval={0}
+                                tickLine={false}
+                                axisLine={false}
                             />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'rgba(255, 251, 235, 0.97)',
-                                    border: '1px solid #fffbeb',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
-                                }}
+                                cursor={{ fill: 'rgba(143,197,74,0.08)' }}
                                 content={({ active, payload }) => {
                                     if (active && payload && payload.length) {
                                         return (
-                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
                                                 <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
                                                 <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-[#8FC54A] font-semibold">Kekurangan: {payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
                                     return null;
                                 }}
                             />
-                            <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 8, 8, 0]} />
+                            <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 6, 6, 0]} barSize={20} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
+                </div>{/* end side-by-side */}
             </div>
         </>
     );
