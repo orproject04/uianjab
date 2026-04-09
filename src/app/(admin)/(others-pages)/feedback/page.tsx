@@ -101,9 +101,10 @@ export default function FeedbackPage() {
 
   const markAsSeen = (item: Feedback) => {
     if (!me || isActualAdmin) return;
-    const updatedAt = item.updated_at || item.created_at;
-    if (seenMap[item.id] === updatedAt) return;
-    const next = { ...seenMap, [item.id]: updatedAt };
+    // Track based on status_history length so that user-only changes (e.g. rating) don't re-trigger unread
+    const adminState = String((item.status_history || []).length);
+    if (seenMap[item.id] === adminState) return;
+    const next = { ...seenMap, [item.id]: adminState };
     setSeenMap(next);
     try { localStorage.setItem(`feedback_seen_${me.id}`, JSON.stringify(next)); } catch { /* ignore */ }
   };
@@ -111,8 +112,9 @@ export default function FeedbackPage() {
   const isUnread = (item: Feedback) => {
     // Only flag items that have been acted on by admin (not just submitted)
     if (!item.status_history || item.status_history.length === 0) return false;
-    const updatedAt = item.updated_at || item.created_at;
-    return seenMap[item.id] !== updatedAt;
+    // Use status_history length as "admin state" — only changes when admin adds an entry, not when user rates
+    const adminState = String(item.status_history.length);
+    return seenMap[item.id] !== adminState;
   };
 
   // Rating forms state
