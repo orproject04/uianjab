@@ -56,23 +56,37 @@ export default function FeedbackPage() {
   const [sortBy, setSortBy] = useState<'created_at' | 'updated_at'>('created_at');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  // Admin: track how many rated items were seen last visit
-  const [seenRatedCount, setSeenRatedCount] = useState<number | null>(null);
+  // Admin: track which rated items have been opened (per item id → rating value as string)
+  const [seenRatingsMap, setSeenRatingsMap] = useState<Record<string, string>>({});
 
   // Track which feedback items user has already "seen" (by updated_at timestamp)
   // Stored in localStorage as { [feedbackId]: updatedAtIso }
   const [seenMap, setSeenMap] = useState<Record<string, string>>({});
 
-  // Load admin seen rated count from localStorage
+  // Load admin seenRatingsMap from localStorage
   useEffect(() => {
     if (!me || !isActualAdmin) return;
     try {
-      const raw = localStorage.getItem(`feedback_rated_seen_${me.id}`);
-      setSeenRatedCount(raw !== null ? parseInt(raw, 10) : 0);
+      const raw = localStorage.getItem(`feedback_ratings_seen_${me.id}`);
+      setSeenRatingsMap(raw ? JSON.parse(raw) : {});
     } catch {
-      setSeenRatedCount(0);
+      setSeenRatingsMap({});
     }
   }, [me, isActualAdmin]);
+
+  const markRatingAsSeen = (item: Feedback) => {
+    if (!me || !isActualAdmin || !item.rating) return;
+    const key = String(item.rating);
+    if (seenRatingsMap[item.id] === key) return;
+    const next = { ...seenRatingsMap, [item.id]: key };
+    setSeenRatingsMap(next);
+    try { localStorage.setItem(`feedback_ratings_seen_${me.id}`, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+
+  const isRatingUnread = (item: Feedback) => {
+    if (!item.rating) return false;
+    return seenRatingsMap[item.id] !== String(item.rating);
+  };
 
   // Load seenMap from localStorage once user is known
   useEffect(() => {
@@ -218,12 +232,6 @@ export default function FeedbackPage() {
       const data = json?.data || [];
       setFeedbackList(data);
 
-      // Mark current rated count as seen for admin
-      if (isActualAdmin && me) {
-        const count = data.filter((f: Feedback) => f.rating).length;
-        setSeenRatedCount(count);
-        try { localStorage.setItem(`feedback_rated_seen_${me.id}`, String(count)); } catch { /* ignore */ }
-      }
     } catch (error: any) {
       console.error('Error loading feedback:', error);
       Swal.fire('Error', error.message || 'Failed to load feedback', 'error');
@@ -242,6 +250,7 @@ export default function FeedbackPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, filterStatus, filterUpdatesOnly, sortBy, sortOrder]);
+
 
   // Handle form submit
   const handleSubmit = async (e: React.FormEvent) => {
@@ -356,9 +365,11 @@ export default function FeedbackPage() {
         newSet.delete(id);
       } else {
         newSet.add(id);
-        // Mark as seen when user opens the item
         const item = feedbackList.find((f) => f.id === id);
-        if (item) markAsSeen(item);
+        if (item) {
+          markAsSeen(item);       // user: mark status update as seen
+          markRatingAsSeen(item); // admin: mark rating as seen
+        }
       }
       return newSet;
     });
@@ -414,13 +425,13 @@ export default function FeedbackPage() {
   // User: items with new admin activity not yet seen
   const unreadCount = !isActualAdmin ? feedbackList.filter(isUnread).length : 0;
 
+
   // User: how many finished items still need a rating
   const unratedCount = feedbackList.filter(
     (f) => (f.status === 'diterima' || f.status === 'ditolak') && !f.rating
   ).length;
-  // Admin: how many items have received a rating (and how many are new since last visit)
-  const ratedCount = feedbackList.filter((f) => f.rating).length;
-  const newRatedCount = seenRatedCount !== null ? Math.max(0, ratedCount - seenRatedCount) : 0;
+  // Admin: items with a rating not yet opened
+  const newRatedCount = feedbackList.filter(isRatingUnread).length;
   // Admin: how many finished items have NOT been rated yet
   const selesaiUnratedCount = feedbackList.filter(
     (f) => (f.status === 'diterima' || f.status === 'ditolak') && !f.rating
@@ -428,10 +439,11 @@ export default function FeedbackPage() {
 
   // Filter + Sort
   const filteredAndSorted = feedbackList
-    .filter((f) => filterStatus === 'all' || f.status === filterStatus || (!f.status && filterStatus === 'diusulkan'))
+    .filter((f) => filterUpdatesOnly || filterStatus === 'all' || f.status === filterStatus || (!f.status && filterStatus === 'diusulkan'))
     .filter((f) => {
       if (!filterUpdatesOnly) return true;
-      return isActualAdmin ? !!f.rating : isUnread(f);
+      // Keep item visible while expanded even if already marked as seen
+      return isActualAdmin ? (isRatingUnread(f) || expandedIds.has(f.id)) : (isUnread(f) || expandedIds.has(f.id));
     })
     .sort((a, b) => {
       const aVal = new Date(sortBy === 'updated_at' ? (a.updated_at || a.created_at) : a.created_at).getTime();
@@ -483,7 +495,6 @@ export default function FeedbackPage() {
               : 'Kirim usulan perbaikan dokumen anjab dan lihat riwayat usulan Anda'}
           </p>
         </div>
-
       </div>
 
       {/* Tabs */}
@@ -530,6 +541,19 @@ export default function FeedbackPage() {
                 Kirim Usulan
               </button>
             </>
+          )}
+          {!isActualAdmin && activeTab === 'history' && (
+            <div className="ml-auto flex items-center">
+              <button
+                onClick={() => setActiveTab('submit')}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-all font-medium shadow-sm hover:shadow-md active:scale-95 whitespace-nowrap"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Buat Usulan Baru</span>
+              </button>
+            </div>
           )}
         </nav>
       </div>
@@ -799,8 +823,8 @@ export default function FeedbackPage() {
           {/* User Notification Banner */}
           {!isActualAdmin && !loading && unreadCount > 0 && (
             <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
                 <div className="flex-1 flex items-center justify-between gap-3 flex-wrap">
@@ -809,13 +833,9 @@ export default function FeedbackPage() {
                   </p>
                   <button
                     onClick={() => setFilterUpdatesOnly((prev) => !prev)}
-                    className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
-                      filterUpdatesOnly
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-800/50 dark:text-blue-300 dark:hover:bg-blue-800'
-                    }`}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full transition-colors whitespace-nowrap bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-800/50 dark:text-blue-300 dark:hover:bg-blue-800"
                   >
-                    {filterUpdatesOnly ? 'Tampilkan semua' : 'Tampilkan saja'}
+                    {filterUpdatesOnly ? 'Tampilkan semua' : 'Tampilkan'}
                   </button>
                 </div>
               </div>
@@ -823,28 +843,24 @@ export default function FeedbackPage() {
           )}
 
           {/* Admin Notification Banners */}
-          {isActualAdmin && !loading && (newRatedCount > 0 || selesaiUnratedCount > 0) && (
-            <div className="px-5 py-3 space-y-2 border-b border-gray-200 dark:border-gray-700">
-              {newRatedCount > 0 && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                  <svg className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
+          {isActualAdmin && !loading && newRatedCount > 0 && (
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <svg className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <div className="flex-1 flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-xs text-green-800 dark:text-green-300">
-                    <span className="font-semibold">{newRatedCount} penilaian baru</span> diterima dari pengguna sejak kunjungan terakhir.
+                    <span className="font-semibold">{newRatedCount} penilaian baru</span> belum dibuka dari pengguna.
                   </p>
+                  <button
+                    onClick={() => setFilterUpdatesOnly((prev) => !prev)}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full transition-colors whitespace-nowrap bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-800/50 dark:text-green-300 dark:hover:bg-green-800"
+                  >
+                    {filterUpdatesOnly ? 'Tampilkan semua' : 'Tampilkan'}
+                  </button>
                 </div>
-              )}
-              {selesaiUnratedCount > 0 && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                  <svg className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                  </svg>
-                  <p className="text-xs text-yellow-800 dark:text-yellow-300">
-                    <span className="font-semibold">{selesaiUnratedCount} usulan selesai</span> belum mendapatkan penilaian dari pengguna.
-                  </p>
-                </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -853,6 +869,27 @@ export default function FeedbackPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
             </div>
           ) : filteredAndSorted.length === 0 ? (
+            filterUpdatesOnly ? (
+              <div className="p-16 text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  Semua notifikasi telah dibaca
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Tidak ada pembaruan baru yang belum dibaca.
+                </p>
+                <button
+                  onClick={() => setFilterUpdatesOnly(false)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium text-sm"
+                >
+                  Tampilkan semua usulan
+                </button>
+              </div>
+            ) : (
             <div className="p-16 text-center">
               <svg
                 className="w-20 h-20 mx-auto mb-5 text-gray-400"
@@ -887,6 +924,7 @@ export default function FeedbackPage() {
                 </button>
               )}
             </div>
+            )
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {paginatedFeedback.map((item, index) => (
@@ -902,6 +940,9 @@ export default function FeedbackPage() {
                       </div>
                       {!isActualAdmin && isUnread(item) && (
                         <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-gray-800" />
+                      )}
+                      {isActualAdmin && isRatingUnread(item) && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-yellow-500 border-2 border-white dark:border-gray-800" />
                       )}
                     </div>
 
@@ -962,8 +1003,10 @@ export default function FeedbackPage() {
                                 >
                                   <option value="ditindaklanjuti">Ditindaklanjuti</option>
                                   <option value="ditolak">Ditolak</option>
+                                  {item.status !== 'diusulkan' && (
+                                    <option value="diterima">Selesai</option>
+                                  )}
                                 </select>
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Gunakan tombol &quot;Tandai Selesai&quot; untuk menyelesaikan usulan</p>
                               </div>
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Catatan Admin (Opsional)</label>
@@ -1001,46 +1044,8 @@ export default function FeedbackPage() {
                                   }}
                                   className="text-sm px-3 py-1.5 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors font-medium"
                                 >
-                                  Tindak Lanjuti
+                                  Ubah Status
                                 </button>
-                                {item.status !== 'diusulkan' && (
-                                  <button
-                                    disabled={adminSubmitting}
-                                    onClick={async () => {
-                                      const result = await Swal.fire({
-                                        title: 'Tandai Selesai?',
-                                        text: 'Usulan akan ditandai sebagai selesai dan tidak dapat diubah lagi.',
-                                        icon: 'question',
-                                        showCancelButton: true,
-                                        confirmButtonText: 'Ya, Tandai Selesai',
-                                        cancelButtonText: 'Batal',
-                                        input: 'textarea',
-                                        inputLabel: 'Catatan penutup (opsional)',
-                                        inputPlaceholder: 'Tambahkan catatan penutup...',
-                                      });
-                                      if (result.isConfirmed) {
-                                        setAdminSubmitting(true);
-                                        try {
-                                          const res = await fetch('/api/feedback', {
-                                            method: 'PUT',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ id: item.id, mark_selesai: true, admin_notes: result.value || '' })
-                                          });
-                                          if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
-                                          Swal.fire('Selesai!', 'Usulan telah ditandai selesai.', 'success');
-                                          loadFeedback();
-                                        } catch (err: any) {
-                                          Swal.fire('Error', err.message || 'Gagal memperbarui status', 'error');
-                                        } finally {
-                                          setAdminSubmitting(false);
-                                        }
-                                      }
-                                    }}
-                                    className="text-sm px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium disabled:opacity-60"
-                                  >
-                                    ✓ Tandai Selesai
-                                  </button>
-                                )}
                               </div>
                             )
                           )}

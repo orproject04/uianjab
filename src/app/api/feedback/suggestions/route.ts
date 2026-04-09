@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
            AND unit_kerja <> ''
            AND ($1 = '' OR unit_kerja ILIKE '%' || $1 || '%')
          ORDER BY unit_kerja
-         LIMIT 50`,
+         LIMIT 500`,
         [q]
       );
       return NextResponse.json({ data: result.rows.map((r: any) => r.unit_kerja) });
