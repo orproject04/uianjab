@@ -106,6 +106,7 @@ export default function DashboardPage() {
     const [selectedBiro, setSelectedBiro] = useState<{ value: string; label: string } | null>(null);
     const [selectedJenis, setSelectedJenis] = useState<{ value: string; label: string } | null>(null);
     const [selectedLokasi, setSelectedLokasi] = useState<{ value: string; label: string } | null>(null);
+    const [selectedKelas, setSelectedKelas] = useState<{ value: string; label: string } | null>(null);
     const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
     const [expandedSubJenis, setExpandedSubJenis] = useState<string | null>(null);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -353,6 +354,49 @@ export default function DashboardPage() {
         return 998;
     };
 
+    // Compute filtered summary when kelas filter is active
+    const filteredForSummary = selectedKelas
+        ? byNamaJabatan.filter(it => String(it.kelas_jabatan ?? '-').trim() === selectedKelas.value)
+        : null;
+
+    // Build per-jenis aggregation from filtered rows (with fungsional jenjang normalization)
+    const computedByJenis: Array<(typeof byJenis)[number] & { jumlah_jabatan: number }> = (() => {
+        if (!filteredForSummary) return (byJenis as any[]).map(j => ({ ...j, jumlah_jabatan: (j as any).jumlah_jabatan ?? 0 }));
+        const jenisMap: Record<string, { jenis: string; bezetting: number; bezetting_pns: number; bezetting_pppk: number; kebutuhan: number; selisih: number; jumlah_jabatan: number }> = {};
+        const jenisNamesMap: Record<string, Set<string>> = {};
+        for (const it of filteredForSummary) {
+            const jenis = it.jenis_jabatan || '-';
+            if (!jenisMap[jenis]) {
+                jenisMap[jenis] = { jenis, bezetting: 0, bezetting_pns: 0, bezetting_pppk: 0, kebutuhan: 0, selisih: 0, jumlah_jabatan: 0 };
+                jenisNamesMap[jenis] = new Set();
+            }
+            jenisMap[jenis].bezetting += Number(it.bezetting ?? 0);
+            jenisMap[jenis].bezetting_pns += Number(it.bezetting_pns ?? 0);
+            jenisMap[jenis].bezetting_pppk += Number(it.bezetting_pppk ?? 0);
+            jenisMap[jenis].kebutuhan += Number(it.kebutuhan ?? 0);
+            jenisMap[jenis].selisih += Number(it.selisih ?? 0);
+            const isFungsional = /fungsional/i.test(jenis);
+            let namaKey = String(it.nama_jabatan || '').trim().toLowerCase();
+            if (isFungsional && namaKey) {
+                namaKey = namaKey.replace(/\s+(?:ahli\s+pertama|ahli\s+muda|ahli\s+madya|ahli\s+utama|pertama|muda|madya|utama|pelaksana\s+lanjutan|pelaksana|penyelia|terampil|mahir)(?:\s*\([^)]*\))?$/i, '').trim();
+            }
+            if (namaKey) jenisNamesMap[jenis].add(namaKey);
+        }
+        for (const jenis of Object.keys(jenisMap)) {
+            jenisMap[jenis].jumlah_jabatan = jenisNamesMap[jenis].size;
+        }
+        return Object.values(jenisMap);
+    })();
+
+    const displaySummary = filteredForSummary ? {
+        total_jabatan: computedByJenis.reduce((s, j) => s + j.jumlah_jabatan, 0),
+        total_bezetting: filteredForSummary.reduce((s, it) => s + Number(it.bezetting ?? 0), 0),
+        total_kebutuhan: filteredForSummary.reduce((s, it) => s + Number(it.kebutuhan ?? 0), 0),
+        total_selisih: filteredForSummary.reduce((s, it) => s + Number(it.selisih ?? 0), 0),
+        bezetting_pns: filteredForSummary.reduce((s, it) => s + Number(it.bezetting_pns ?? 0), 0),
+        bezetting_pppk: filteredForSummary.reduce((s, it) => s + Number(it.bezetting_pppk ?? 0), 0),
+    } : summary;
+
     const sortedByJenis = [...byJenis].sort((a, b) => {
         const r = jenisRank(a.jenis) - jenisRank(b.jenis);
         if (r !== 0) return r;
@@ -360,7 +404,17 @@ export default function DashboardPage() {
         return (b.kebutuhan || 0) - (a.kebutuhan || 0);
     });
 
-    const displayByJenis = sortedByJenis;
+    const sortedComputedByJenis = selectedKelas
+        ? [...computedByJenis].sort((a, b) => {
+            const r = jenisRank(a.jenis) - jenisRank(b.jenis);
+            if (r !== 0) return r;
+            return (b.kebutuhan || 0) - (a.kebutuhan || 0);
+        })
+        : sortedByJenis;
+    const displayByJenis = sortedComputedByJenis;
+
+    // Single source of truth for rows used in card detail expansion and pns/pppk computation
+    const activeJabatanRows = filteredForSummary ?? byNamaJabatan;
 
     // Dedupe by (nama_jabatan, unit_kerja) to avoid exact duplicate rows
     const dedupeByNamaUnitMap: Record<string, BreakdownItem> = {};
@@ -379,7 +433,9 @@ export default function DashboardPage() {
 
     // Prepare sortable data for Total Per Nama Jabatan
     const getSortedByNama = () => {
-        const arr = [...byNamaJabatan];
+        const arr = [...byNamaJabatan].filter(it =>
+            !selectedKelas || String(it.kelas_jabatan ?? '-').trim() === selectedKelas.value
+        );
         const field = sortField;
 
         // If no sort field is set, return original order from API
@@ -891,6 +947,10 @@ export default function DashboardPage() {
         { value: "pusat", label: "Pusat" },
         { value: "daerah", label: "Daerah" },
     ];
+    const kelasOptions = [
+        ...Array.from({ length: 17 }, (_, i) => ({ value: String(i + 1), label: `Kelas ${i + 1}` })),
+        { value: '-', label: 'Tidak Diketahui' },
+    ];
 
     // Custom YAxis tick renderer to wrap long unit names into multiple lines
     const renderYAxisTick = (props: any) => {
@@ -1039,6 +1099,9 @@ export default function DashboardPage() {
         placeholder: (base: any) => ({
             ...base,
             color: 'var(--select-placeholder)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
         }),
     };
 
@@ -1141,14 +1204,14 @@ export default function DashboardPage() {
                             </svg>
                         </div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filter Data</h3>
-                        {(selectedBiro || selectedJenis || selectedLokasi) && (
+                        {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas) && (
                             <span className="ml-auto text-xs px-2.5 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full font-medium">
                                 Filter Aktif
                             </span>
                         )}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="md:col-span-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                        <div className="sm:col-span-2 lg:col-span-2 xl:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -1160,9 +1223,9 @@ export default function DashboardPage() {
                                 value={selectedBiro}
                                 onChange={setSelectedBiro}
                                 styles={selectStyles}
-                                placeholder="Semua Unit Kerja"
+                                placeholder="Unit Kerja/Biro"
                                 isClearable
-                                className="react-select-container"
+                                className="react-select-container text-xs"
                             />
                         </div>
                             <div>
@@ -1177,9 +1240,9 @@ export default function DashboardPage() {
                                     value={selectedJenis}
                                     onChange={setSelectedJenis}
                                     styles={selectStyles}
-                                    placeholder="Semua Jenis"
+                                    placeholder="Jenis Jabatan"
                                     isClearable
-                                    className="react-select-container"
+                                    className="react-select-container text-xs"
                                 />
                             </div>
                         <div>
@@ -1195,18 +1258,36 @@ export default function DashboardPage() {
                                 value={selectedLokasi}
                                 onChange={setSelectedLokasi}
                                 styles={selectStyles}
-                                placeholder="Semua Lokasi"
+                                placeholder="Lokasi"
                                 isClearable
-                                className="react-select-container"
+                                className="react-select-container text-xs"
                             />
                         </div>
-                        {(selectedBiro || selectedJenis || selectedLokasi) && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                                Kelas Jabatan
+                            </label>
+                            <Select
+                                options={kelasOptions}
+                                value={selectedKelas}
+                                onChange={setSelectedKelas}
+                                styles={selectStyles}
+                                placeholder="Kelas Jabatan"
+                                isClearable
+                                className="react-select-container text-xs"
+                            />
+                        </div>
+                        {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas) && (
                             <div className="flex items-end">
                                 <button
                                     onClick={() => {
                                         setSelectedBiro(null);
                                         setSelectedJenis(null);
                                         setSelectedLokasi(null);
+                                        setSelectedKelas(null);
                                         setSearchNama('');
                                         setCurrentPage(1);
                                     }}
@@ -1227,31 +1308,31 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <SummaryCard
                         title="Total Jenis Jabatan"
-                        value={summary.total_jabatan}
+                        value={displaySummary.total_jabatan}
                         icon="📊"
                         color="bg-blue-500"
                     />
                     <SummaryCard
                         title="Bezetting"
-                        value={summary.total_bezetting}
+                        value={displaySummary.total_bezetting}
                         icon="👥"
                         color="bg-green-500"
                         breakdown={[
-                            { label: 'PNS', value: summary.bezetting_pns || 0 },
-                            { label: 'PPPK', value: summary.bezetting_pppk || 0 }
+                            { label: 'PNS', value: displaySummary.bezetting_pns || 0 },
+                            { label: 'PPPK', value: displaySummary.bezetting_pppk || 0 }
                         ]}
                     />
                     <SummaryCard
                         title="Kebutuhan"
-                        value={summary.total_kebutuhan}
+                        value={displaySummary.total_kebutuhan}
                         icon="🎯"
                         color="bg-blue-light-500"
                     />
                     <SummaryCard
                         title="Selisih"
-                        value={summary.total_selisih}
-                        icon={summary.total_selisih >= 0 ? "📈" : "📉"}
-                        color={summary.total_selisih >= 0 ? "bg-orange-500" : "bg-red-500"}
+                        value={displaySummary.total_selisih}
+                        icon={displaySummary.total_selisih >= 0 ? "📈" : "📉"}
+                        color={displaySummary.total_selisih >= 0 ? "bg-orange-500" : "bg-red-500"}
                     />
                 </div>
 
@@ -1291,21 +1372,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 grid-flow-row-dense">
                         {displayByJenis.map((item, index) => {
-                            // Use API-provided deduped jumlah_jabatan when available;
-                            // fallback to deduping by nama_jabatan in byNamaJabatan
-                            const jumlahJabatan = Number((item as any).jumlah_jabatan ?? (() => {
-                                const set = new Set<string>();
-                                for (const j of byNamaJabatan) {
-                                    if ((j.jenis_jabatan || '') === (item.jenis || '')) {
-                                        const name = String(j.nama_jabatan || '').trim().toLowerCase();
-                                        if (name) set.add(name);
-                                    }
-                                }
-                                return set.size;
-                            })());
-
-                            const pns = byNamaJabatan.filter(j => (j.jenis_jabatan || '') === (item.jenis || '')).reduce((acc, curr) => acc + (curr.bezetting_pns || 0), 0);
-                            const pppk = byNamaJabatan.filter(j => (j.jenis_jabatan || '') === (item.jenis || '')).reduce((acc, curr) => acc + (curr.bezetting_pppk || 0), 0);
+                            // jumlah_jabatan is pre-computed in computedByJenis (from activeJabatanRows)
+                            const jumlahJabatan = Number((item as any).jumlah_jabatan ?? 0);
+                            // bezetting_pns/pppk are also pre-computed in computedByJenis
+                            const pns = Number((item as any).bezetting_pns ?? 0);
+                            const pppk = Number((item as any).bezetting_pppk ?? 0);
 
                             // Split jenis on '/' to show secondary label on a second line
                             const jenisParts = String(item.jenis || '').split('/').map(s => s.trim()).filter(Boolean);
@@ -1316,7 +1387,7 @@ export default function DashboardPage() {
                             let details: any[] = [];
                             if (isExpanded) {
                                 const map: Record<string, { nama: string; bezetting: number; bezetting_pns: number; bezetting_pppk: number; kebutuhan: number; selisih: number; subItems: any[] }> = {};
-                                for (const d of byNamaJabatan) {
+                                for (const d of activeJabatanRows) {
                                     if ((d.jenis_jabatan || '') !== item.jenis) continue;
                                     let baseNama = String(d.nama_jabatan || '').trim();
                                     const originalNama = baseNama;
@@ -1465,7 +1536,7 @@ export default function DashboardPage() {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                     {details.map((d, i) => {
                                                         const isFungsional = /fungsional/i.test(item.jenis || '');
-                                                        const hasSubItems = isFungsional && d.subItems && d.subItems.length > 1; // display if more than 1 variation exists or at least something unique
+                                                        const hasSubItems = isFungsional && d.subItems && d.subItems.length >= 1;
                                                         const isSubExpanded = expandedSubJenis === d.nama;
 
                                                         return (
@@ -1529,7 +1600,7 @@ export default function DashboardPage() {
                                                                     </div>
                                                                 </div>
 
-                                                                {isSubExpanded && hasSubItems && (
+                                                                {isSubExpanded && hasSubItems && d.subItems.length >= 1 && (
                                                                     <div className="col-span-1 sm:col-span-2 lg:col-span-3 w-full animate-fadeIn bg-gradient-to-br from-brand-50/50 to-white dark:from-gray-800/80 dark:to-gray-800 border border-brand-200 dark:border-gray-600 shadow-sm rounded-xl p-4 mt-1">
                                                                         <div className="flex items-center gap-2 mb-3 text-brand-600 dark:text-brand-400 pb-2 border-b border-brand-100/50 dark:border-gray-700">
                                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>

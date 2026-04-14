@@ -526,11 +526,6 @@ export default function FeedbackPage() {
                     {unreadCount}
                   </span>
                 )}
-                {unreadCount === 0 && unratedCount > 0 && (
-                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-yellow-400 text-yellow-900">
-                    {unratedCount}
-                  </span>
-                )}
               </button>
               <button
                 onClick={() => setActiveTab('submit')}
