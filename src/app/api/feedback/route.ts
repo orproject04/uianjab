@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 import { getUserFromReq } from '@/lib/auth';
 
+// Ensure required columns exist — run immediately at module load
+const _migration = Promise.all([
+  pool.query(`
+    ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS status_history JSONB NOT NULL DEFAULT '[]'::jsonb
+  `),
+  pool.query(`
+    ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ
+  `),
+]).catch(() => {/* columns already exist */});
+
 // GET - List feedback records
 export async function GET(req: NextRequest) {
   try {
+    // Wait for migration in case module just loaded
+    await _migration.catch(() => {});
+
     const user = await getUserFromReq(req);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,34 +31,46 @@ export async function GET(req: NextRequest) {
     // If admin, show all feedback. Otherwise, only show user's own feedback
     if (user.role === 'admin') {
       query = `
-        SELECT 
-          f.id, 
+        SELECT
+          f.id,
           f.user_id,
-          f.nama_jabatan, 
-          f.unit_kerja, 
-          f.usulan_perbaikan, 
+          f.nama_jabatan,
+          f.unit_kerja,
+          f.usulan_perbaikan,
           f.created_at,
+          COALESCE(f.updated_at, f.created_at) as updated_at,
+          f.status,
+          f.admin_notes,
+          f.status_history,
+          f.rating,
+          f.rating_comment,
           u.full_name as user_name,
           u.email as user_email
         FROM feedback f
         LEFT JOIN user_anjab u ON f.user_id = u.id
-        ORDER BY f.created_at ASC
+        ORDER BY f.created_at DESC
       `;
     } else {
       query = `
-        SELECT 
-          f.id, 
+        SELECT
+          f.id,
           f.user_id,
-          f.nama_jabatan, 
-          f.unit_kerja, 
-          f.usulan_perbaikan, 
+          f.nama_jabatan,
+          f.unit_kerja,
+          f.usulan_perbaikan,
           f.created_at,
+          COALESCE(f.updated_at, f.created_at) as updated_at,
+          f.status,
+          f.admin_notes,
+          f.status_history,
+          f.rating,
+          f.rating_comment,
           u.full_name as user_name,
           u.email as user_email
         FROM feedback f
         LEFT JOIN user_anjab u ON f.user_id = u.id
         WHERE f.user_id = $1
-        ORDER BY f.created_at ASC
+        ORDER BY f.created_at DESC
       `;
       params = [user.id];
     }
@@ -102,9 +129,9 @@ export async function POST(req: NextRequest) {
 
     // Insert feedback
     const result = await pool.query(
-      `INSERT INTO feedback (user_id, nama_jabatan, unit_kerja, usulan_perbaikan, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
-       RETURNING id, user_id, nama_jabatan, unit_kerja, usulan_perbaikan, created_at`,
+      `INSERT INTO feedback (user_id, nama_jabatan, unit_kerja, usulan_perbaikan, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'diusulkan', NOW(), NOW())
+       RETURNING id, user_id, nama_jabatan, unit_kerja, usulan_perbaikan, status, created_at`,
       [user.id, nama_jabatan.trim(), unit_kerja.trim(), usulan_perbaikan.trim()]
     );
 
@@ -119,6 +146,124 @@ export async function POST(req: NextRequest) {
     console.error('Error creating feedback:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to create feedback' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Update feedback status or rating
+export async function PUT(req: NextRequest) {
+  try {
+    const user = await getUserFromReq(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, status, admin_notes, rating, rating_comment, mark_selesai } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    }
+
+    // Check existing feedback
+    const existing = await pool.query('SELECT * FROM feedback WHERE id = $1', [id]);
+    if (existing.rowCount === 0) {
+      return NextResponse.json({ error: 'Feedback not found' }, { status: 404 });
+    }
+
+    const currentFeedback = existing.rows[0];
+
+    // If regular user trying to update status or admin_notes
+    if (user.role !== 'admin') {
+      if (status !== undefined || admin_notes !== undefined || mark_selesai) {
+         return NextResponse.json({ error: 'Unauthorized to update status' }, { status: 403 });
+      }
+      if (currentFeedback.user_id !== user.id) {
+         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+    }
+
+    // ---- Admin status update logic ----
+    if (user.role === 'admin' && (status !== undefined || mark_selesai)) {
+      // Lock: cannot change if already diterima or ditolak
+      const lockedStatuses = ['diterima', 'ditolak'];
+      if (lockedStatuses.includes(currentFeedback.status)) {
+        return NextResponse.json(
+          { error: `Usulan dengan status "${currentFeedback.status}" tidak dapat diubah lagi` },
+          { status: 400 }
+        );
+      }
+
+      // Determine new status
+      const newStatus = mark_selesai ? 'diterima' : status;
+
+      // Validate allowed status transitions
+      const allowedStatuses = ['ditindaklanjuti', 'ditolak', 'diterima'];
+      if (!allowedStatuses.includes(newStatus)) {
+        return NextResponse.json(
+          { error: 'Status tidak valid. Admin hanya dapat mengubah ke: ditindaklanjuti, ditolak, atau diterima (selesai)' },
+          { status: 400 }
+        );
+      }
+
+      // Build new history entry
+      const historyEntry: Record<string, unknown> = {
+        status: newStatus,
+        changed_at: new Date().toISOString(),
+        changed_by: user.full_name || user.email || 'Admin',
+      };
+      if (admin_notes?.trim()) {
+        historyEntry.notes = admin_notes.trim();
+      }
+
+      // Append to existing history
+      const existingHistory: unknown[] = Array.isArray(currentFeedback.status_history)
+        ? currentFeedback.status_history
+        : [];
+      const newHistory = [...existingHistory, historyEntry];
+
+      // Update status, admin_notes (latest), and history
+      const result = await pool.query(
+        `UPDATE feedback 
+         SET status = $1, admin_notes = $2, status_history = $3::jsonb, updated_at = NOW()
+         WHERE id = $4
+         RETURNING *`,
+        [newStatus, admin_notes?.trim() || currentFeedback.admin_notes || null, JSON.stringify(newHistory), id]
+      );
+
+      return NextResponse.json({ message: 'Status usulan berhasil diperbarui', data: result.rows[0] });
+    }
+
+    // ---- Rating update logic (regular user) ----
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+
+    if (rating !== undefined) {
+      updates.push(`rating = $${idx++}`);
+      values.push(rating);
+    }
+    if (rating_comment !== undefined) {
+      updates.push(`rating_comment = $${idx++}`);
+      values.push(rating_comment);
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const query = `UPDATE feedback SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+    const result = await pool.query(query, values);
+
+    return NextResponse.json({ message: 'Feedback updated', data: result.rows[0] });
+  } catch (error: any) {
+    console.error('Error updating feedback:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to update feedback' },
       { status: 500 }
     );
   }

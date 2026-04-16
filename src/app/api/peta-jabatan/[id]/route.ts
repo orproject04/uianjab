@@ -13,14 +13,17 @@ export async function PATCH(
 ) {
     const client = await pool.connect();
     try {
-        // ✅ admin only
+        // ✅ admin & admin-akk only
         const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin"])) {
+        if (!user || !hasRole(user, ["admin", "admin-akk"])) {
             return NextResponse.json(
                 {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
                 {status: 403}
             );
         }
+
+        const isAdmin = hasRole(user, ["admin"]);
+        const updatedBy = user.full_name || user.email || user.id;
 
         const {id} = await ctx.params;
         if (!isUuid(id)) {
@@ -259,26 +262,33 @@ export async function PATCH(
         // 5) Update field lain
         const fields: string[] = [];
         const values: any[] = [];
-        const setIf = (col: string, val: unknown) => {
+        const setIf = (col: string, val: unknown, forceAdmin = true) => {
             if (val !== undefined) {
+                // Jika forceAdmin, maka hanya admin yang bisa ubah
+                if (forceAdmin && !isAdmin) return;
+                
                 fields.push(`${col} = $${fields.length + 1}`);
                 values.push(val);
             }
         };
+
+        // structural fields (admin only)
         setIf("nama_jabatan", name);
         setIf("slug", slug);
         setIf("unit_kerja", unit_kerja);
         if (hasOrder) setIf("order_index", order_index);
-
         setIf("is_pusat", is_pusat);
         setIf("jenis_jabatan", jenis_jabatan);
         
-        // Update pejabat dan bezetting
+        // pejabat (admin and admin-akk)
         if (hasPejabat) {
             // Convert to JSON string for jsonb column
-            setIf("pejabat", pejabat ? JSON.stringify(pejabat) : '[]');
-            setIf("bezetting", bezetting);
+            setIf("pejabat", pejabat ? JSON.stringify(pejabat) : '[]', false);
+            setIf("bezetting", bezetting, false);
         }
+
+        // Always update audit trail
+        setIf("updated_by", updatedBy, false);
 
         if (fields.length) {
             const q = `

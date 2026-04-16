@@ -196,12 +196,15 @@ export async function fetchAllPegawaiData(
 /**
  * Clear all pejabat in peta_jabatan table
  */
-export async function clearAllNamaPejabat(): Promise<void> {
-  await pool.query(`
-    UPDATE peta_jabatan 
+export async function clearAllNamaPejabat(syncedBy?: string): Promise<void> {
+  await pool.query(
+    `UPDATE peta_jabatan 
     SET pejabat = '[]'::jsonb,
-        bezetting = 0
-  `);
+        bezetting = 0,
+        updated_by = $1
+    `,
+    [syncedBy || null]
+  );
 }
 
 /**
@@ -224,7 +227,7 @@ export async function syncPegawaiToPetaJabatan(
   try {
     // Step 1: Clear existing nama_pejabat
     if (onProgress) onProgress(0, 100, 'Menghapus data pegawai lama...');
-    await clearAllNamaPejabat();
+    await clearAllNamaPejabat(syncedBy);
     if (onProgress) onProgress(5, 100, 'Data lama berhasil dihapus');
     
     // Step 2: Fetch all pegawai data
@@ -322,11 +325,11 @@ export async function syncPegawaiToPetaJabatan(
             await pool.query(
               `UPDATE peta_jabatan 
                SET pejabat = $1::jsonb,
-                   bezetting = $2
+                   bezetting = $2,
+                   updated_by = $4
                WHERE id = $3`,
-              [JSON.stringify(namaPejabat), bezetting, row.id]
+              [JSON.stringify(namaPejabat), bezetting, row.id, syncedBy || null]
             );
-            // Note: totalUpdated removed - not tracked anymore
           }
           
           result.totalMatched += pegawaiList.length;
@@ -380,9 +383,10 @@ export async function syncPegawaiToPetaJabatan(
             await pool.query(
               `UPDATE peta_jabatan 
                SET pejabat = $1::jsonb,
-                   bezetting = 1
+                   bezetting = 1,
+                   updated_by = $3
                WHERE id = $2`,
-              [JSON.stringify(defaultSekjen), sekjen.id]
+              [JSON.stringify(defaultSekjen), sekjen.id, syncedBy || null]
             );
             
           }

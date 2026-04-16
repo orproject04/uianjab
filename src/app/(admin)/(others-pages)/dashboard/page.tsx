@@ -80,14 +80,14 @@ type SummaryCardProps = {
 const COLORS = ["#8FC54A", "#80C15D", "#6DB980", "#3CA8CD", "#48ADBC", "#83C7E8"];
 
 export default function DashboardPage() {
-    const { isAdmin, isAdminJf, loading: meLoading } = useMe();
+    const { isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
     const router = useRouter();
 
     useEffect(() => {
-        if (!meLoading && !(isAdmin || isAdminJf)) {
+        if (!meLoading && !(isAdmin || isAdminJf || isAdminAKK)) {
             router.replace("/");
         }
-    }, [meLoading, isAdmin, isAdminJf, router]);
+    }, [meLoading, isAdmin, isAdminJf, isAdminAKK, router]);
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -106,6 +106,7 @@ export default function DashboardPage() {
     const [selectedBiro, setSelectedBiro] = useState<{ value: string; label: string } | null>(null);
     const [selectedJenis, setSelectedJenis] = useState<{ value: string; label: string } | null>(null);
     const [selectedLokasi, setSelectedLokasi] = useState<{ value: string; label: string } | null>(null);
+    const [selectedKelas, setSelectedKelas] = useState<{ value: string; label: string } | null>(null);
     const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
     const [expandedSubJenis, setExpandedSubJenis] = useState<string | null>(null);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -114,6 +115,18 @@ export default function DashboardPage() {
     const [yAxisWidth, setYAxisWidth] = useState<number>(220);
     // Responsive chart height: mobile smaller to avoid huge vertical overflow
     const [chartHeight, setChartHeight] = useState<number>(400);
+
+    const handleResetFilter = () => {
+        setSelectedBiro(null);
+        setSelectedJenis(null);
+        setSelectedLokasi(null);
+        setSelectedKelas(null);
+        setSearchNama('');
+        setCurrentPage(1);
+        setExpandedJenis(null);
+        setExpandedSubJenis(null);
+    };
+
     useEffect(() => {
         const setW = () => {
             const w = typeof window !== 'undefined' ? window.innerWidth : 1024;
@@ -146,10 +159,11 @@ export default function DashboardPage() {
         if (selectedBiro?.value) params.append("biro", selectedBiro.value);
         if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
         if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
+        if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
         const url = `/api/dashboard/jabatan?${params.toString()}`;
         if (lastFetchUrlRef.current === url) return; // already fetched this exact URL
         loadData();
-    }, [selectedBiro, selectedJenis, selectedLokasi]);
+    }, [selectedBiro, selectedJenis, selectedLokasi, selectedKelas]);
 
     // Initial load after user authentication completes
     const hasLoadedOnce = useRef(false);
@@ -172,6 +186,7 @@ export default function DashboardPage() {
             if (selectedBiro?.value) params.append("biro", selectedBiro.value);
             if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
             if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
+            if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
 
             const url = `/api/dashboard/jabatan?${params.toString()}`;
             const res = await apiFetch(url, forceNoCache ? { cache: 'no-store' } : undefined);
@@ -203,7 +218,7 @@ export default function DashboardPage() {
         );
     }
 
-    if (!(isAdmin || isAdminJf)) {
+    if (!(isAdmin || isAdminJf || isAdminAKK)) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
@@ -261,13 +276,40 @@ export default function DashboardPage() {
     // Handler to save overrides: collect overrides entries and call API
     async function handleSaveOverrides() {
         try {
-            const edits: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number }> = [];
+            // Merge bezetting|||... and kebutuhan|||... entries per (nama_jabatan, unit_kerja)
+            const mergedMap: Record<string, { nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }> = {};
             for (const key of Object.keys(overrides)) {
-                const [nama, unit] = key.split('|||');
+                let type: 'bezetting' | 'kebutuhan' | null = null;
+                let rest = key;
+                if (key.startsWith('bezetting|||')) { type = 'bezetting'; rest = key.slice('bezetting|||'.length); }
+                else if (key.startsWith('kebutuhan|||')) { type = 'kebutuhan'; rest = key.slice('kebutuhan|||'.length); }
+                else { type = 'bezetting'; } // legacy fallback (no prefix)
+
+                const parts = rest.split('|||');
+                const nama = parts[0] || '';
+                const unit = parts[1] || '';
+                const pairKey = `${nama}|||${unit}`;
                 const raw = overrides[key];
                 const num = raw === '' ? 0 : Number(raw);
-                edits.push({ nama_jabatan: nama || '', unit_kerja: unit || '', kebutuhan_khusus: Number.isFinite(num) ? num : 0 });
+                const val = Number.isFinite(num) ? num : 0;
+
+                if (!mergedMap[pairKey]) {
+                    // Look up current values from data as defaults
+                    const existing = byNamaJabatan.find(it =>
+                        String(it.nama_jabatan || '').trim() === nama &&
+                        String(it.unit_kerja || '').trim() === unit
+                    );
+                    mergedMap[pairKey] = {
+                        nama_jabatan: nama,
+                        unit_kerja: unit,
+                        kebutuhan_khusus: Number(existing?.kebutuhan ?? 0),
+                        bezetting_input: Number(existing?.bezetting ?? 0),
+                    };
+                }
+                if (type === 'kebutuhan') mergedMap[pairKey].kebutuhan_khusus = val;
+                else mergedMap[pairKey].bezetting_input = val;
             }
+            const edits = Object.values(mergedMap);
             if (!edits.length) return;
             // send to API
             // Prevent automatic effects from reloading data while we perform a controlled reload
@@ -326,14 +368,40 @@ export default function DashboardPage() {
         return 998;
     };
 
-    const sortedByJenis = [...byJenis].sort((a, b) => {
-        const r = jenisRank(a.jenis) - jenisRank(b.jenis);
-        if (r !== 0) return r;
-        // Sort by kebutuhan if same rank
-        return (b.kebutuhan || 0) - (a.kebutuhan || 0);
-    });
+    const displaySummary = summary;
+    const activeJabatanRows = byNamaJabatan;
 
-    const displayByJenis = sortedByJenis;
+    // Build per-jenis aggregation from filtered rows (with fungsional jenjang normalization)
+    const displayByJenis = (() => {
+        const jenisMap: Record<string, { jenis: string; bezetting: number; bezetting_pns: number; bezetting_pppk: number; kebutuhan: number; selisih: number; jumlah_jabatan: number }> = {};
+        const jenisNamesMap: Record<string, Set<string>> = {};
+        for (const it of activeJabatanRows) {
+            const jenis = it.jenis_jabatan || '-';
+            if (!jenisMap[jenis]) {
+                jenisMap[jenis] = { jenis, bezetting: 0, bezetting_pns: 0, bezetting_pppk: 0, kebutuhan: 0, selisih: 0, jumlah_jabatan: 0 };
+                jenisNamesMap[jenis] = new Set();
+            }
+            jenisMap[jenis].bezetting += Number(it.bezetting ?? 0);
+            jenisMap[jenis].bezetting_pns += Number(it.bezetting_pns ?? 0);
+            jenisMap[jenis].bezetting_pppk += Number(it.bezetting_pppk ?? 0);
+            jenisMap[jenis].kebutuhan += Number(it.kebutuhan ?? 0);
+            jenisMap[jenis].selisih += Number(it.selisih ?? 0);
+            const isFungsional = /fungsional/i.test(jenis);
+            let namaKey = String(it.nama_jabatan || '').trim().toLowerCase();
+            if (isFungsional && namaKey) {
+                namaKey = namaKey.replace(/\s+(?:ahli\s+pertama|ahli\s+muda|ahli\s+madya|ahli\s+utama|pertama|muda|madya|utama|pelaksana\s+lanjutan|pelaksana|penyelia|terampil|mahir)(?:\s*\([^)]*\))?$/i, '').trim();
+            }
+            if (namaKey) jenisNamesMap[jenis].add(namaKey);
+        }
+        for (const jenis of Object.keys(jenisMap)) {
+            jenisMap[jenis].jumlah_jabatan = jenisNamesMap[jenis].size;
+        }
+        return Object.values(jenisMap).sort((a, b) => {
+            const r = jenisRank(a.jenis) - jenisRank(b.jenis);
+            if (r !== 0) return r;
+            return (b.kebutuhan || 0) - (a.kebutuhan || 0);
+        });
+    })();
 
     // Dedupe by (nama_jabatan, unit_kerja) to avoid exact duplicate rows
     const dedupeByNamaUnitMap: Record<string, BreakdownItem> = {};
@@ -409,6 +477,23 @@ export default function DashboardPage() {
         .sort((a, b) => (a.selisih || 0) - (b.selisih || 0))
         .slice(0, 10)
         .map(d => ({ ...d, abs_selisih: Math.abs(d.selisih || 0), display_label: d.display_label || `${d.nama_jabatan} — ${d.unit_kerja}` }));
+
+    // Rekap by Kelas Jabatan — group byNamaJabatan and sum bezetting per kelas
+    const byKelasJabatanMap: Record<string, number> = {};
+    for (const item of byNamaJabatan) {
+        const kelas = String(item.kelas_jabatan ?? '-').trim() || '-';
+        byKelasJabatanMap[kelas] = (byKelasJabatanMap[kelas] || 0) + Number(item.bezetting ?? 0);
+    }
+    const rekapKelasList = Object.entries(byKelasJabatanMap)
+        .sort(([a], [b]) => {
+            const na = Number(a); const nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return nb - na;
+            if (!isNaN(na)) return -1;
+            if (!isNaN(nb)) return 1;
+            return 0;
+        })
+        .map(([kelas, persediaan], i) => ({ no: i + 1, kelas, persediaan }));
+    const totalPersediaanKelas = rekapKelasList.reduce((sum, r) => sum + r.persediaan, 0);
 
     function toggleSort(field: string) {
         if (sortField === field) {
@@ -637,6 +722,72 @@ export default function DashboardPage() {
         }
     }
 
+    // Print function for Rekap Kelas Jabatan
+    function handlePrintRekapKelas() {
+        let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Rekap Kelas Jabatan</title>
+    <style>
+        @page { margin: 2cm; size: A4 portrait; }
+        body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
+        h2 { text-align: center; margin: 0 0 4px 0; font-size: 14px; font-weight: bold; text-transform: uppercase; }
+        p.sub { text-align: center; margin: 0 0 16px 0; font-size: 11px; }
+        table { border-collapse: collapse; width: 60%; margin: 0 auto; font-size: 11px; }
+        th, td { border: 1px solid #000; padding: 5px 10px; text-align: center; }
+        th { background: #d0d0d0; font-weight: bold; text-transform: uppercase; }
+        .total-row td { font-weight: bold; background: #f0f0f0; }
+        .sub-header td { background: #e0e0e0; font-size: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Rekap Persediaan Pegawai Berdasarkan Kelas Jabatan</h2>
+    <p class="sub">Data Bezetting per Kelas Jabatan</p>
+    <table>
+        <thead>
+            <tr>
+                <th>No.</th>
+                <th>Kelas Jabatan</th>
+                <th>Persediaan Pegawai</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+        rekapKelasList.forEach((r, i) => {
+            html += `
+            <tr>
+                <td>${i + 1}.</td>
+                <td>${r.kelas}</td>
+                <td>${r.persediaan.toLocaleString('id-ID')}</td>
+            </tr>`;
+        });
+
+        html += `
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="2">TOTAL</td>
+                <td>${totalPersediaanKelas.toLocaleString('id-ID')}</td>
+            </tr>
+        </tfoot>
+    </table>
+</body>
+</html>`;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) return;
+        doc.open(); doc.write(html); doc.close();
+        iframe.contentWindow?.focus();
+        setTimeout(() => {
+            iframe.contentWindow?.print();
+            setTimeout(() => document.body.removeChild(iframe), 1000);
+        }, 400);
+    }
+
     // Print function for Total Per Jenis Jabatan using hidden iframe approach
     function handlePrintJenisJabatan() {
         try {
@@ -781,6 +932,12 @@ export default function DashboardPage() {
         { value: "pusat", label: "Pusat" },
         { value: "daerah", label: "Daerah" },
     ];
+    const kelasOptions = [
+        ...Array.from({ length: 13 }, (_, i) => {
+            const kelas = 17 - i;
+            return { value: String(kelas), label: `Kelas ${kelas}` };
+        })
+    ];
 
     // Custom YAxis tick renderer to wrap long unit names into multiple lines
     const renderYAxisTick = (props: any) => {
@@ -830,6 +987,62 @@ export default function DashboardPage() {
         );
     };
 
+    // Narrower Y-axis tick renderer for side-by-side panels (width=190)
+    const renderYAxisTickNarrow = (props: any) => {
+    const { x, y, payload } = props;
+
+    const raw: string = String(payload?.value ?? "");
+    const labelSource = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
+
+    const maxLen = 22;
+    const words = String(labelSource).split(/\s+/);
+    const lines: string[] = [];
+
+    let current = "";
+
+    for (const w of words) {
+        if ((current + " " + w).trim().length <= maxLen) {
+            current = (current + " " + w).trim();
+        } else {
+            if (current) lines.push(current);
+            current = w;
+        }
+    }
+
+    if (current) lines.push(current);
+
+    if (lines.length > 4) {
+        const first = lines.slice(0, 3);
+        let last = lines.slice(3).join(" ");
+
+        if (last.length > maxLen) {
+            last = last.slice(0, maxLen - 3) + "...";
+        }
+
+        lines.length = 0;
+        lines.push(...first, last);
+    }
+
+    const anchorX = x - 4;
+    const lineGap = 11;
+
+    return (
+        <text
+            x={anchorX}
+            y={y}
+            textAnchor="end"
+            fontSize={9}
+            fill="#374151"
+            dominantBaseline="middle"
+        >
+            {lines.map((ln, i) => (
+                <tspan key={i} x={anchorX} dy={i === 0 ? 0 : lineGap}>
+                    {ln}
+                </tspan>
+            ))}
+        </text>
+    );
+};
     // Custom styles for react-select dark mode
     const selectStyles = {
         control: (base: any, state: any) => ({
@@ -873,6 +1086,9 @@ export default function DashboardPage() {
         placeholder: (base: any) => ({
             ...base,
             color: 'var(--select-placeholder)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
         }),
     };
 
@@ -975,14 +1191,14 @@ export default function DashboardPage() {
                             </svg>
                         </div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filter Data</h3>
-                        {(selectedBiro || selectedJenis || selectedLokasi) && (
+                        {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas) && (
                             <span className="ml-auto text-xs px-2.5 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full font-medium">
                                 Filter Aktif
                             </span>
                         )}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="md:col-span-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                        <div className="sm:col-span-2 lg:col-span-2 xl:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -994,9 +1210,9 @@ export default function DashboardPage() {
                                 value={selectedBiro}
                                 onChange={setSelectedBiro}
                                 styles={selectStyles}
-                                placeholder="Semua Unit Kerja"
+                                placeholder="Unit Kerja/Biro"
                                 isClearable
-                                className="react-select-container"
+                                className="react-select-container text-xs"
                             />
                         </div>
                             <div>
@@ -1011,9 +1227,9 @@ export default function DashboardPage() {
                                     value={selectedJenis}
                                     onChange={setSelectedJenis}
                                     styles={selectStyles}
-                                    placeholder="Semua Jenis"
+                                    placeholder="Jenis Jabatan"
                                     isClearable
-                                    className="react-select-container"
+                                    className="react-select-container text-xs"
                                 />
                             </div>
                         <div>
@@ -1029,21 +1245,32 @@ export default function DashboardPage() {
                                 value={selectedLokasi}
                                 onChange={setSelectedLokasi}
                                 styles={selectStyles}
-                                placeholder="Semua Lokasi"
+                                placeholder="Lokasi"
                                 isClearable
-                                className="react-select-container"
+                                className="react-select-container text-xs"
                             />
                         </div>
-                        {(selectedBiro || selectedJenis || selectedLokasi) && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                                Kelas Jabatan
+                            </label>
+                            <Select
+                                options={kelasOptions}
+                                value={selectedKelas}
+                                onChange={setSelectedKelas}
+                                styles={selectStyles}
+                                placeholder="Kelas Jabatan"
+                                isClearable
+                                className="react-select-container text-xs"
+                            />
+                        </div>
+                        {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas) && (
                             <div className="flex items-end">
                                 <button
-                                    onClick={() => {
-                                        setSelectedBiro(null);
-                                        setSelectedJenis(null);
-                                        setSelectedLokasi(null);
-                                        setSearchNama('');
-                                        setCurrentPage(1);
-                                    }}
+                                    onClick={handleResetFilter}
                                     className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all font-medium flex items-center justify-center gap-2"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1061,31 +1288,31 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <SummaryCard
                         title="Total Jenis Jabatan"
-                        value={summary.total_jabatan}
+                        value={displaySummary.total_jabatan}
                         icon="📊"
                         color="bg-blue-500"
                     />
                     <SummaryCard
                         title="Bezetting"
-                        value={summary.total_bezetting}
+                        value={displaySummary.total_bezetting}
                         icon="👥"
                         color="bg-green-500"
                         breakdown={[
-                            { label: 'PNS', value: summary.bezetting_pns || 0 },
-                            { label: 'PPPK', value: summary.bezetting_pppk || 0 }
+                            { label: 'PNS', value: displaySummary.bezetting_pns || 0 },
+                            { label: 'PPPK', value: displaySummary.bezetting_pppk || 0 }
                         ]}
                     />
                     <SummaryCard
                         title="Kebutuhan"
-                        value={summary.total_kebutuhan}
+                        value={displaySummary.total_kebutuhan}
                         icon="🎯"
                         color="bg-blue-light-500"
                     />
                     <SummaryCard
                         title="Selisih"
-                        value={summary.total_selisih}
-                        icon={summary.total_selisih >= 0 ? "📈" : "📉"}
-                        color={summary.total_selisih >= 0 ? "bg-orange-500" : "bg-red-500"}
+                        value={displaySummary.total_selisih}
+                        icon={displaySummary.total_selisih >= 0 ? "📈" : "📉"}
+                        color={displaySummary.total_selisih >= 0 ? "bg-orange-500" : "bg-red-500"}
                     />
                 </div>
 
@@ -1102,13 +1329,9 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Rincian jumlah untuk setiap jenis jabatan</p>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-                            {selectedJenis && (
+                            {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas || searchNama || expandedJenis) && (
                                 <button
-                                    onClick={() => {
-                                        setSelectedJenis(null);
-                                        setSearchNama('');
-                                        setCurrentPage(1);
-                                    }}
+                                    onClick={handleResetFilter}
                                     className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
                                 >
                                     Reset Filter
@@ -1125,21 +1348,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 grid-flow-row-dense">
                         {displayByJenis.map((item, index) => {
-                            // Use API-provided deduped jumlah_jabatan when available;
-                            // fallback to deduping by nama_jabatan in byNamaJabatan
-                            const jumlahJabatan = Number((item as any).jumlah_jabatan ?? (() => {
-                                const set = new Set<string>();
-                                for (const j of byNamaJabatan) {
-                                    if ((j.jenis_jabatan || '') === (item.jenis || '')) {
-                                        const name = String(j.nama_jabatan || '').trim().toLowerCase();
-                                        if (name) set.add(name);
-                                    }
-                                }
-                                return set.size;
-                            })());
-
-                            const pns = byNamaJabatan.filter(j => (j.jenis_jabatan || '') === (item.jenis || '')).reduce((acc, curr) => acc + (curr.bezetting_pns || 0), 0);
-                            const pppk = byNamaJabatan.filter(j => (j.jenis_jabatan || '') === (item.jenis || '')).reduce((acc, curr) => acc + (curr.bezetting_pppk || 0), 0);
+                            // jumlah_jabatan is pre-computed in computedByJenis (from activeJabatanRows)
+                            const jumlahJabatan = Number((item as any).jumlah_jabatan ?? 0);
+                            // bezetting_pns/pppk are also pre-computed in computedByJenis
+                            const pns = Number((item as any).bezetting_pns ?? 0);
+                            const pppk = Number((item as any).bezetting_pppk ?? 0);
 
                             // Split jenis on '/' to show secondary label on a second line
                             const jenisParts = String(item.jenis || '').split('/').map(s => s.trim()).filter(Boolean);
@@ -1150,7 +1363,7 @@ export default function DashboardPage() {
                             let details: any[] = [];
                             if (isExpanded) {
                                 const map: Record<string, { nama: string; bezetting: number; bezetting_pns: number; bezetting_pppk: number; kebutuhan: number; selisih: number; subItems: any[] }> = {};
-                                for (const d of byNamaJabatan) {
+                                for (const d of activeJabatanRows) {
                                     if ((d.jenis_jabatan || '') !== item.jenis) continue;
                                     let baseNama = String(d.nama_jabatan || '').trim();
                                     const originalNama = baseNama;
@@ -1192,7 +1405,23 @@ export default function DashboardPage() {
                                 details = Object.values(map).sort((a: any, b: any) => a.nama.localeCompare(b.nama, 'id'));
                                 details.forEach(d => {
                                     if (d.subItems) {
-                                        d.subItems.sort((a: any, b: any) => a.originalNama.localeCompare(b.originalNama, 'id'));
+                                        const rankFungsional = (nama: string) => {
+                                            const lower = nama.toLowerCase();
+                                            if (lower.includes('terampil')) return 1;
+                                            if (lower.includes('mahir')) return 2;
+                                            if (lower.includes('penyelia')) return 3;
+                                            if (lower.includes('ahli pertama')) return 4;
+                                            if (lower.includes('ahli muda')) return 5;
+                                            if (lower.includes('ahli madya')) return 6;
+                                            if (lower.includes('ahli utama')) return 7;
+                                            return 99;
+                                        };
+                                        d.subItems.sort((a: any, b: any) => {
+                                            const rA = rankFungsional(a.originalNama);
+                                            const rB = rankFungsional(b.originalNama);
+                                            if (rA !== rB) return rA - rB;
+                                            return a.originalNama.localeCompare(b.originalNama, 'id');
+                                        });
                                     }
                                 });
                             }
@@ -1208,7 +1437,7 @@ export default function DashboardPage() {
                                                 }}
                                                 className="w-full text-left outline-none cursor-pointer flex-1 flex flex-col"
                                             >
-                                                <div className="flex items-start justify-between mb-3 w-full">
+                                                <div className="flex items-start justify-between mb-1 w-full">
                                                     <div className="flex-1 mr-2">
                                                         <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
                                                             {jenisParts[0]}
@@ -1232,7 +1461,7 @@ export default function DashboardPage() {
                                                         {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "💼" : index === 3 ? "⚙️" : index === 4 ? "📋" : "🖥️"}
                                                     </div>
                                                 </div>
-                                                <div className="space-y-1.5 mt-auto w-full">
+                                                <div className="space-y-1.5 mt-1 w-full h-full flex flex-col justify-start">
                                                     <div className="flex flex-col w-full">
                                                         <div className="flex items-center justify-between text-xs w-full">
                                                             <span className="text-gray-600 dark:text-gray-400">Bezetting</span>
@@ -1299,7 +1528,7 @@ export default function DashboardPage() {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                     {details.map((d, i) => {
                                                         const isFungsional = /fungsional/i.test(item.jenis || '');
-                                                        const hasSubItems = isFungsional && d.subItems && d.subItems.length > 1; // display if more than 1 variation exists or at least something unique
+                                                        const hasSubItems = isFungsional && d.subItems && d.subItems.length >= 1;
                                                         const isSubExpanded = expandedSubJenis === d.nama;
 
                                                         return (
@@ -1363,7 +1592,7 @@ export default function DashboardPage() {
                                                                     </div>
                                                                 </div>
 
-                                                                {isSubExpanded && hasSubItems && (
+                                                                {isSubExpanded && hasSubItems && d.subItems.length >= 1 && (
                                                                     <div className="col-span-1 sm:col-span-2 lg:col-span-3 w-full animate-fadeIn bg-gradient-to-br from-brand-50/50 to-white dark:from-gray-800/80 dark:to-gray-800 border border-brand-200 dark:border-gray-600 shadow-sm rounded-xl p-4 mt-1">
                                                                         <div className="flex items-center gap-2 mb-3 text-brand-600 dark:text-brand-400 pb-2 border-b border-brand-100/50 dark:border-gray-700">
                                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -1455,7 +1684,7 @@ export default function DashboardPage() {
                                 <button
                                     onClick={() => { if (unsavedChanges) handleSaveOverrides(); else handlePrintTotalJabatan(); }}
                                     className={`px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 ${unsavedChanges ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
-                                    title={unsavedChanges ? 'Simpan perubahan kebutuhan fungsional' : 'Print tabel Total Jabatan'}
+                                    title={unsavedChanges ? 'Simpan perubahan' : 'Print tabel Total Jabatan'}
                                 >
                                     {unsavedChanges ? 'Simpan' : 'Print'}
                                 </button>
@@ -1556,9 +1785,53 @@ export default function DashboardPage() {
                                         </td>
 
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
-                                            <span className="text-xs font-medium text-gray-900 dark:text-white">
-                                                {(item.bezetting ?? 0).toLocaleString("id-ID")}
-                                            </span>
+                                            {(() => {
+                                                    const key = `bezetting|||${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
+                                                    const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
+                                                    const displayed = existing === '' ? '' : String(existing);
+                                                    if (!(isAdminAKK)) {
+                                                        return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
+                                                    }
+                                                    return (
+                                                        <input
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            className="w-28 text-center rounded border px-2 py-1 text-sm"
+                                                            value={displayed}
+                                                            onFocus={() => {
+                                                                // if current displayed value is '0', clear it so typing '12' doesn't produce '012'
+                                                                const curr = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
+                                                                if ((curr === 0 || curr === '0') && !overrides.hasOwnProperty(key)) {
+                                                                    setOverrides((prev) => ({ ...prev, [key]: '' }));
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                // if user focused and left without typing, remove temporary override so original value shows again
+                                                                if (overrides.hasOwnProperty(key) && overrides[key] === '') {
+                                                                    setOverrides((prev) => {
+                                                                        const next = { ...prev } as Record<string, string | number>;
+                                                                        delete next[key];
+                                                                        return next;
+                                                                    });
+                                                                }
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                // allow only digits and control keys while typing
+                                                                if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
+                                                                    e.preventDefault();
+                                                                }
+                                                            }}
+                                                            onChange={(e) => {
+                                                                const raw = e.target.value;
+                                                                // keep raw string while editing; we'll coerce when saving
+                                                                setOverrides((prev) => ({ ...prev, [key]: raw }));
+                                                                setUnsavedChanges(true);
+                                                            }}
+                                                            // bezetting input — uses prefixed key 'bezetting|||...' to avoid collision with kebutuhan
+                                                        />
+                                                    );
+                                                })()}
                                         </td>
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             <span className="text-xs font-medium text-gray-900 dark:text-white">
@@ -1573,9 +1846,14 @@ export default function DashboardPage() {
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             {(/fungsional/i).test(String(item.jenis_jabatan || '')) ? (
                                                 (() => {
-                                                    const key = `${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
+                                                    // Use separate prefix 'kebutuhan|||' to avoid colliding with the 'bezetting|||' key
+                                                    const key = `kebutuhan|||${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
                                                     const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.kebutuhan ?? 0));
                                                     const displayed = existing === '' ? '' : String(existing);
+                                                    // Only admin-jf (or superadmin) can edit kebutuhan fungsional; admin-akk is read-only
+                                                    if (!(isAdminJf || (isAdmin && !isAdminAKK))) {
+                                                        return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
+                                                    }
                                                     return (
                                                         <input
                                                             type="text"
@@ -1772,8 +2050,112 @@ export default function DashboardPage() {
                     })()}
                 </div>
 
-                {/* Top Jabatan (Selisih Positif) */}
+                {/* Rekap Kelas Jabatan — Chart */}
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-6">
+                        <div>
+                            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">Distribusi Persediaan Pegawai per Kelas Jabatan</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Jumlah bezetting pegawai berdasarkan kelas jabatan</p>
+                        </div>
+                        <button
+                            onClick={handlePrintRekapKelas}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-brand-600 text-white hover:bg-brand-700 transition-colors flex-shrink-0 ml-4"
+                            title="Print rekap tabel kelas jabatan"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Print Rekap
+                        </button>
+                    </div>
+
+                    {/* Summary pills */}
+                    <div className="flex flex-wrap gap-3 mb-6">
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Total Pegawai</span>
+                            <span className="text-base font-bold text-brand-600 dark:text-brand-400">{totalPersediaanKelas.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Kelas Terbanyak</span>
+                            <span className="text-base font-bold text-blue-light-600 dark:text-blue-light-400">
+                                {rekapKelasList.length > 0 ? `Kelas ${rekapKelasList.reduce((m, r) => r.persediaan > m.persediaan ? r : m, rekapKelasList[0]).kelas}` : '-'}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Jumlah Kelas</span>
+                            <span className="text-base font-bold text-gray-700 dark:text-gray-300">{rekapKelasList.length}</span>
+                        </div>
+                    </div>
+
+                    {/* Bar chart — sorted ascending (1→17, then -) so it reads like a distribution */}
+                    <ResponsiveContainer width="100%" height={320}>
+                        <BarChart
+                            data={[...rekapKelasList].sort((a, b) => {
+                                const na = Number(a.kelas); const nb = Number(b.kelas);
+                                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                                if (!isNaN(na)) return -1;
+                                return 1;
+                            })}
+                            margin={{ top: 16, right: 16, left: 0, bottom: 8 }}
+                        >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                            <XAxis
+                                dataKey="kelas"
+                                tick={{ fontSize: 11, fill: '#6b7280' }}
+                                tickLine={false}
+                                axisLine={false}
+                                label={{ value: 'Kelas Jabatan', position: 'insideBottom', offset: -2, fontSize: 11, fill: '#9ca3af' }}
+                                height={40}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 11, fill: '#6b7280' }}
+                                tickLine={false}
+                                axisLine={false}
+                                width={48}
+                            />
+                            <Tooltip
+                                cursor={{ fill: 'rgba(99,102,241,0.06)' }}
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                        const d = payload[0].payload;
+                                        const pct = totalPersediaanKelas > 0 ? ((d.persediaan / totalPersediaanKelas) * 100).toFixed(1) : '0';
+                                        return (
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+                                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Kelas Jabatan {d.kelas}</p>
+                                                <p className="text-sm font-bold text-brand-600 dark:text-brand-400">{d.persediaan.toLocaleString('id-ID')} pegawai</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{pct}% dari total</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
+                            <Bar dataKey="persediaan" name="Persediaan Pegawai" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                                {[...rekapKelasList].sort((a, b) => {
+                                    const na = Number(a.kelas); const nb = Number(b.kelas);
+                                    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                                    if (!isNaN(na)) return -1;
+                                    return 1;
+                                }).map((entry, idx) => {
+                                    // gradient intensity: higher kelas = deeper blue-teal
+                                    const maxVal = Math.max(...rekapKelasList.map(r => r.persediaan), 1);
+                                    const intensity = entry.persediaan / maxVal;
+                                    const r = Math.round(60 + (1 - intensity) * 120);
+                                    const g = Math.round(168 - (1 - intensity) * 60);
+                                    const b = Math.round(205 - (1 - intensity) * 40);
+                                    return <Cell key={`kelas-${idx}`} fill={`rgb(${r},${g},${b})`} />;
+                                })}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Top Jabatan side-by-side */}
+                <div className="flex gap-4 flex-col lg:flex-row">
+
+                {/* Top Jabatan (Selisih Positif) */}
+                <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-blue-light-500 to-blue-light-600 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1787,45 +2169,43 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting melebihi kebutuhan pegawai</p>
                         </div>
                     </div>
-                    <ResponsiveContainer width="100%" height={chartHeight}>
-                        <BarChart data={topPositive} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis type="number" tick={{ fontSize: 12 }} />
+                    <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topPositive} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                             <YAxis
                                 dataKey="display_label"
                                 type="category"
-                                width={yAxisWidth}
-                                tick={renderYAxisTick}
+                                width={190}
+                                tick={renderYAxisTickNarrow}
+                                interval={0}
+                                tickLine={false}
+                                axisLine={false}
                             />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'rgba(255, 245, 245, 0.97)',
-                                    border: '1px solid #fee2e2',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
-                                }}
+                                cursor={{ fill: 'rgba(60,168,205,0.08)' }}
                                 content={({ active, payload }) => {
                                     if (active && payload && payload.length) {
                                         return (
-                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
                                                 <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
                                                 <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Selisih: +{payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-[#3CA8CD] font-semibold">Kelebihan: +{payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
                                     return null;
                                 }}
                             />
-                            <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 8, 8, 0]} />
+                            <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 6, 6, 0]} barSize={20} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
                 {/* Top Jabatan (Selisih Negatif) */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-400 to-brand-500 rounded-xl flex items-center justify-center shadow-lg">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1837,50 +2217,49 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
                         </div>
                     </div>
-                    <ResponsiveContainer width="100%" height={chartHeight}>
-                        <BarChart data={topNegative} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis type="number" tick={{ fontSize: 12 }} domain={[0, 'dataMax']} />
+                    <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topNegative} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 'dataMax']} />
                             <YAxis
                                 dataKey="display_label"
                                 type="category"
-                                width={yAxisWidth}
-                                tick={renderYAxisTick}
+                                width={190}
+                                tick={renderYAxisTickNarrow}
+                                interval={0}
+                                tickLine={false}
+                                axisLine={false}
                             />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'rgba(255, 251, 235, 0.97)',
-                                    border: '1px solid #fffbeb',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 6px 12px rgba(0, 0, 0, 0.06)'
-                                }}
+                                cursor={{ fill: 'rgba(143,197,74,0.08)' }}
                                 content={({ active, payload }) => {
                                     if (active && payload && payload.length) {
                                         return (
-                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{payload[0].payload.nama_jabatan}</p>
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 320 }}>Unit: {payload[0].payload.unit_kerja}</p>
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
                                                 <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
                                                 <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Selisih: {payload[0].payload.selisih}</p>
+                                                <p className="text-xs text-[#8FC54A] font-semibold">Kekurangan: {payload[0].payload.selisih}</p>
                                             </div>
                                         );
                                     }
                                     return null;
                                 }}
                             />
-                            <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 8, 8, 0]} />
+                            <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 6, 6, 0]} barSize={20} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
+                </div>{/* end side-by-side */}
             </div>
         </>
     );
 }
 
 // Save overrides to server
-async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number }>) {
+async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }>) {
     const res = await apiFetch('/api/dashboard/jabatan/overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

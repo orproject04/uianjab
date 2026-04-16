@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         }
 
         // allow both full admin and admin-jf (special role limited to fungsional dashboard)
-        if (!hasRole(user, ["admin", "admin-jf"])) {
+        if (!hasRole(user, ["admin", "admin-jf", "admin-akk"])) {
             return NextResponse.json(
                 { error: "Forbidden, hanya admin yang dapat mengakses data ini" },
                 { status: 403 }
@@ -31,9 +31,11 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const biroFilter = searchParams.get("biro");
         const jenisJabatanFilter = searchParams.get("jenis_jabatan");
-        const lokasiFilter = searchParams.get("lokasi");        // Build WHERE clause
-    // Build WHERE clause against peta_jabatan (no deleted_at column)
-    const whereConditions: string[] = [];
+        const lokasiFilter = searchParams.get("lokasi");
+        const kelasJabatanFilter = searchParams.get("kelas_jabatan"); // Get kelas_jabatan filter
+
+        // Build WHERE clause against peta_jabatan (no deleted_at column)
+        const whereConditions: string[] = [];
         const params: any[] = [];
         let paramIndex = 1;
 
@@ -76,6 +78,12 @@ export async function GET(req: NextRequest) {
             } else if (lokasiFilter.toLowerCase() === "daerah") {
                 whereConditions.push(`is_pusat = false`);
             }
+        }
+
+        if (kelasJabatanFilter) {
+            whereConditions.push(`jabatan_id IN (SELECT id FROM jabatan WHERE kelas_jabatan = $${paramIndex})`);
+            params.push(kelasJabatanFilter);
+            paramIndex++;
         }
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
@@ -270,6 +278,9 @@ export async function GET(req: NextRequest) {
             } else if (lokasiFilter.toLowerCase() === "daerah") {
                 treeWhereConditions.push(`t.is_pusat = false`);
             }
+        }
+        if (kelasJabatanFilter) {
+            treeWhereConditions.push(`j.kelas_jabatan = '${kelasJabatanFilter.replace(/'/g, "''")}'`);
         }
         const treeWhereClause = treeWhereConditions.length > 0 ? `WHERE ${treeWhereConditions.join(" AND ")}` : "";
 

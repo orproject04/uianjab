@@ -383,9 +383,9 @@ export default function TugasPokokABKSection({
                                 </div>
 
                                 {/* Field ABK - Editable */}
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold mb-1">Jumlah Hasil</label>
+                                        <label className="block text-xs font-bold mb-1" title="Jumlah Hasil">Jumlah Hasil</label>
                                         <input
                                             type="number"
                                             value={tugas.jumlah_hasil ?? ""}
@@ -396,7 +396,7 @@ export default function TugasPokokABKSection({
                                     </div>
                                     
                                     <div>
-                                        <label className="block text-sm font-bold mb-1">Waktu Penyelesaian (jam)</label>
+                                        <label className="block text-xs font-bold mb-1" title="Waktu Penyelesaian (jam)">Waktu (jam)</label>
                                         <input
                                             type="number"
                                             value={tugas.waktu_penyelesaian_jam ?? ""}
@@ -407,7 +407,7 @@ export default function TugasPokokABKSection({
                                     </div>
                                     
                                     <div>
-                                        <label className="block text-sm font-bold mb-1">Waktu Efektif</label>
+                                        <label className="block text-xs font-bold mb-1" title="Waktu Efektif">Waktu Efektif</label>
                                         <input
                                             type="number"
                                             value={tugas.waktu_efektif ?? ""}
@@ -418,7 +418,7 @@ export default function TugasPokokABKSection({
                                     </div>
                                     
                                     <div>
-                                        <label className="block text-sm font-bold mb-1">Kebutuhan Pegawai</label>
+                                        <label className="block text-xs font-bold mb-1" title="Kebutuhan Pegawai">Kebutuhan</label>
                                         <input
                                             type="text"
                                             value={tugas.kebutuhan_pegawai != null && typeof tugas.kebutuhan_pegawai === 'number' ? tugas.kebutuhan_pegawai.toFixed(4) : '0.0000'}

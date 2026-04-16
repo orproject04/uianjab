@@ -18,7 +18,7 @@ type Persesjen = {
 
 export default function PeresjenPage() {
   const router = useRouter();
-  const { me, isAdmin, isAdminJf, loading: meLoading } = useMe();
+  const { me, isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
   const [data, setData] = useState<Persesjen[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -37,6 +37,7 @@ export default function PeresjenPage() {
   const [jenisOptions] = useState([
     { value: "Peta Jabatan", label: "Peta Jabatan" },
     { value: "Kelas Jabatan", label: "Kelas Jabatan" },
+    { value: "Uraian Tugas Jabatan", label: "Uraian Tugas Jabatan" },
   ]);
 
   const persejenInputRef = useRef<HTMLInputElement | null>(null);
@@ -113,7 +114,7 @@ export default function PeresjenPage() {
 
     setUploadLoading(true);
     setShowModal(false);
-    
+
     Swal.fire({
       title: 'Mengunggah dokumen...',
       html: 'Mohon tunggu, file sedang diunggah',
@@ -444,7 +445,7 @@ export default function PeresjenPage() {
                           className={`flex-none min-w-[44px] px-3 py-2 text-sm text-center rounded-lg transition-colors ${currentPage === page
                             ? 'bg-brand-600 text-white'
                             : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }`}
+                            }`}
                         >
                           {page}
                         </button>
@@ -594,7 +595,7 @@ export default function PeresjenPage() {
                           className={`px-3 py-2 text-sm text-center rounded-lg transition-colors ${currentPage === page
                             ? 'bg-brand-600 text-white'
                             : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }`}
+                            }`}
                         >
                           {page}
                         </button>
@@ -617,9 +618,8 @@ export default function PeresjenPage() {
         </>
       )}
 
-      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1100] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
@@ -684,9 +684,8 @@ export default function PeresjenPage() {
                       if (f) setFormData({ ...formData, persesjen: f });
                     }}
                     onClick={() => persejenInputRef.current?.click()}
-                    className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-                      dragPersesjen ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-brand-400 dark:hover:border-brand-500'
-                    }`}
+                    className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${dragPersesjen ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-brand-400 dark:hover:border-brand-500'
+                      }`}
                   >
                     <div className="mb-3">
                       <FileJson className="w-10 h-10 text-brand-500" />

@@ -54,10 +54,20 @@ type NavItem = {
     subItems?: SubNavItem[];
 };
 
+const JENIS_JABATAN_OPTIONS = [
+    { value: "", label: "(Pilih Jenis Jabatan)" },
+    { value: "ESELON I / JPT Madya", label: "ESELON I / JPT Madya" },
+    { value: "ESELON II / JPT Pratama", label: "ESELON II / JPT Pratama" },
+    { value: "ESELON III / Administrator", label: "ESELON III / Administrator" },
+    { value: "ESELON IV / Pengawas", label: "ESELON IV / Pengawas" },
+    { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
+    { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
+];
+
 const AppSidebar: React.FC = () => {
     const {isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar} = useSidebar();
     const pathname = usePathname();
-    const {isAdmin, isAdminJf, loading: meLoading} = useMe();
+    const {isAdmin, isAdminJf, isAdminAKK, loading: meLoading} = useMe();
 
     // Check if we're on mobile
     const [isMobile, setIsMobile] = useState(false);
@@ -252,7 +262,7 @@ const AppSidebar: React.FC = () => {
         }] : []),
         {name: "Anjab dan ABK", icon: <ListIcon/>, subItems: anjabSubs},
         {name: "Peta Jabatan", icon: <GroupIcon/>, path: "/peta-jabatan", subItems: []},
-        ...((isAdmin || isAdminJf) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
+        ...((isAdmin || isAdminJf || isAdminAKK) ? [{ name: "Rekap Jabatan", icon: <PieChartIcon/>, path: "/dashboard", subItems: [] }] : []),
         ...((isAdmin || isAdminJf) ? [{
             name: "Dokumen",
             icon: <DocsIcon/>,
@@ -262,7 +272,7 @@ const AppSidebar: React.FC = () => {
             ]
         }] : []),
         {name: "Usulan Perbaikan Anjab dan ABK", icon: <MailIcon/>, path: "/feedback", subItems: []}
-    ], [isAdmin, isAdminJf, anjabSubs]);
+    ], [isAdmin, isAdminJf, isAdminAKK, anjabSubs]);
     const othersItems: NavItem[] = [];
 
     const isExactActive = useCallback(
@@ -782,7 +792,7 @@ const AppSidebar: React.FC = () => {
     }, [pathname]);
 
     const NodeActionsButton: React.FC<{ node: SubNavItem }> = ({node}) => {
-        if (!isAdmin) return null;
+        if (!isAdmin && !isAdminAKK) return null;
         const [open, setOpen] = useState(false);
         const btnRef = useRef<HTMLButtonElement | null>(null);
         const menuRef = useRef<HTMLDivElement | null>(null);
@@ -876,35 +886,41 @@ const AppSidebar: React.FC = () => {
                             >
                                 Edit Jabatan
                             </button>
-                            <button
-                                type="button"
-                                onMouseDown={(e) => {
-                                    e.preventDefault();
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    setOpen(false);
-                                    openAddModal(node);
-                                }}
-                                className="w-full text-left px-3 py-2 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                            >
-                                Tambah Jabatan
-                            </button>
-                            <div className="h-px bg-gray-100"/>
-                            <button
-                                type="button"
-                                onMouseDown={(e) => {
-                                    e.preventDefault();
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    setOpen(false);
-                                    handleDeleteNode(node);
-                                }}
-                                className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 transition-colors"
-                            >
-                                Hapus Jabatan
-                            </button>
+                            {isAdmin && (
+                                <button
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setOpen(false);
+                                        openAddModal(node);
+                                    }}
+                                    className="w-full text-left px-3 py-2 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                                >
+                                    Tambah Jabatan
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <>
+                                    <div className="h-px bg-gray-100"/>
+                                    <button
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                        }}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setOpen(false);
+                                            handleDeleteNode(node);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 transition-colors"
+                                    >
+                                        Hapus Jabatan
+                                    </button>
+                                </>
+                            )}
                         </div>,
                         document.body
                     )}
@@ -1195,12 +1211,20 @@ const AppSidebar: React.FC = () => {
                         </div>
 
                         <div className="px-5 py-4 overflow-y-auto">
+                            {/* Banner untuk admin-akk */}
+                            {!isAdmin && isAdminAKK && (
+                                <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700 flex items-start gap-2">
+                                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    <span>Anda hanya dapat mengubah <b>Nama Pejabat</b>. Field lainnya dinonaktifkan untuk role Anda.</span>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Nama</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         value={editName}
+                                        disabled={!isAdmin && isAdminAKK}
                                         onChange={(e) => {
                                             const v = e.target.value;
                                             setEditName(v);
@@ -1212,8 +1236,9 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Kode Penamaan Jabatan</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         value={editSlug}
+                                        disabled={!isAdmin && isAdminAKK}
                                         onChange={(e) => setEditSlug(toSlug(e.target.value))}
                                         placeholder="Contoh: pksti"
                                     />
@@ -1225,8 +1250,9 @@ const AppSidebar: React.FC = () => {
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Unit Kerja</label>
                                     <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         value={editUnitKerja}
+                                        disabled={!isAdmin && isAdminAKK}
                                         onChange={(e) => setEditUnitKerja(e.target.value)}
                                         placeholder="Opsional"
                                     />
@@ -1234,33 +1260,29 @@ const AppSidebar: React.FC = () => {
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Pusat / Daerah</label>
-                                    <CustomSelect
-                                        value={editIsPusat}
-                                        onChange={(val) => setEditIsPusat(val)}
-                                        options={[
-                                            { value: "true", label: "Pusat" },
-                                            { value: "false", label: "Daerah" }
-                                        ]}
-                                    />
+                                    <div className={!isAdmin && isAdminAKK ? 'opacity-50 pointer-events-none' : ''}>
+                                        <CustomSelect
+                                            value={editIsPusat}
+                                            onChange={(val) => setEditIsPusat(val)}
+                                            options={[
+                                                { value: "true", label: "Pusat" },
+                                                { value: "false", label: "Daerah" }
+                                            ]}
+                                        />
+                                    </div>
                                 </div>
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Jenis Jabatan</label>
-                                    <CustomSelect
-                                        value={editJenisJabatan}
-                                        onChange={(val) => setEditJenisJabatan(val)}
-                                        options={[
-                                            { value: "", label: "(Pilih Jenis Jabatan)" },
-                                            { value: "ESELON I", label: "ESELON I" },
-                                            { value: "ESELON II", label: "ESELON II" },
-                                            { value: "ESELON III", label: "ESELON III" },
-                                            { value: "ESELON IV", label: "ESELON IV" },
-                                            { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
-                                            { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
-                                        ]}
-                                        placeholder="Pilih Jenis Jabatan"
-                                        searchable={true}
-                                    />
+                                    <div className={!isAdmin && isAdminAKK ? 'opacity-50 pointer-events-none' : ''}>
+                                        <CustomSelect
+                                            value={editJenisJabatan}
+                                            onChange={(val) => setEditJenisJabatan(val)}
+                                            options={JENIS_JABATAN_OPTIONS}
+                                            placeholder="Pilih Jenis Jabatan"
+                                            searchable={true}
+                                        />
+                                    </div>
                                 </div>
 
                                 <div>
@@ -1310,16 +1332,18 @@ const AppSidebar: React.FC = () => {
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Atasan</label>
-                                    <CustomSelect
-                                        value={editParentId}
-                                        onChange={(val) => setEditParentId(val as any)}
-                                        options={parentOptions.map((o) => ({
-                                            value: String(o.id),
-                                            label: o.label
-                                        }))}
-                                        placeholder="Pilih Atasan"
-                                        searchable={true}
-                                    />
+                                    <div className={!isAdmin && isAdminAKK ? 'opacity-50 pointer-events-none' : ''}>
+                                        <CustomSelect
+                                            value={editParentId}
+                                            onChange={(val) => setEditParentId(val as any)}
+                                            options={parentOptions.map((o) => ({
+                                                value: String(o.id),
+                                                label: o.label
+                                            }))}
+                                            placeholder="Pilih Atasan"
+                                            searchable={true}
+                                        />
+                                    </div>
                                     <p className="mt-1.5 text-xs text-gray-500">
                                         Memindahkan jabatan juga memindahkan seluruh jabatan dibawahnya.
                                     </p>
@@ -1329,8 +1353,9 @@ const AppSidebar: React.FC = () => {
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">Urutan</label>
                                     <input
                                         type="number"
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         value={editOrder}
+                                        disabled={!isAdmin && isAdminAKK}
                                         onChange={(e) => setEditOrder(e.target.value)}
                                         placeholder="Kosongkan untuk auto"
                                     />
@@ -1542,15 +1567,7 @@ const AppSidebar: React.FC = () => {
                                     <CustomSelect
                                         value={addJenisJabatan}
                                         onChange={(val) => setAddJenisJabatan(val)}
-                                        options={[
-                                            { value: "", label: "(Pilih Jenis Jabatan)" },
-                                            { value: "ESELON I", label: "ESELON I" },
-                                            { value: "ESELON II", label: "ESELON II" },
-                                            { value: "ESELON III", label: "ESELON III" },
-                                            { value: "ESELON IV", label: "ESELON IV" },
-                                            { value: "JABATAN FUNGSIONAL", label: "JABATAN FUNGSIONAL" },
-                                            { value: "JABATAN PELAKSANA", label: "JABATAN PELAKSANA" },
-                                        ]}
+                                        options={JENIS_JABATAN_OPTIONS}
                                         placeholder="Pilih Jenis Jabatan"
                                         searchable={true}
                                     />
