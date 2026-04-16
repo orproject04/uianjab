@@ -28,12 +28,12 @@ export async function POST(req: NextRequest) {
             const beztVal = Number.isFinite(bezt) ? bezt : null;
 
             const res1 = await pool.query(
-                `UPDATE peta_jabatan SET kebutuhan_pegawai = $1, updated_at = NOW() WHERE lower(trim(coalesce(nama_jabatan,''))) = lower(trim($2)) AND lower(trim(coalesce(unit_kerja,''))) = lower(trim($3)) AND lower(coalesce(jenis_jabatan,'')) LIKE '%fungsional%' RETURNING id`,
-                [kebVal, nama, unit]
+                `UPDATE peta_jabatan SET kebutuhan_pegawai = $1, updated_at = NOW(), updated_by = $4 WHERE lower(trim(coalesce(nama_jabatan,''))) = lower(trim($2)) AND lower(trim(coalesce(unit_kerja,''))) = lower(trim($3)) AND lower(coalesce(jenis_jabatan,'')) LIKE '%fungsional%' RETURNING id`,
+                [kebVal, nama, unit, user.full_name || user.email || 'Unknown']
             );
             const res2 = await pool.query(
-                `UPDATE peta_jabatan SET bezetting = $1, updated_at = NOW() WHERE lower(trim(coalesce(nama_jabatan,''))) = lower(trim($2)) AND lower(trim(coalesce(unit_kerja,''))) = lower(trim($3)) RETURNING id`,
-                [beztVal, nama, unit]
+                `UPDATE peta_jabatan SET bezetting = $1, updated_at = NOW(), updated_by = $4 WHERE lower(trim(coalesce(nama_jabatan,''))) = lower(trim($2)) AND lower(trim(coalesce(unit_kerja,''))) = lower(trim($3)) RETURNING id`,
+                [beztVal, nama, unit, user.full_name || user.email || 'Unknown']
             );
             updated += (res1.rowCount || 0) + (res2.rowCount || 0);
         }

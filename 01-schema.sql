@@ -276,6 +276,7 @@ CREATE TABLE IF NOT EXISTS peta_jabatan (
   pejabat           jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
+  updated_by        text
   CONSTRAINT uq_so_parent_slug UNIQUE (parent_id, slug)
 );
 

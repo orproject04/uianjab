@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
+import { getUserFromReq } from "@/lib/auth";
 
 // POST - Update kebutuhan_pegawai di peta_jabatan
 export async function POST(req: NextRequest) {
@@ -14,14 +15,18 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
+        const user = getUserFromReq(req);
+        const updatedBy = user ? (user.full_name || user.email || user.id) : null;
+
         // Update peta_jabatan
         const result = await pool.query(
             `UPDATE peta_jabatan 
              SET kebutuhan_pegawai = $1,
-                 updated_at = CURRENT_TIMESTAMP
+                 updated_at = CURRENT_TIMESTAMP,
+                 updated_by = $3
              WHERE id = $2
              RETURNING *`,
-            [kebutuhan_pegawai, peta_jabatan_id]
+            [kebutuhan_pegawai, peta_jabatan_id, updatedBy]
         );
 
         if (result.rows.length === 0) {
@@ -42,3 +47,4 @@ export async function POST(req: NextRequest) {
         }, { status: 500 });
     }
 }
+

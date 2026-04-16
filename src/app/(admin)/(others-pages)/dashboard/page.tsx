@@ -115,6 +115,18 @@ export default function DashboardPage() {
     const [yAxisWidth, setYAxisWidth] = useState<number>(220);
     // Responsive chart height: mobile smaller to avoid huge vertical overflow
     const [chartHeight, setChartHeight] = useState<number>(400);
+
+    const handleResetFilter = () => {
+        setSelectedBiro(null);
+        setSelectedJenis(null);
+        setSelectedLokasi(null);
+        setSelectedKelas(null);
+        setSearchNama('');
+        setCurrentPage(1);
+        setExpandedJenis(null);
+        setExpandedSubJenis(null);
+    };
+
     useEffect(() => {
         const setW = () => {
             const w = typeof window !== 'undefined' ? window.innerWidth : 1024;
@@ -147,10 +159,11 @@ export default function DashboardPage() {
         if (selectedBiro?.value) params.append("biro", selectedBiro.value);
         if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
         if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
+        if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
         const url = `/api/dashboard/jabatan?${params.toString()}`;
         if (lastFetchUrlRef.current === url) return; // already fetched this exact URL
         loadData();
-    }, [selectedBiro, selectedJenis, selectedLokasi]);
+    }, [selectedBiro, selectedJenis, selectedLokasi, selectedKelas]);
 
     // Initial load after user authentication completes
     const hasLoadedOnce = useRef(false);
@@ -173,6 +186,7 @@ export default function DashboardPage() {
             if (selectedBiro?.value) params.append("biro", selectedBiro.value);
             if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
             if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
+            if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
 
             const url = `/api/dashboard/jabatan?${params.toString()}`;
             const res = await apiFetch(url, forceNoCache ? { cache: 'no-store' } : undefined);
@@ -354,17 +368,14 @@ export default function DashboardPage() {
         return 998;
     };
 
-    // Compute filtered summary when kelas filter is active
-    const filteredForSummary = selectedKelas
-        ? byNamaJabatan.filter(it => String(it.kelas_jabatan ?? '-').trim() === selectedKelas.value)
-        : null;
+    const displaySummary = summary;
+    const activeJabatanRows = byNamaJabatan;
 
     // Build per-jenis aggregation from filtered rows (with fungsional jenjang normalization)
-    const computedByJenis: Array<(typeof byJenis)[number] & { jumlah_jabatan: number }> = (() => {
-        if (!filteredForSummary) return (byJenis as any[]).map(j => ({ ...j, jumlah_jabatan: (j as any).jumlah_jabatan ?? 0 }));
+    const displayByJenis = (() => {
         const jenisMap: Record<string, { jenis: string; bezetting: number; bezetting_pns: number; bezetting_pppk: number; kebutuhan: number; selisih: number; jumlah_jabatan: number }> = {};
         const jenisNamesMap: Record<string, Set<string>> = {};
-        for (const it of filteredForSummary) {
+        for (const it of activeJabatanRows) {
             const jenis = it.jenis_jabatan || '-';
             if (!jenisMap[jenis]) {
                 jenisMap[jenis] = { jenis, bezetting: 0, bezetting_pns: 0, bezetting_pppk: 0, kebutuhan: 0, selisih: 0, jumlah_jabatan: 0 };
@@ -385,36 +396,12 @@ export default function DashboardPage() {
         for (const jenis of Object.keys(jenisMap)) {
             jenisMap[jenis].jumlah_jabatan = jenisNamesMap[jenis].size;
         }
-        return Object.values(jenisMap);
-    })();
-
-    const displaySummary = filteredForSummary ? {
-        total_jabatan: computedByJenis.reduce((s, j) => s + j.jumlah_jabatan, 0),
-        total_bezetting: filteredForSummary.reduce((s, it) => s + Number(it.bezetting ?? 0), 0),
-        total_kebutuhan: filteredForSummary.reduce((s, it) => s + Number(it.kebutuhan ?? 0), 0),
-        total_selisih: filteredForSummary.reduce((s, it) => s + Number(it.selisih ?? 0), 0),
-        bezetting_pns: filteredForSummary.reduce((s, it) => s + Number(it.bezetting_pns ?? 0), 0),
-        bezetting_pppk: filteredForSummary.reduce((s, it) => s + Number(it.bezetting_pppk ?? 0), 0),
-    } : summary;
-
-    const sortedByJenis = [...byJenis].sort((a, b) => {
-        const r = jenisRank(a.jenis) - jenisRank(b.jenis);
-        if (r !== 0) return r;
-        // Sort by kebutuhan if same rank
-        return (b.kebutuhan || 0) - (a.kebutuhan || 0);
-    });
-
-    const sortedComputedByJenis = selectedKelas
-        ? [...computedByJenis].sort((a, b) => {
+        return Object.values(jenisMap).sort((a, b) => {
             const r = jenisRank(a.jenis) - jenisRank(b.jenis);
             if (r !== 0) return r;
             return (b.kebutuhan || 0) - (a.kebutuhan || 0);
-        })
-        : sortedByJenis;
-    const displayByJenis = sortedComputedByJenis;
-
-    // Single source of truth for rows used in card detail expansion and pns/pppk computation
-    const activeJabatanRows = filteredForSummary ?? byNamaJabatan;
+        });
+    })();
 
     // Dedupe by (nama_jabatan, unit_kerja) to avoid exact duplicate rows
     const dedupeByNamaUnitMap: Record<string, BreakdownItem> = {};
@@ -433,9 +420,7 @@ export default function DashboardPage() {
 
     // Prepare sortable data for Total Per Nama Jabatan
     const getSortedByNama = () => {
-        const arr = [...byNamaJabatan].filter(it =>
-            !selectedKelas || String(it.kelas_jabatan ?? '-').trim() === selectedKelas.value
-        );
+        const arr = [...byNamaJabatan];
         const field = sortField;
 
         // If no sort field is set, return original order from API
@@ -948,8 +933,10 @@ export default function DashboardPage() {
         { value: "daerah", label: "Daerah" },
     ];
     const kelasOptions = [
-        ...Array.from({ length: 17 }, (_, i) => ({ value: String(i + 1), label: `Kelas ${i + 1}` })),
-        { value: '-', label: 'Tidak Diketahui' },
+        ...Array.from({ length: 13 }, (_, i) => {
+            const kelas = 17 - i;
+            return { value: String(kelas), label: `Kelas ${kelas}` };
+        })
     ];
 
     // Custom YAxis tick renderer to wrap long unit names into multiple lines
@@ -1283,14 +1270,7 @@ export default function DashboardPage() {
                         {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas) && (
                             <div className="flex items-end">
                                 <button
-                                    onClick={() => {
-                                        setSelectedBiro(null);
-                                        setSelectedJenis(null);
-                                        setSelectedLokasi(null);
-                                        setSelectedKelas(null);
-                                        setSearchNama('');
-                                        setCurrentPage(1);
-                                    }}
+                                    onClick={handleResetFilter}
                                     className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all font-medium flex items-center justify-center gap-2"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1349,13 +1329,9 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">Rincian jumlah untuk setiap jenis jabatan</p>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-                            {selectedJenis && (
+                            {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas || searchNama || expandedJenis) && (
                                 <button
-                                    onClick={() => {
-                                        setSelectedJenis(null);
-                                        setSearchNama('');
-                                        setCurrentPage(1);
-                                    }}
+                                    onClick={handleResetFilter}
                                     className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
                                 >
                                     Reset Filter
@@ -1429,7 +1405,23 @@ export default function DashboardPage() {
                                 details = Object.values(map).sort((a: any, b: any) => a.nama.localeCompare(b.nama, 'id'));
                                 details.forEach(d => {
                                     if (d.subItems) {
-                                        d.subItems.sort((a: any, b: any) => a.originalNama.localeCompare(b.originalNama, 'id'));
+                                        const rankFungsional = (nama: string) => {
+                                            const lower = nama.toLowerCase();
+                                            if (lower.includes('terampil')) return 1;
+                                            if (lower.includes('mahir')) return 2;
+                                            if (lower.includes('penyelia')) return 3;
+                                            if (lower.includes('ahli pertama')) return 4;
+                                            if (lower.includes('ahli muda')) return 5;
+                                            if (lower.includes('ahli madya')) return 6;
+                                            if (lower.includes('ahli utama')) return 7;
+                                            return 99;
+                                        };
+                                        d.subItems.sort((a: any, b: any) => {
+                                            const rA = rankFungsional(a.originalNama);
+                                            const rB = rankFungsional(b.originalNama);
+                                            if (rA !== rB) return rA - rB;
+                                            return a.originalNama.localeCompare(b.originalNama, 'id');
+                                        });
                                     }
                                 });
                             }
@@ -1445,7 +1437,7 @@ export default function DashboardPage() {
                                                 }}
                                                 className="w-full text-left outline-none cursor-pointer flex-1 flex flex-col"
                                             >
-                                                <div className="flex items-start justify-between mb-3 w-full">
+                                                <div className="flex items-start justify-between mb-1 w-full">
                                                     <div className="flex-1 mr-2">
                                                         <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
                                                             {jenisParts[0]}
@@ -1469,7 +1461,7 @@ export default function DashboardPage() {
                                                         {index === 0 ? "👔" : index === 1 ? "🎓" : index === 2 ? "💼" : index === 3 ? "⚙️" : index === 4 ? "📋" : "🖥️"}
                                                     </div>
                                                 </div>
-                                                <div className="space-y-1.5 mt-auto w-full">
+                                                <div className="space-y-1.5 mt-1 w-full h-full flex flex-col justify-start">
                                                     <div className="flex flex-col w-full">
                                                         <div className="flex items-center justify-between text-xs w-full">
                                                             <span className="text-gray-600 dark:text-gray-400">Bezetting</span>

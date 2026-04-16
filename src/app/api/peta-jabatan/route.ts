@@ -251,6 +251,8 @@ export async function POST(req: NextRequest) {
             return addCorsHeaders(response, origin);
         }
 
+        const creator = user.full_name || user.email || user.id;
+
         const body = await req.json().catch(() => ({}));
         const parsed = CreateSchema.safeParse(body);
         if (!parsed.success) {
@@ -359,16 +361,16 @@ export async function POST(req: NextRequest) {
                     ), ins AS (
                 INSERT
                 INTO peta_jabatan
-                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id)
+                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id, created_by, updated_by)
                 VALUES
-                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid)
+                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid, $9, $9)
                     RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, bezetting, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id
                     )
                 SELECT *
                 FROM ins
             `,
-            //         $1         $2                 $3           $4          $5           $6        $7              $8
-            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id]
+            //         $1         $2                 $3           $4          $5           $6        $7              $8               $9
+            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id, creator]
         );
 
         const newNode = rows[0];
