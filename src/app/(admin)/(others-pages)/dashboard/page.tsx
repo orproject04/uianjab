@@ -411,8 +411,10 @@ export default function DashboardPage() {
         return 998;
     };
 
-    const additionalErrorPNS = (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PNS').length;
-    const additionalErrorPPPK = (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PPPK').length;
+    const hasAnyDashboardFilter = Boolean(selectedBiro || selectedJenis || selectedLokasi || selectedKelas);
+
+    const additionalErrorPNS = hasAnyDashboardFilter ? 0 : (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PNS').length;
+    const additionalErrorPPPK = hasAnyDashboardFilter ? 0 : (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PPPK').length;
 
     const displaySummary = {
         ...summary,
@@ -549,7 +551,6 @@ export default function DashboardPage() {
     const dataErrorPNS = sortedDataError.filter((r) => String(r.status || '').toUpperCase() === 'PNS').length;
     const dataErrorPPPK = sortedDataError.filter((r) => String(r.status || '').toUpperCase() === 'PPPK').length;
     const totalDataError = dataErrorPNS + dataErrorPPPK;
-    const hasAnyDashboardFilter = Boolean(selectedBiro || selectedJenis || selectedLokasi || selectedKelas);
 
     const filteredDataError = sortedDataError.filter((it) => {
         if (!searchError) return true;
@@ -2563,26 +2564,26 @@ export default function DashboardPage() {
                     </div>
                     <div className="overflow-x-auto max-h-[60vh] sm:max-h-[520px] overflow-y-auto">
                         <table className="w-full table-fixed min-w-[1400px]">
-                            <thead className="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700">
                                 <tr>
                                     <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-14">No</th>
-                                    <th onClick={() => toggleErrorSort('nip')} className="px-3 py-3 w-32 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
-                                        <div className="flex items-center gap-1 select-none">NIP {errorSortField === 'nip' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    <th onClick={() => toggleErrorSort('nip')} className="px-3 py-3 w-32 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center gap-1 select-none">NIP {errorSortField === 'nip' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
                                     </th>
-                                    <th onClick={() => toggleErrorSort('nama')} className="px-3 py-3 w-44 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
-                                        <div className="flex items-center gap-1 select-none">Nama {errorSortField === 'nama' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    <th onClick={() => toggleErrorSort('nama')} className="px-3 py-3 w-44 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center gap-1 select-none">Nama {errorSortField === 'nama' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
                                     </th>
-                                    <th onClick={() => toggleErrorSort('jabatan')} className="px-3 py-3 w-44 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
-                                        <div className="flex items-center gap-1 select-none">Jabatan {errorSortField === 'jabatan' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    <th onClick={() => toggleErrorSort('jabatan')} className="px-3 py-3 w-44 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center gap-1 select-none">Jabatan {errorSortField === 'jabatan' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
                                     </th>
-                                    <th onClick={() => toggleErrorSort('unit_organisasi')} className="px-3 py-3 w-44 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
-                                        <div className="flex items-center gap-1 select-none">Unit Organisasi {errorSortField === 'unit_organisasi' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    <th onClick={() => toggleErrorSort('unit_organisasi')} className="px-3 py-3 w-44 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center gap-1 select-none">Unit Organisasi {errorSortField === 'unit_organisasi' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
                                     </th>
                                     <th onClick={() => toggleErrorSort('status')} className="px-3 py-3 w-24 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
                                         <div className="flex items-center justify-center gap-1 select-none">Status {errorSortField === 'status' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
                                     </th>
-                                    <th onClick={() => toggleErrorSort('saran_perbaikan')} className="px-3 py-3 w-[36%] min-w-[420px] text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
-                                        <div className="flex items-center gap-1 select-none">Saran Perbaikan {errorSortField === 'saran_perbaikan' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    <th onClick={() => toggleErrorSort('saran_perbaikan')} className="px-3 py-3 w-[36%] min-w-[420px] text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center gap-1 select-none">Saran Perbaikan {errorSortField === 'saran_perbaikan' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
                                     </th>
                                 </tr>
                             </thead>
