@@ -393,6 +393,23 @@ export async function GET(req: NextRequest) {
         const jenisListResult = await runQuery('jenisListQuery', jenisListQuery);
         const jenisList = jenisListResult.rows.map((r: any) => r.jenis_jabatan);
 
+        const dataErrorQuery = `
+            SELECT
+                id,
+                nip,
+                nama,
+                jabatan,
+                unit_organisasi,
+                status,
+                saran_perbaikan,
+                synced_at
+            FROM data_error
+            ORDER BY synced_at DESC, id DESC
+            LIMIT 5000
+        `;
+        const dataErrorResult = await runQuery('dataErrorQuery', dataErrorQuery);
+        const dataError = dataErrorResult.rows;
+
         return NextResponse.json({
             summary: {
                 total_jabatan: Number(summary.total_jabatan ?? 0),
@@ -445,6 +462,16 @@ export async function GET(req: NextRequest) {
                     selisih: Number(r.selisih ?? 0),
                 };
             }),
+            dataError: dataError.map((r: any) => ({
+                id: Number(r.id ?? 0),
+                nip: r.nip ?? '',
+                nama: r.nama ?? '',
+                jabatan: r.jabatan ?? '',
+                unit_organisasi: r.unit_organisasi ?? '',
+                status: r.status ?? '',
+                saran_perbaikan: r.saran_perbaikan ?? '',
+                synced_at: r.synced_at ?? null,
+            })),
             // For verification: lists of normalized unique names
             all_unique_names: allNames,
             byJenis_names: byJenisNames,
@@ -462,6 +489,72 @@ export async function GET(req: NextRequest) {
         }
         return NextResponse.json(
             { error: "Failed to fetch dashboard data", details: error.message },
+            { status: 500 }
+        );
+    }
+}
+
+export async function PATCH(req: NextRequest) {
+    try {
+        const user = getUserFromReq(req);
+        if (!user) {
+            return NextResponse.json(
+                { error: "Unauthorized, Silakan login kembali" },
+                { status: 401 }
+            );
+        }
+
+        if (!hasRole(user, ["admin", "admin-jf", "admin-akk"])) {
+            return NextResponse.json(
+                { error: "Forbidden, hanya admin yang dapat mengubah data ini" },
+                { status: 403 }
+            );
+        }
+
+        const body = await req.json().catch(() => ({} as any));
+        const updates = Array.isArray(body?.updates) ? body.updates : [];
+
+        if (updates.length === 0) {
+            return NextResponse.json({ ok: true, updated: 0 });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            let updated = 0;
+            for (const u of updates) {
+                const id = Number(u?.id);
+                if (!Number.isFinite(id) || id <= 0) continue;
+
+                const valueRaw = String(u?.saran_perbaikan ?? '').trim();
+                const value = valueRaw.length > 0 ? valueRaw : '-';
+
+                const res = await client.query(
+                    `UPDATE data_error
+                     SET saran_perbaikan = $1,
+                         synced_by = COALESCE($3, synced_by),
+                         synced_at = CURRENT_TIMESTAMP
+                     WHERE id = $2`,
+                    [value, id, user.email || user.full_name || user.id]
+                );
+                updated += Number(res.rowCount ?? 0);
+            }
+
+            await client.query('COMMIT');
+            return NextResponse.json({ ok: true, updated });
+        } catch (error: any) {
+            await client.query('ROLLBACK');
+            return NextResponse.json(
+                { error: "Gagal menyimpan saran perbaikan", details: error.message },
+                { status: 500 }
+            );
+        } finally {
+            client.release();
+        }
+    } catch (error: any) {
+        return NextResponse.json(
+            { error: "Gagal memproses permintaan", details: error.message },
             { status: 500 }
         );
     }

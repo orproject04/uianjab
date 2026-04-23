@@ -2,6 +2,62 @@
 import pool from "./db";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import https from "https";
+
+const allowInsecureExternalApiTls =
+  process.env.NODE_ENV !== 'production' &&
+  process.env.ALLOW_INSECURE_EXTERNAL_API_TLS === 'true';
+
+function isTlsVerificationError(error: any): boolean {
+  const code = error?.cause?.code || error?.code;
+  return code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'SELF_SIGNED_CERT_IN_CHAIN';
+}
+
+async function fetchJsonInsecureTls(
+  url: string,
+  headers: Record<string, string>,
+  timeout: number
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = https.request(
+      {
+        protocol: u.protocol,
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: `${u.pathname}${u.search}`,
+        method: 'GET',
+        headers,
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          const status = res.statusCode || 500;
+          if (status < 200 || status >= 300) {
+            return reject(new Error(`HTTP error! status: ${status} - ${body}`));
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (parseError: any) {
+            reject(new Error(`Invalid JSON response: ${parseError.message}`));
+          }
+        });
+      }
+    );
+
+    req.setTimeout(timeout, () => {
+      req.destroy(new Error(`Request timeout - API took too long to respond (>${timeout}ms)`));
+    });
+
+    req.on('error', (err) => reject(err));
+    req.end();
+  });
+}
 
 export interface PegawaiApiResponse {
   data: PegawaiData[];
@@ -52,6 +108,71 @@ export interface UnmatchedRecord {
   unit_organisasi_name: string;
   status?: string; // Status pegawai
   reason: string;
+}
+
+function getPegawaiRole(pegawai: PegawaiData): 'PNS' | 'PPPK' {
+  if (pegawai.json && typeof pegawai.json === 'object' && 'kedudukanPnsNama' in pegawai.json) {
+    const kedudukanPnsNama = String(pegawai.json.kedudukanPnsNama || '').trim();
+    if (/PPPK/i.test(kedudukanPnsNama)) {
+      return 'PPPK';
+    }
+  }
+  return 'PNS';
+}
+
+function buildSaranPerbaikan(record: UnmatchedRecord): string {
+  return '-';
+}
+
+async function saveDataErrorRecords(records: UnmatchedRecord[], syncedBy?: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Keep this table as a snapshot of the latest sync errors.
+    await client.query('DELETE FROM data_error');
+
+    if (records.length > 0) {
+      const values: any[] = [];
+      const placeholders: string[] = [];
+
+      for (const rec of records) {
+        const baseIndex = values.length;
+        placeholders.push(
+          `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`
+        );
+        values.push(
+          rec.nip || '',
+          rec.name || '',
+          rec.jabatan_name || '',
+          rec.unit_organisasi_name || '',
+          rec.status || 'ACTIVE',
+          buildSaranPerbaikan(rec),
+          syncedBy || null
+        );
+      }
+
+      await client.query(
+        `INSERT INTO data_error (
+          nip,
+          nama,
+          jabatan,
+          unit_organisasi,
+          status,
+          saran_perbaikan,
+          synced_by
+        ) VALUES ${placeholders.join(',')}`,
+        values
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -118,25 +239,41 @@ export async function fetchPegawaiData(
       headers['x-api-token'] = apiToken;
     }
     
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unable to read response');
-      console.error('[FETCH_PEGAWAI] HTTP error:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-        url,
-      });
-      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+    let data: PegawaiApiResponse;
+    if (allowInsecureExternalApiTls) {
+      data = await fetchJsonInsecureTls(url, headers, timeout);
+    } else {
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Unable to read response');
+          console.error('[FETCH_PEGAWAI] HTTP error:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+            url,
+          });
+          throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        data = await response.json();
+      } catch (fetchError: any) {
+        if (process.env.NODE_ENV !== 'production' && isTlsVerificationError(fetchError)) {
+          console.warn('[FETCH_PEGAWAI] TLS verification failed in development, retrying with insecure TLS');
+          data = await fetchJsonInsecureTls(url, headers, timeout);
+        } else {
+          throw fetchError;
+        }
+      }
     }
-    
-    const data = await response.json();
+
+    clearTimeout(timeoutId);
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
@@ -257,7 +394,7 @@ export async function syncPegawaiToPetaJabatan(
         name: pegawai.name,
         jabatan_name: pegawai.jabatan_name,
         unit_organisasi_name: pegawai.unit_organisasi_name,
-        status: pegawai.status,
+        status: 'INACTIVE',
         reason: `Status pegawai: ${pegawai.status} (Tidak Aktif)`,
       });
     }
@@ -302,17 +439,7 @@ export async function syncPegawaiToPetaJabatan(
           // Match found - update each matching row
           // Store as JSONB array with structure: {name, nip, role}
           const namaPejabat = pegawaiList.map(p => {
-            // Determine role from json.kedudukanPnsNama field
-            let role = 'PNS'; // Default to PNS
-            
-            if (p.json && typeof p.json === 'object' && 'kedudukanPnsNama' in p.json) {
-              const kedudukanPnsNama = String(p.json.kedudukanPnsNama || '').trim();
-              // If kedudukanPnsNama contains "PPPK", set role as PPPK
-              if (/PPPK/i.test(kedudukanPnsNama)) {
-                role = 'PPPK';
-              }
-            }
-            
+            const role = getPegawaiRole(p);
             return {
               name: p.name,
               nip: p.nip,
@@ -341,7 +468,7 @@ export async function syncPegawaiToPetaJabatan(
               name: pegawai.name,
               jabatan_name: pegawai.jabatan_name,
               unit_organisasi_name: pegawai.unit_organisasi_name,
-              status: pegawai.status,
+              status: getPegawaiRole(pegawai),
               reason: 'Tidak ditemukan jabatan dengan nama dan unit kerja yang cocok di database',
             });
           }
@@ -398,9 +525,17 @@ export async function syncPegawaiToPetaJabatan(
     }
     
     // Step 6: Write unmatched and inactive records to log file
-    if (result.unmatchedRecords.length > 0 || result.inactiveRecords.length > 0) {
-      if (onProgress) onProgress(92, 100, 'Menulis log records...');
-      const combinedRecords = [...result.unmatchedRecords, ...result.inactiveRecords];
+    const combinedRecords = [...result.unmatchedRecords, ...result.inactiveRecords];
+    if (onProgress) onProgress(92, 100, 'Menyimpan data error...');
+    try {
+      await saveDataErrorRecords(combinedRecords, syncedBy);
+    } catch (saveDataError: any) {
+      console.error('[SYNC] Failed to save data_error:', saveDataError);
+      result.errors.push(`Gagal menyimpan data_error: ${saveDataError.message}`);
+    }
+
+    if (combinedRecords.length > 0) {
+      if (onProgress) onProgress(93, 100, 'Menulis log records...');
       const logPaths = await writeUnmatchedLog(combinedRecords);
       result.logFilePaths = logPaths;
     }

@@ -56,12 +56,25 @@ type PetaJabatanItem = {
     bezetting: number;
     kebutuhan_pegawai: number;
 };
+
+type DataErrorItem = {
+    id: number;
+    nip: string;
+    nama: string;
+    jabatan: string;
+    unit_organisasi: string;
+    status: string;
+    saran_perbaikan: string;
+    synced_at?: string | null;
+};
+
 type DashboardData = {
     summary: SummaryData;
     byJenis: BreakdownItem[];
     byLokasi: BreakdownItem[];
     byBiro: BreakdownItem[];
     byNamaJabatan: BreakdownItem[];
+    dataError: DataErrorItem[];
     filters: {
         biroList: string[];
         jenisList: string[];
@@ -95,7 +108,13 @@ export default function DashboardPage() {
     const [sortField, setSortField] = useState<string>("");
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [searchNama, setSearchNama] = useState<string>('');
+    const [searchError, setSearchError] = useState<string>('');
+    const [errorSortField, setErrorSortField] = useState<keyof DataErrorItem | ''>('');
+    const [errorSortDir, setErrorSortDir] = useState<'asc' | 'desc'>('asc');
     const [currentPage, setCurrentPage] = useState<number>(1);
+    const [currentErrorPage, setCurrentErrorPage] = useState<number>(1);
+    const [errorSuggestionEdits, setErrorSuggestionEdits] = useState<Record<number, string>>({});
+    const [unsavedErrorSuggestions, setUnsavedErrorSuggestions] = useState(false);
     // Overrides for kebutuhan khusus fungsional: key => `${nama}|||${unit}` -> string|number
     // We keep string here to allow empty-string during editing (so leading zero can be removed on focus)
     const [overrides, setOverrides] = useState<Record<string, string | number>>({});
@@ -269,7 +288,7 @@ export default function DashboardPage() {
 
     if (!data) return null;
 
-    const { summary, byJenis, byLokasi, byBiro, byNamaJabatan, filters } = data;
+    const { summary, byJenis, byLokasi, byBiro, byNamaJabatan, dataError, filters } = data;
 
 
 
@@ -325,6 +344,30 @@ export default function DashboardPage() {
         }
     }
 
+    async function handleSaveDataErrorSuggestions() {
+        try {
+            const updates = Object.entries(errorSuggestionEdits)
+                .map(([id, saran]) => ({
+                    id: Number(id),
+                    saran_perbaikan: String(saran ?? '').trim() || '-'
+                }))
+                .filter((x) => Number.isFinite(x.id) && x.id > 0);
+
+            if (updates.length === 0) return;
+
+            const res = await saveDataErrorSuggestionsApi(updates);
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok || j?.error) throw new Error(j?.error || `HTTP ${res.status}`);
+
+            await loadData(true);
+            setErrorSuggestionEdits({});
+            setUnsavedErrorSuggestions(false);
+        } catch (err: any) {
+            console.error('Gagal menyimpan saran perbaikan:', err);
+            alert('Gagal menyimpan saran perbaikan.');
+        }
+    }
+
     // --- UI helpers ---
     // Sort `byJenis` in this order: Eselon 1,2,3,4, Jabatan Pelaksana, Jabatan Fungsional
     const jenisRank = (j?: string) => {
@@ -368,7 +411,16 @@ export default function DashboardPage() {
         return 998;
     };
 
-    const displaySummary = summary;
+    const additionalErrorPNS = (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PNS').length;
+    const additionalErrorPPPK = (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PPPK').length;
+
+    const displaySummary = {
+        ...summary,
+        bezetting_pns: Number(summary.bezetting_pns ?? 0) + additionalErrorPNS,
+        bezetting_pppk: Number(summary.bezetting_pppk ?? 0) + additionalErrorPPPK,
+        total_bezetting: Number(summary.total_bezetting ?? 0) + additionalErrorPNS + additionalErrorPPPK,
+        total_selisih: Number(summary.total_selisih ?? 0) + additionalErrorPNS + additionalErrorPPPK,
+    };
     const activeJabatanRows = byNamaJabatan;
 
     // Build per-jenis aggregation from filtered rows (with fungsional jenjang normalization)
@@ -465,6 +517,72 @@ export default function DashboardPage() {
     const showLeftEllipsis = startPage > 1;
     const showRightEllipsis = endPage < totalPages;
 
+    const sortedDataError = [...(dataError || [])].sort((a, b) => {
+        const rank = (status?: string) => {
+            const s = String(status || '').toUpperCase();
+            if (s === 'PNS') return 1;
+            if (s === 'PPPK') return 2;
+            if (s === 'INACTIVE') return 3;
+            return 4;
+        };
+
+        if (!errorSortField) {
+            const r = rank(a.status) - rank(b.status);
+            if (r !== 0) return r;
+            const namaA = String(a.nama || '').toLowerCase();
+            const namaB = String(b.nama || '').toLowerCase();
+            return namaA.localeCompare(namaB);
+        }
+
+        const dir = errorSortDir === 'desc' ? -1 : 1;
+        if (errorSortField === 'status') {
+            const r = rank(a.status) - rank(b.status);
+            if (r !== 0) return r * dir;
+            return String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }) * dir;
+        }
+
+        const va = String(a[errorSortField] || '').toLowerCase();
+        const vb = String(b[errorSortField] || '').toLowerCase();
+        return va.localeCompare(vb, 'id', { numeric: true, sensitivity: 'base' }) * dir;
+    });
+
+    const dataErrorPNS = sortedDataError.filter((r) => String(r.status || '').toUpperCase() === 'PNS').length;
+    const dataErrorPPPK = sortedDataError.filter((r) => String(r.status || '').toUpperCase() === 'PPPK').length;
+    const totalDataError = dataErrorPNS + dataErrorPPPK;
+    const hasAnyDashboardFilter = Boolean(selectedBiro || selectedJenis || selectedLokasi || selectedKelas);
+
+    const filteredDataError = sortedDataError.filter((it) => {
+        if (!searchError) return true;
+        const q = searchError.toLowerCase();
+        return [it.nip, it.nama, it.jabatan, it.unit_organisasi, it.status, it.saran_perbaikan]
+            .some((v) => String(v || '').toLowerCase().includes(q));
+    });
+    const errorItemsPerPage = 20;
+    const totalErrorPages = Math.max(1, Math.ceil(filteredDataError.length / errorItemsPerPage));
+    if (currentErrorPage > totalErrorPages) setCurrentErrorPage(totalErrorPages);
+    const currentErrorPageItems = filteredDataError.slice(
+        (currentErrorPage - 1) * errorItemsPerPage,
+        currentErrorPage * errorItemsPerPage
+    );
+    const maxErrorPageButtons = 3;
+    const halfErrorWindow = Math.floor(maxErrorPageButtons / 2);
+    let startErrorPage = Math.max(1, currentErrorPage - halfErrorWindow);
+    let endErrorPage = Math.min(totalErrorPages, startErrorPage + maxErrorPageButtons - 1);
+    if (endErrorPage - startErrorPage + 1 < maxErrorPageButtons) {
+        startErrorPage = Math.max(1, endErrorPage - maxErrorPageButtons + 1);
+    }
+    const visibleErrorPages = Array.from({ length: endErrorPage - startErrorPage + 1 }, (_, i) => startErrorPage + i);
+    const showLeftErrorEllipsis = startErrorPage > 1;
+    const showRightErrorEllipsis = endErrorPage < totalErrorPages;
+
+    const getDisplayedSaran = (item: DataErrorItem) => {
+        if (Object.prototype.hasOwnProperty.call(errorSuggestionEdits, item.id)) {
+            return errorSuggestionEdits[item.id];
+        }
+        const current = String(item.saran_perbaikan || '').trim();
+        return current.length > 0 ? current : '-';
+    };
+
     // Prepare Top-10 datasets for charts (positive uses selisih, negative uses absolute selisih)
     const topPositive = dedupedByNamaJabatan
         .filter(d => d.selisih > 0)
@@ -501,6 +619,16 @@ export default function DashboardPage() {
         } else {
             setSortField(field);
             setSortDir('desc');
+        }
+    }
+
+    function toggleErrorSort(field: keyof DataErrorItem) {
+        setCurrentErrorPage(1);
+        if (errorSortField === field) {
+            setErrorSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setErrorSortField(field);
+            setErrorSortDir('asc');
         }
     }
 
@@ -793,6 +921,8 @@ export default function DashboardPage() {
         try {
             // Use the displayByJenis data (already filtered and sorted)
             const rows = displayByJenis;
+            const errorTotal = totalDataError;
+            const includeErrorRow = !hasAnyDashboardFilter && errorTotal > 0;
 
             const filterLines: string[] = [];
             if (selectedBiro?.value) filterLines.push(`Biro: ${selectedBiro.label}`);
@@ -874,12 +1004,24 @@ export default function DashboardPage() {
             </tr>`;
             });
 
+            if (includeErrorRow) {
+                totalBezetting += errorTotal;
+                html += `            <tr>
+                <td class="right">${rows.length + 1}</td>
+                <td>Data Perlu Disesuaikan</td>
+                <td class="right">-</td>
+                <td class="right">${errorTotal.toLocaleString('id-ID')}</td>
+                <td class="right">-</td>
+                <td class="right">-</td>
+            </tr>`;
+            }
+
             html += `            <tr class="total-row">
                 <td colspan="2" class="center">TOTAL</td>
                 <td class="right">${totalJenisJabatan.toLocaleString('id-ID')}</td>
                 <td class="right">${totalBezetting.toLocaleString('id-ID')}</td>
                 <td class="right">${totalKebutuhan.toLocaleString('id-ID')}</td>
-                <td class="right">${totalSelisih.toLocaleString('id-ID')}</td>
+                <td class="right">${includeErrorRow? (totalSelisih + errorTotal).toLocaleString('id-ID'): totalSelisih.toLocaleString('id-ID')}</td>
             </tr>
         </tbody>
     </table>
@@ -908,6 +1050,106 @@ export default function DashboardPage() {
                 iframeDoc.close();
 
                 // Wait for content to load then print
+                iframe.onload = () => {
+                    setTimeout(() => {
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
+                    }, 100);
+                };
+            }
+        } catch (err) {
+            console.error('Print failed', err);
+            alert('Gagal memulai print.');
+        }
+    }
+
+    function handlePrintDataError() {
+        try {
+            const rows = filteredDataError;
+
+            let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Total Jabatan Error Sinkronisasi - Print</title>
+    <style>
+        @page { margin: 1cm; size: A4 landscape; }
+        body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }
+        h2 { margin: 0 0 8px 0; font-size: 16px; font-weight: bold; }
+        p { margin: 0 0 10px 0; font-size: 11px; }
+        table { border-collapse: collapse; width: 100%; font-size: 10px; border: 1px solid #000; }
+        thead { display: table-header-group; }
+        tbody { display: table-row-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #000; padding: 4px; text-align: left; vertical-align: top; }
+        th { background: #f0f0f0; text-align: center; padding: 5px; font-weight: bold; }
+        td.center { text-align: center; }
+        .footer { margin: 10px 0 0 0; font-size: 9px; color: #666; }
+    </style>
+</head>
+<body>
+    <h2>Total Jabatan Error Sinkronisasi</h2>
+    <p><strong>Urutan status:</strong> PNS, PPPK, INACTIVE</p>
+    <table>
+        <thead>
+            <tr>
+                <th>No</th>
+                <th>NIP</th>
+                <th>Nama</th>
+                <th>Jabatan</th>
+                <th>Unit Organisasi</th>
+                <th>Status</th>
+                <th>Saran Perbaikan</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+            rows.forEach((r, i) => {
+                const esc = (v: any) => String(v ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += `
+            <tr>
+                <td class="center">${i + 1}</td>
+                <td>${esc(r.nip || '-')}</td>
+                <td>${esc(r.nama || '-')}</td>
+                <td>${esc(r.jabatan || '-')}</td>
+                <td>${esc(r.unit_organisasi || '-')}</td>
+                <td class="center">${esc(r.status || '-')}</td>
+                <td>${esc(getDisplayedSaran(r as DataErrorItem) || '-')}</td>
+            </tr>`;
+            });
+
+            if (rows.length === 0) {
+                html += `
+            <tr>
+                <td colspan="7" class="center">Tidak ada data yang perlu disesuaikan.</td>
+            </tr>`;
+            }
+
+            html += `
+        </tbody>
+    </table>
+    <p class="footer">Generated: ${new Date().toLocaleString('id-ID')}</p>
+</body>
+</html>`;
+
+            let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'print-iframe';
+                iframe.style.position = 'absolute';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = 'none';
+                iframe.style.visibility = 'hidden';
+                document.body.appendChild(iframe);
+            }
+
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (iframeDoc) {
+                iframeDoc.open();
+                iframeDoc.write(html);
+                iframeDoc.close();
+
                 iframe.onload = () => {
                     setTimeout(() => {
                         iframe.contentWindow?.focus();
@@ -1111,7 +1353,7 @@ export default function DashboardPage() {
                 }
             `}</style>
 
-            <div className="space-y-6 pb-8 px-4 sm:px-0">
+            <div className="flex flex-col space-y-6 pb-8 px-4 sm:px-0">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
@@ -1653,6 +1895,34 @@ export default function DashboardPage() {
                                 </Fragment>
                             );
                         })}
+                        {totalDataError > 0 && !hasAnyDashboardFilter && (
+                        <div className="relative group flex flex-col h-full bg-white dark:bg-gray-800 rounded-xl transition-all">
+                            <div className="flex-1 w-full flex flex-col bg-gradient-to-br from-red-100/70 to-orange-100/70 dark:bg-gray-700/50 rounded-xl p-4 border-2 border-transparent shadow-sm relative z-10">
+                                <div className="flex items-start justify-between mb-1 w-full">
+                                    <div className="flex-1 mr-2">
+                                        <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Data Perlu Disesuaikan</h4>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-2xl font-bold text-gray-900 dark:text-white">{totalDataError}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">orang</span>
+                                        </div>
+                                    </div>
+                                    <div className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm bg-red-100 text-red-600">
+                                        ⚠️
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5 mt-1 w-full h-full flex flex-col justify-start">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-600 dark:text-gray-400">PNS</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">{dataErrorPNS.toLocaleString('id-ID')}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-600 dark:text-gray-400">PPPK</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">{dataErrorPPPK.toLocaleString('id-ID')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        )}
                     </div>
                 </div>
 
@@ -2253,6 +2523,188 @@ export default function DashboardPage() {
                 </div>
 
                 </div>{/* end side-by-side */}
+
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+                    <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-brand-50 to-blue-light-50 dark:from-gray-800 dark:to-gray-800">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M7.938 4h8.124c1.656 0 3 1.344 3 3v8c0 1.656-1.344 3-3 3H7.938c-1.656 0-3-1.344-3-3V7c0-1.656 1.344-3 3-3z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
+                                        Data Perlu Disesuaikan
+                                    </h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Data Pegawai yang tidak match dengan Peta Jabatan</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2 sm:mt-0 sm:ml-auto w-full sm:w-auto sm:max-w-md">
+                                <label className="sr-only">Cari Data yang Perlu Disesuaikan</label>
+                                <input
+                                    value={searchError}
+                                    onChange={(e) => {
+                                        setSearchError(e.target.value);
+                                        setCurrentErrorPage(1);
+                                    }}
+                                    placeholder="Cari NIP/Nama/Jabatan..."
+                                    className="flex-1 sm:w-96 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                                />
+                                <button
+                                    onClick={() => { if (unsavedErrorSuggestions) handleSaveDataErrorSuggestions(); else handlePrintDataError(); }}
+                                    className={`px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 ${unsavedErrorSuggestions ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                                    title={unsavedErrorSuggestions ? 'Simpan saran perbaikan' : 'Print tabel Total Jabatan Error Sinkronisasi'}
+                                >
+                                    {unsavedErrorSuggestions ? 'Simpan' : 'Print'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto max-h-[60vh] sm:max-h-[520px] overflow-y-auto">
+                        <table className="w-full table-fixed min-w-[1400px]">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-700 dark:to-gray-800 sticky top-0 z-10">
+                                <tr>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-14">No</th>
+                                    <th onClick={() => toggleErrorSort('nip')} className="px-3 py-3 w-32 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center gap-1 select-none">NIP {errorSortField === 'nip' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    </th>
+                                    <th onClick={() => toggleErrorSort('nama')} className="px-3 py-3 w-44 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center gap-1 select-none">Nama {errorSortField === 'nama' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    </th>
+                                    <th onClick={() => toggleErrorSort('jabatan')} className="px-3 py-3 w-44 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center gap-1 select-none">Jabatan {errorSortField === 'jabatan' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    </th>
+                                    <th onClick={() => toggleErrorSort('unit_organisasi')} className="px-3 py-3 w-44 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center gap-1 select-none">Unit Organisasi {errorSortField === 'unit_organisasi' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    </th>
+                                    <th onClick={() => toggleErrorSort('status')} className="px-3 py-3 w-24 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center justify-center gap-1 select-none">Status {errorSortField === 'status' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    </th>
+                                    <th onClick={() => toggleErrorSort('saran_perbaikan')} className="px-3 py-3 w-[36%] min-w-[420px] text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <div className="flex items-center gap-1 select-none">Saran Perbaikan {errorSortField === 'saran_perbaikan' ? (errorSortDir === 'asc' ? '▲' : '▼') : ''}</div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {currentErrorPageItems.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                            Tidak ada data yang perlu disesuaikan.
+                                        </td>
+                                    </tr>
+                                ) : currentErrorPageItems.map((item, index) => (
+                                    <tr
+                                        key={`${item.nip}-${item.nama}-${index}`}
+                                        className={`hover:bg-brand-50 dark:hover:bg-gray-700/50 transition-colors ${index % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50'}`}
+                                    >
+                                        <td className="px-3 py-3 whitespace-normal break-words text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                                            {(currentErrorPage - 1) * errorItemsPerPage + index + 1}
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-xs text-gray-900 dark:text-white">{item.nip || '-'}</td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-xs text-gray-900 dark:text-white">{item.nama || '-'}</td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-xs text-gray-900 dark:text-white">{item.jabatan || '-'}</td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-xs text-gray-600 dark:text-gray-300">{item.unit_organisasi || '-'}</td>
+                                        <td className="px-3 py-3 whitespace-normal break-words text-center text-xs text-gray-900 dark:text-white">{item.status || '-'}</td>
+                                        <td className="px-3 py-3 whitespace-normal break-words align-top text-xs text-gray-700 dark:text-gray-300">
+                                            <textarea
+                                                rows={2}
+                                                value={getDisplayedSaran(item)}
+                                                onFocus={(e) => {
+                                                    if (e.target.value === '-') {
+                                                        setErrorSuggestionEdits((prev) => ({ ...prev, [item.id]: '' }));
+                                                    }
+                                                }}
+                                                onBlur={(e) => {
+                                                    const value = String(e.target.value || '').trim();
+                                                    if (!value) {
+                                                        setErrorSuggestionEdits((prev) => ({ ...prev, [item.id]: '-' }));
+                                                    }
+                                                }}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    setErrorSuggestionEdits((prev) => ({ ...prev, [item.id]: value }));
+                                                    setUnsavedErrorSuggestions(true);
+                                                }}
+                                                className="w-full min-h-[52px] max-h-64 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs leading-5 text-gray-800 dark:text-gray-100 resize-y"
+                                            />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="py-5 px-4 sm:p-6 border-t border-gray-100 dark:border-gray-700 flex flex-col items-center sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-left">
+                            Menampilkan {currentErrorPageItems.length} dari {filteredDataError.length} data yang perlu disesuaikan.
+                        </div>
+                        <div className="flex items-center gap-2 w-full justify-center sm:w-auto sm:justify-start px-2 sm:px-0">
+                            <button
+                                onClick={() => setCurrentErrorPage(1)}
+                                disabled={currentErrorPage <= 1}
+                                aria-label="First page"
+                                title="First"
+                                className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17L6 12l5-5M18 17l-5-5 5-5" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => setCurrentErrorPage((p) => Math.max(1, p - 1))}
+                                disabled={currentErrorPage <= 1}
+                                aria-label="Previous page"
+                                title="Prev"
+                                className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+
+                            {showLeftErrorEllipsis && (
+                                <span className="px-2 text-sm text-gray-500">...</span>
+                            )}
+
+                            {visibleErrorPages.map((n) => (
+                                <button
+                                    key={n}
+                                    onClick={() => setCurrentErrorPage(n)}
+                                    className={`px-3 py-1 text-sm rounded-md ${currentErrorPage === n ? 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white' : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}
+                                >
+                                    {n}
+                                </button>
+                            ))}
+
+                            {showRightErrorEllipsis && (
+                                <span className="px-2 text-sm text-gray-500">...</span>
+                            )}
+
+                            <button
+                                onClick={() => setCurrentErrorPage((p) => Math.min(totalErrorPages, p + 1))}
+                                disabled={currentErrorPage >= totalErrorPages}
+                                aria-label="Next page"
+                                title="Next"
+                                className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => setCurrentErrorPage(totalErrorPages)}
+                                disabled={currentErrorPage >= totalErrorPages}
+                                aria-label="Last page"
+                                title="Last"
+                                className="px-3 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-md disabled:opacity-50"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17l5-5-5-5M6 17l5-5-5-5" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </>
     );
@@ -2264,6 +2716,15 @@ async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerj
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ edits: payload })
+    });
+    return res;
+}
+
+async function saveDataErrorSuggestionsApi(payload: Array<{ id: number; saran_perbaikan: string }>) {
+    const res = await apiFetch('/api/dashboard/jabatan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: payload })
     });
     return res;
 }
