@@ -193,6 +193,117 @@ export default function AnjabListPage() {
         setShowUploadSection(!showUploadSection);
     };
 
+
+
+
+    const handleBulkDownload = async (scope: string = "all", label: string = "Semua Anjab") => {
+        try {
+            Swal.fire({
+                title: `Memproses Download`,
+                html: `
+                    <div class="mb-4 text-left">
+                        <p class="text-xs text-gray-500 mb-2">${label}</p>
+                        <p class="text-sm text-gray-600 mb-3" id="swal-progress-message">Mengumpulkan dan membuat Anjab PDF...</p>
+                        <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
+                            <div id="swal-progress-bar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span id="swal-progress-text">Memulai...</span>
+                            <span id="swal-progress-percent">0%</span>
+                        </div>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => { Swal.showLoading(); },
+            });
+
+            const response = await apiFetch(`/api/anjab/download-bulk?stream=1&scope=${encodeURIComponent(scope)}`, {
+                method: "GET",
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                Swal.close();
+                try {
+                    const error = await response.json();
+                    await Swal.fire({ icon: "error", title: "Gagal", text: error.error || "Gagal membuat file download" });
+                } catch {
+                    await Swal.fire({ icon: "error", title: "Gagal", text: `Error ${response.status}: ${response.statusText}` });
+                }
+                return;
+            }
+
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let fileToDownload: string | null = null;
+
+            if (reader) {
+                let buffer = "";
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n\n");
+                    buffer = lines.pop() || "";
+
+                    for (const line of lines) {
+                        if (line.startsWith("data: ")) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.total !== undefined && data.done === undefined) {
+                                    const messageEl = document.getElementById("swal-progress-message");
+                                    const textEl = document.getElementById("swal-progress-text");
+                                    if (messageEl) messageEl.innerText = `Menyiapkan ${data.total} file PDF...`;
+                                    if (textEl) textEl.innerText = `0 / ${data.total}`;
+                                } else if (data.done !== undefined) {
+                                    const percent = Math.round((data.done / data.total) * 100);
+                                    const messageEl = document.getElementById("swal-progress-message");
+                                    const textEl = document.getElementById("swal-progress-text");
+                                    const barEl = document.getElementById("swal-progress-bar");
+                                    const percentEl = document.getElementById("swal-progress-percent");
+                                    if (messageEl) messageEl.innerText = `Sedang membuat PDF (${data.done}/${data.total})`;
+                                    if (textEl) textEl.innerText = `${data.done} / ${data.total}`;
+                                    if (barEl) barEl.style.width = `${percent}%`;
+                                    if (percentEl) percentEl.innerText = `${percent}%`;
+                                } else if (data.complete) {
+                                    fileToDownload = data.file;
+                                } else if (data.error) {
+                                    throw new Error(data.error);
+                                }
+                            } catch (e) {
+                                console.error("Error parsing SSE data", e);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (fileToDownload) {
+                const url = `/api/anjab/download-bulk?file=${encodeURIComponent(fileToDownload)}`;
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileToDownload;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                Swal.close();
+                await Swal.fire({ icon: "success", title: "Berhasil!", text: `File download sudah dimulai` });
+            } else {
+                throw new Error("Gagal membuat file archive.");
+            }
+        } catch (error: any) {
+            Swal.close();
+            console.error("Download error:", error);
+            await Swal.fire({ icon: "error", title: "Error", text: error?.message || "Terjadi kesalahan saat membuat file download" });
+        }
+    };
+
+    const handleDownloadAll = () => handleBulkDownload("all", "Semua Anjab");
+
     const handleViewJabatan = (id: string) => {
         // Langsung ke halaman edit section pertama (jabatan) dengan UUID
         router.push(`/anjab/master/edit/jabatan/${id}`);
@@ -305,59 +416,72 @@ export default function AnjabListPage() {
                             Kelola dokumen analisis jabatan Anda
                         </p>
                     </div>
+                    <div className="flex-shrink-0 flex flex-col sm:flex-row gap-2">
+                        {/* Download All Button */}
+                        <button
+                            onClick={handleDownloadAll}
+                            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 text-white border border-transparent rounded-xl hover:bg-brand-700 transition-all duration-200 shadow-sm hover:shadow font-medium whitespace-nowrap"
+                            title="Download semua Anjab dengan ABK"
+                        >
+                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            <span>Download Semua</span>
+                        </button>
 
-                    {/* Clear Cache Button */}
-                    <button
-                        onClick={async () => {
-                            const result = await Swal.fire({
-                                title: 'Hapus Cache PDF?',
-                                text: 'Semua cache PDF akan dihapus. Proses ini tidak dapat dibatalkan.',
-                                icon: 'warning',
-                                showCancelButton: true,
-                                confirmButtonText: 'Ya, Hapus',
-                                cancelButtonText: 'Batal',
-                                confirmButtonColor: '#dc2626',
-                                cancelButtonColor: '#6b7280',
-                            });
-
-                            if (!result.isConfirmed) return;
-
-                            try {
-                                const res = await apiFetch('/api/anjab/clear-cache', {
-                                    method: 'POST',
+                        {/* Clear Cache Button */}
+                        <button
+                            onClick={async () => {
+                                const result = await Swal.fire({
+                                    title: 'Hapus Cache PDF?',
+                                    text: 'Semua cache PDF akan dihapus. Proses ini tidak dapat dibatalkan.',
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Ya, Hapus',
+                                    cancelButtonText: 'Batal',
+                                    confirmButtonColor: '#dc2626',
+                                    cancelButtonColor: '#6b7280',
                                 });
 
-                                if (res.ok) {
-                                    const data = await res.json();
-                                    await Swal.fire({
-                                        icon: 'success',
-                                        title: 'Berhasil!',
-                                        text: `${data.deleted_count || 0} file cache PDF berhasil dihapus`,
+                                if (!result.isConfirmed) return;
+
+                                try {
+                                    const res = await apiFetch('/api/anjab/clear-cache', {
+                                        method: 'POST',
                                     });
-                                } else {
-                                    const error = await res.json();
+
+                                    if (res.ok) {
+                                        const data = await res.json();
+                                        await Swal.fire({
+                                            icon: 'success',
+                                            title: 'Berhasil!',
+                                            text: `${data.deleted_count || 0} file cache PDF berhasil dihapus`,
+                                        });
+                                    } else {
+                                        const error = await res.json();
+                                        await Swal.fire({
+                                            icon: 'error',
+                                            title: 'Gagal',
+                                            text: error.error || 'Gagal menghapus cache',
+                                        });
+                                    }
+                                } catch (error) {
                                     await Swal.fire({
                                         icon: 'error',
-                                        title: 'Gagal',
-                                        text: error.error || 'Gagal menghapus cache',
+                                        title: 'Error',
+                                        text: 'Terjadi kesalahan saat menghapus cache',
                                     });
                                 }
-                            } catch (error) {
-                                await Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error',
-                                    text: 'Terjadi kesalahan saat menghapus cache',
-                                });
-                            }
-                        }}
-                        className="flex-shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors w-full sm:w-auto whitespace-nowrap"
-                        title="Clear PDF Cache"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        <span>Clear Cache</span>
-                    </button>
+                            }}
+                            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
+                            title="Clear PDF Cache"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Clear Cache</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Toolbar */}

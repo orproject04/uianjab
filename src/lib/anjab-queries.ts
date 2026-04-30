@@ -499,11 +499,15 @@ export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | n
         if (byId.rows[0]) return byId.rows[0];
 
         // Try by peta_jabatan.id (find jabatan via peta_jabatan.jabatan_id)
-        const byPeta = await pool.query<AnjabRow>(
-            SELECT_ANJAB("j.id = (SELECT jabatan_id FROM peta_jabatan WHERE id = $1::uuid)"),
-            [idOrSlug]
-        );
-        return byPeta.rows[0] ?? null;
+        const petaQuery = await pool.query("SELECT id as peta_jabatan_id, jabatan_id FROM peta_jabatan WHERE id = $1::uuid LIMIT 1", [idOrSlug]);
+        if (petaQuery.rows[0]) {
+            const anjab = await pool.query<AnjabRow>(
+                SELECT_ANJAB_WITH_ABK("j.id = $1::uuid AND so.id = $2::uuid"),
+                [petaQuery.rows[0].jabatan_id, petaQuery.rows[0].peta_jabatan_id]
+            );
+            return anjab.rows[0] ?? null;
+        }
+        return null;
     }
 
     // Not UUID - slug path = gunakan SELECT_ANJAB_WITH_ABK (dengan data ABK)
