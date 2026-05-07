@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import { getPetaJabatan } from '@/lib/getPetaJabatan';
+import { printPetaJabatan } from '@/lib/printPetaJabatan';
 import type { RawNodeDatum, CustomNodeElementProps } from "react-d3-tree";
 import { useMe } from "@/context/MeContext";
 
@@ -31,7 +32,9 @@ type APIRow = {
   jenis_jabatan: string | null;
   kelas_jabatan?: string | null;
   pejabat?: PegawaiInfo[];
+  biroList?: string[]; // Optional list of biro for filter dropdown
 };
+
 
 // Type for search matches with name-level granularity
 type SearchMatch = {
@@ -271,6 +274,12 @@ export default function PetaJabatanClient() {
   // Copy to clipboard state - track which name was just copied
   const [copiedNameId, setCopiedNameId] = useState<string | null>(null);
 
+  // Unit / Biro filter
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
+  const [unitSearch, setUnitSearch] = useState("");
+  const unitDropdownRef = useRef<HTMLDivElement | null>(null);
+
 
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
@@ -313,6 +322,25 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     sessionStorage.setItem('petaJabatan_fungsionalMode', fungsionalMode);
   }, [fungsionalMode]);
+
+  useEffect(() => {
+    if (selectedUnit !== null) {
+      sessionStorage.setItem('petaJabatan_selectedUnit', selectedUnit);
+    } else {
+      sessionStorage.removeItem('petaJabatan_selectedUnit');
+    }
+  }, [selectedUnit]);
+
+  useEffect(() => {
+    if (!unitDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (unitDropdownRef.current && !unitDropdownRef.current.contains(e.target as Node)) {
+        setUnitDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [unitDropdownOpen]);
 
   useEffect(() => {
     if (filterText) {
@@ -386,6 +414,7 @@ export default function PetaJabatanClient() {
     sessionStorage.removeItem('petaJabatan_scope');
     sessionStorage.removeItem('petaJabatan_fungsionalMode');
     sessionStorage.removeItem('petaJabatan_returnFromAnjab');
+    sessionStorage.removeItem('petaJabatan_selectedUnit');
 
     // Reset all state to defaults
     setFilterText("");
@@ -395,6 +424,8 @@ export default function PetaJabatanClient() {
     setCurrentZoom(null);
     setScope("PUSAT");
     setFungsionalMode("STRUKTURAL");
+    setSelectedUnit(null);
+    setUnitSearch("");
     hasFocusedOnce.current = false;
     
     // Collapse all nodes to initial state
@@ -434,6 +465,9 @@ export default function PetaJabatanClient() {
       if (savedFilterText) {
         setFilterText(savedFilterText);
       }
+
+      const savedUnit = sessionStorage.getItem('petaJabatan_selectedUnit');
+      if (savedUnit) setSelectedUnit(savedUnit);
 
       // Only restore lastClickedPath if returning from anjab page
       if (returnFromAnjab === 'true' && savedLastPath) {
@@ -582,38 +616,201 @@ export default function PetaJabatanClient() {
   const rows = scenario.rows;
   const syntheticFlags = scenario.synthetic;
 
-  // Reset collapse state ONLY when scope changes (PUSAT <-> DAERAH)
-  useEffect(() => {
-    if (rows.length === 0) return;
-
-    // Reset and collapse all when scope changes
-    const map: Record<string, boolean> = {};
-    for (const r of rows) map[r.id] = true;
-    setCollapseMap(map);
-    hasFocusedOnce.current = false; // Allow focus to work again if needed
-  }, [scope]); // Only reset when scope changes, NOT fungsionalMode
-
-  useEffect(() => {
-    if (rows.length === 0) return;
-
-    // If we have a last clicked path and haven't focused yet, expand to that path
-    if (lastClickedPath && rows.length > 0 && !hasFocusedOnce.current) {
-      const expandedMap = expandNodesAlongPath(lastClickedPath, rows);
-      setCollapseMap(expandedMap);
-      hasFocusedOnce.current = true;
-    } else if (!lastClickedPath && !hasFocusedOnce.current) {
-      // Initial load without focus - collapse all
-      const map: Record<string, boolean> = {};
-      for (const r of rows) map[r.id] = true;
-      setCollapseMap(map);
-      hasFocusedOnce.current = true; // Mark as focused to prevent re-expansion on user clicks
+  // Map unit_kerja → scope yang dibutuhkan (untuk auto-switch saat pilih Provinsi)
+  const unitScopeMap = useMemo(() => {
+    const map = new Map<string, ScopeOpt>();
+    for (const r of allRows) {
+      const rank = rankJenis(r.jenis_jabatan);
+      if (!r.unit_kerja) continue;
+      const key = r.unit_kerja.trim();
+      if (rank === 2) map.set(key, 'PUSAT');
+      if (rank === 3 && r.is_pusat === false) map.set(key, 'DAERAH');
     }
-    // Don't re-collapse when lastClickedPath is cleared
-  }, [rows, lastClickedPath, expandNodesAlongPath]);
+    return map;
+  }, [allRows]);
+
+  const unitOptions = useMemo(() => {
+    // Pakai allRows agar Provinsi (is_pusat=false) muncul meskipun scope saat ini PUSAT
+    const units = new Set<string>();
+    for (const r of allRows) {
+      const rank = rankJenis(r.jenis_jabatan);
+      if (!r.unit_kerja) continue;
+      const key = r.unit_kerja.trim();
+      if (rank === 2) units.add(key); // Biro, Pusat (Eselon II)
+      if (rank === 3 && r.is_pusat === false) units.add(key); // Kantor Provinsi
+    }
+    return Array.from(units).sort((a, b) => a.localeCompare(b, 'id'));
+  }, [allRows]);
+
+  // Handler pilih unit: auto-switch scope agar data yang tepat termuat
+  const handleSelectUnit = useCallback((unit: string | null) => {
+    setSelectedUnit(unit);
+    if (unit) {
+      const requiredScope = unitScopeMap.get(unit);
+      if (requiredScope) setScope(requiredScope);
+    }
+  }, [unitScopeMap]);
+
+  const unitFilteredRows = useMemo(() => {
+    if (!selectedUnit) return rows;
+
+    // Cari head node: node dengan rank paling tinggi (paling senior) yang punya unit_kerja ini
+    let headNode: APIRow | null = null;
+    let headRank = 99;
+    for (const r of rows) {
+      if ((r.unit_kerja || '').trim() !== selectedUnit) continue;
+      const rank = rankJenis(r.jenis_jabatan);
+      if (rank < headRank) { headRank = rank; headNode = r; }
+    }
+    if (!headNode) return rows;
+
+    // Bangun index parent→children untuk efisiensi
+    const byParentId = new Map<string, string[]>();
+    for (const r of rows) {
+      if (r.parent_id) {
+        const arr = byParentId.get(r.parent_id) || [];
+        arr.push(r.id);
+        byParentId.set(r.parent_id, arr);
+      }
+    }
+
+    // Kumpulkan semua descendant head node
+    const keep = new Set<string>();
+    const addSubtree = (id: string) => {
+      keep.add(id);
+      for (const childId of (byParentId.get(id) || [])) addSubtree(childId);
+    };
+    addSubtree(headNode.id);
+
+    // Kembalikan subtree dengan head sebagai root (parent_id = null)
+    return rows
+      .filter(r => keep.has(r.id))
+      .map(r => r.id === headNode!.id ? { ...r, parent_id: null } : r);
+  }, [rows, selectedUnit]);
+
+  // Untuk print: gunakan semua baris (struktural + fungsional) agar data cocok dengan yang tampil di aplikasi
+  const printRows = useMemo(() => {
+    // Scope filter: pusat atau daerah (sama seperti scenario), tapi tanpa filter jenis jabatan
+    const pusat = scope === "PUSAT";
+    const byId = new Map<string, APIRow>(allRows.map(r => [r.id, r]));
+
+    let baseRows: APIRow[];
+    if (pusat) {
+      // Ambil semua baris is_pusat=true beserta ancestor-nya
+      const keep = new Set<string>();
+      for (const r of allRows) {
+        if (r.is_pusat === true) {
+          let cur: string | null = r.id;
+          while (cur) { keep.add(cur); cur = byId.get(cur)?.parent_id || null; }
+        }
+      }
+      baseRows = allRows.filter(r => keep.has(r.id));
+    } else {
+      // Ambil semua baris is_pusat=false + setjen sebagai root
+      const setjenNode = allRows.find(r => (r.slug || '').toLowerCase() === 'setjen') || null;
+      const setjenId = setjenNode?.id ?? null;
+      const keep = new Set<string>();
+      if (setjenId) keep.add(setjenId);
+      const isUnderSetjen = (id: string) => {
+        if (!setjenId) return true;
+        let cur: string | null = id;
+        while (cur) { if (cur === setjenId) return true; cur = byId.get(cur)?.parent_id || null; }
+        return false;
+      };
+      for (const r of allRows) {
+        if (r.is_pusat === false && isUnderSetjen(r.id)) {
+          let cur: string | null = r.id;
+          while (cur && cur !== setjenId) { keep.add(cur); cur = byId.get(cur)?.parent_id || null; }
+          if (setjenId) keep.add(setjenId);
+        }
+      }
+      baseRows = allRows.filter(r => keep.has(r.id));
+    }
+
+    // Unit filter (sama seperti unitFilteredRows)
+    if (!selectedUnit) return baseRows;
+
+    let headNode: APIRow | null = null;
+    let headRank = 99;
+    for (const r of baseRows) {
+      if ((r.unit_kerja || '').trim() !== selectedUnit) continue;
+      const rank = rankJenis(r.jenis_jabatan);
+      if (rank < headRank) { headRank = rank; headNode = r; }
+    }
+    if (!headNode) return baseRows;
+
+    const byParentId = new Map<string, string[]>();
+    for (const r of baseRows) {
+      if (r.parent_id) {
+        const arr = byParentId.get(r.parent_id) || [];
+        arr.push(r.id);
+        byParentId.set(r.parent_id, arr);
+      }
+    }
+    const keep = new Set<string>();
+    const addSubtree = (id: string) => {
+      keep.add(id);
+      for (const childId of (byParentId.get(id) || [])) addSubtree(childId);
+    };
+    addSubtree(headNode.id);
+    return baseRows
+      .filter(r => keep.has(r.id))
+      .map(r => r.id === headNode!.id ? { ...r, parent_id: null } : r);
+  }, [allRows, scope, selectedUnit]);
+
+  // Flag sintetis untuk print: selalu sertakan KJF agar layout sama
+  const printSyntheticFlags = useMemo(() => ({
+    addKJFforEselonII: scope === 'PUSAT',
+    addSKDPforSetjen: scope === 'PUSAT',
+    addKJFforEselonIII: scope === 'DAERAH',
+    kjfForInspekturAsE4: scope === 'PUSAT',
+  }), [scope]);
+
+  const handlePrint = useCallback(() => {
+    printPetaJabatan(
+      printRows as any,
+      printSyntheticFlags,
+      selectedUnit,
+      'DPD RI'
+    );
+  }, [printRows, printSyntheticFlags, selectedUnit]);
+
+  // Reset collapse state when scope or unit filter changes
+  useEffect(() => {
+    if (unitFilteredRows.length === 0) return;
+
+    const map: Record<string, boolean> = {};
+    for (const r of unitFilteredRows) map[r.id] = true;
+    setCollapseMap(map);
+    hasFocusedOnce.current = false;
+  }, [scope, selectedUnit]); // Reset when scope or unit filter changes
+
+  useEffect(() => {
+    if (unitFilteredRows.length === 0) return;
+
+    if (!hasFocusedOnce.current) {
+      if (selectedUnit) {
+        // Auto-expand semua node saat unit dipilih
+        const map: Record<string, boolean> = {};
+        for (const r of unitFilteredRows) map[r.id] = false;
+        setCollapseMap(map);
+        hasFocusedOnce.current = true;
+      } else if (lastClickedPath) {
+        const expandedMap = expandNodesAlongPath(lastClickedPath, unitFilteredRows);
+        setCollapseMap(expandedMap);
+        hasFocusedOnce.current = true;
+      } else {
+        const map: Record<string, boolean> = {};
+        for (const r of unitFilteredRows) map[r.id] = true;
+        setCollapseMap(map);
+        hasFocusedOnce.current = true;
+      }
+    }
+  }, [unitFilteredRows, lastClickedPath, selectedUnit, expandNodesAlongPath]);
 
   // Auto-expand and highlight matching nodes when searching (with debounce)
   useEffect(() => {
-    if (!filterText.trim() || rows.length === 0) {
+    if (!filterText.trim() || unitFilteredRows.length === 0) {
       setSearchMatches([]);
       setCurrentMatchIndex(0);
       setCurrentZoom(null); // Reset zoom when search cleared
@@ -626,7 +823,7 @@ export default function PetaJabatanClient() {
       const matches: SearchMatch[] = [];
 
       // Find all matching nodes with detailed info
-      for (const row of rows) {
+      for (const row of unitFilteredRows) {
         const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
         const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
         const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
@@ -666,7 +863,7 @@ export default function PetaJabatanClient() {
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [filterText, rows]);
+  }, [filterText, unitFilteredRows]);
 
   // ==== Show only current match (collapse all others) ====
   useEffect(() => {
@@ -676,25 +873,25 @@ export default function PetaJabatanClient() {
     if (!currentMatch) return;
 
     const expandMap: Record<string, boolean> = {};
-    
+
     // Collapse everything first
-    for (const r of rows) expandMap[r.id] = true;
+    for (const r of unitFilteredRows) expandMap[r.id] = true;
 
     // Find the current match row and expand only its path
-    const currentRow = rows.find(r => r.id === currentMatch.nodeId);
+    const currentRow = unitFilteredRows.find(r => r.id === currentMatch.nodeId);
     if (currentRow) {
       let current: APIRow | undefined = currentRow;
       while (current) {
         expandMap[current.id] = false; // false = expanded
-        current = current.parent_id ? rows.find(r => r.id === current!.parent_id) : undefined;
+        current = current.parent_id ? unitFilteredRows.find(r => r.id === current!.parent_id) : undefined;
       }
     }
 
     setCollapseMap(expandMap);
-    
+
     // Reset centered ref when collapsemap changes for search
     lastCenteredIndexRef.current = -1;
-  }, [currentMatchIndex, searchMatches, rows]);
+  }, [currentMatchIndex, searchMatches, unitFilteredRows]);
 
   // ---------- Breakpoints (berbasis lebar kontainer) ----------
   // Adjusted for 14-inch laptops (~1366px width)
@@ -710,10 +907,10 @@ export default function PetaJabatanClient() {
 
   // ==== Build tree roots (D3Node) ====
   const roots: D3Node[] = useMemo(() => {
-    if (!rows.length) return [];
+    if (!unitFilteredRows.length) return [];
 
     const byParent = new Map<string | null, APIRow[]>();
-    for (const r of rows) {
+    for (const r of unitFilteredRows) {
       const arr = byParent.get(r.parent_id) || [];
       arr.push(r);
       byParent.set(r.parent_id, arr);
@@ -839,7 +1036,7 @@ export default function PetaJabatanClient() {
     };
 
     return (byParent.get(null) || []).map(root => build(root, []));
-  }, [rows, syntheticFlags]);
+  }, [unitFilteredRows, syntheticFlags]);
 
   // ==== Filter text ====
   const lcFilter = filterText.trim().toLowerCase();
@@ -850,14 +1047,14 @@ export default function PetaJabatanClient() {
     if (searchMatches.length > 0 && currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
       const currentMatch = searchMatches[currentMatchIndex];
       
-      // Build path set from root to current match (using rows for real nodes)
+      // Build path set from root to current match (using unitFilteredRows for real nodes)
       const pathIds = new Set<string>();
-      const currentRow = rows.find(r => r.id === currentMatch.nodeId);
+      const currentRow = unitFilteredRows.find(r => r.id === currentMatch.nodeId);
       if (currentRow) {
         let current: APIRow | undefined = currentRow;
         while (current) {
           pathIds.add(current.id);
-          current = current.parent_id ? rows.find(r => r.id === current!.parent_id) : undefined;
+          current = current.parent_id ? unitFilteredRows.find(r => r.id === current!.parent_id) : undefined;
         }
       }
       
@@ -1146,7 +1343,7 @@ export default function PetaJabatanClient() {
       }
       
       // Find the matching row to get path
-      const matchRow = rows.find(r => r.id === currentMatch.nodeId);
+      const matchRow = unitFilteredRows.find(r => r.id === currentMatch.nodeId);
       if (!matchRow) {
         return;
       }
@@ -1268,6 +1465,13 @@ export default function PetaJabatanClient() {
       setTranslate(defaultTranslate);
     }
   }, [translate, containerSize.w, bp.isMobile]);
+
+  // Reset translate ke center saat unit dipilih (agar root baru terlihat)
+  useEffect(() => {
+    if (!containerSize.w) return;
+    setTranslate({ x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110 });
+    setCurrentZoom(null);
+  }, [selectedUnit]);
 
   // Copy to clipboard function
   const handleCopyName = useCallback((name: string, nodeId: string, idx: number, e: React.MouseEvent) => {
@@ -1752,6 +1956,18 @@ export default function PetaJabatanClient() {
               )}
             </div>
           )}
+          {/* Unit / Biro Filter - Mobile */}
+          <select
+            value={selectedUnit || ""}
+            onChange={(e) => handleSelectUnit(e.target.value || null)}
+            className="w-full px-3 py-2 rounded border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">Semua Biro / Pusat / Provinsi</option>
+            {unitOptions.map(u => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+
           {/* Baris 2: Reload & Fullscreen full-width */}
           <button
             onClick={load}
@@ -1759,6 +1975,12 @@ export default function PetaJabatanClient() {
             className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
           >
             {loading ? "Memuat…" : "Reload"}
+          </button>
+          <button
+            onClick={handlePrint}
+            className="w-full px-3 py-2 rounded border text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+          >
+            Cetak
           </button>
           {!isFullscreen ? (
             <button
@@ -1801,6 +2023,18 @@ export default function PetaJabatanClient() {
             >
               Reset
             </button>
+            {selectedUnit !== null && (
+              <button
+                onClick={handlePrint}
+                title="Cetak peta jabatan sesuai filter aktif"
+                className="flex items-center gap-1.5 px-3 py-2 rounded border text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+              >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Cetak
+            </button>
+            )}
             {!isFullscreen ? (
               <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
                 Fullscreen
@@ -1829,6 +2063,70 @@ export default function PetaJabatanClient() {
             options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
             size={bp.isMobile ? "sm" : "md"}
           />
+        </div>
+
+        {/* Unit / Biro Filter Dropdown */}
+        <div className="relative" ref={unitDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setUnitDropdownOpen(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+              selectedUnit
+                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            <span className="max-w-[150px] truncate">{selectedUnit || "Pilih Biro / Pusat / Provinsi"}</span>
+            {selectedUnit ? (
+              <span
+                role="button"
+                onClick={(e) => { e.stopPropagation(); setSelectedUnit(null); setUnitSearch(""); }}
+                className="ml-0.5 text-blue-400 hover:text-blue-600 font-bold leading-none"
+                title="Hapus filter unit"
+              >×</span>
+            ) : (
+              <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${unitDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </button>
+
+          {unitDropdownOpen && (
+            <div className="absolute top-full left-0 mt-1 z-50 w-64 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+              <div className="p-2 border-b">
+                <input
+                  autoFocus
+                  placeholder="Cari Biro / Pusat / Provinsi..."
+                  value={unitSearch}
+                  onChange={(e) => setUnitSearch(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                {unitOptions
+                  .filter(u => u.toLowerCase().includes(unitSearch.toLowerCase()))
+                  .map(unit => (
+                    <button
+                      key={unit}
+                      type="button"
+                      onClick={() => { handleSelectUnit(unit); setUnitDropdownOpen(false); setUnitSearch(""); }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                        selectedUnit === unit ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                      }`}
+                    >
+                      {unit}
+                    </button>
+                  ))
+                }
+                {unitOptions.filter(u => u.toLowerCase().includes(unitSearch.toLowerCase())).length === 0 && (
+                  <div className="px-3 py-4 text-sm text-gray-400 text-center">Tidak ditemukan</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Search Results Navigation */}
@@ -1869,6 +2167,7 @@ export default function PetaJabatanClient() {
       </div>
 
       {err && <div className="text-sm text-red-600">{err}</div>}
+
 
       {/* Tips Navigasi - Collapsible tooltip */}
       {!loading && rd3Data.length > 0 && (
@@ -2050,7 +2349,21 @@ export default function PetaJabatanClient() {
                       size="sm"
                     />
                   </div>
-                  
+
+                  {/* Row 1b: Unit / Biro Filter */}
+                  <div>
+                    <select
+                      value={selectedUnit || ""}
+                      onChange={(e) => handleSelectUnit(e.target.value || null)}
+                      className="w-full px-2 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                    >
+                      <option value="">Semua Biro / Pusat / Provinsi</option>
+                      {unitOptions.map(u => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Row 2: Search Input - More compact on mobile */}
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     <input
@@ -2144,7 +2457,7 @@ export default function PetaJabatanClient() {
         ) : (
           !loading && (
             <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
-              {rows.length === 0 ? "Data kosong" : "Tidak ada yang cocok"}
+              {unitFilteredRows.length === 0 ? "Data kosong" : "Tidak ada yang cocok"}
             </div>
           )
         )}
