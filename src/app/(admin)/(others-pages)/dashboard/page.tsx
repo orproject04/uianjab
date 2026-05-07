@@ -721,7 +721,7 @@ export default function DashboardPage() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Total Jabatan - Print</title>
+    <title>Pandawa - Ortala</title>
     <style>
         @page { margin: 1cm; size: A4 portrait; }
         body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }
@@ -857,7 +857,7 @@ export default function DashboardPage() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Rekap Kelas Jabatan</title>
+    <title>Pandawa - Ortala</title>
     <style>
         @page { margin: 2cm; size: A4 portrait; }
         body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
@@ -935,7 +935,7 @@ export default function DashboardPage() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Total Per Jenis Jabatan - Print</title>
+    <title>Pandawa - Ortala</title>
     <style>
         @page { margin: 1cm; size: A4 portrait; }
         body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }
@@ -1072,7 +1072,7 @@ export default function DashboardPage() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Total Jabatan Error Sinkronisasi - Print</title>
+    <title>Pandawa - Ortala</title>
     <style>
         @page { margin: 1cm; size: A4 landscape; }
         body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }

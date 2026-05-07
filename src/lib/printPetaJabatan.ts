@@ -369,7 +369,7 @@ body {
   font-weight: bold;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
-  margin-top: 16px;
+  margin-top: 24px;
 }
 .page-subtitle {
   text-align: center;
@@ -709,8 +709,8 @@ export function printPetaJabatan(
   <style>${PRINT_CSS}</style>
 </head>
 <body>
+  <div style="text-align: center; font-size: 9pt; font-weight: bold; color: #333; margin-bottom: 20px;">Pandawa - Ortala</div>
   <div class="page-title">${esc(titleText)}</div>
-  <div class="page-subtitle">${esc(orgName.toUpperCase())}</div>
   <div class="org-wrap">
     <div class="org-root">
       ${treeHtml}
