@@ -160,7 +160,7 @@ function inlineTableRow(c: PrintNode, index: number): string {
     <td class="tc">${esc(c.row.kelas_jabatan || '-')}</td>
     <td class="tc">${cb}</td>
     <td class="tc">${ck}</td>
-    <td class="tc" style="color:${csColor}">${cs >= 0 ? '+' : ''}${cs}</td>
+    <td class="tc" style="color:${csColor}">${cs >= 0 ? '' : ''}${cs}</td>
   </tr>`;
 }
 
@@ -185,7 +185,7 @@ function renderCard(node: PrintNode): string {
   const totalKeb = node.isSynthetic ? childrenKeb : (r.kebutuhan_pegawai ?? 0);
   const totalSel = totalBez - totalKeb;
   const totalSelColor = totalSel < 0 ? '#cc0000' : totalSel > 0 ? '#006600' : '#111';
-  const selHtml = `<span style="color:${totalSelColor};font-weight:bold">${totalSel >= 0 ? '+' : ''}${totalSel}</span>`;
+  const selHtml = `<span style="color:${totalSelColor};font-weight:bold">${totalSel >= 0 ? '' : ''}${totalSel}</span>`;
 
   // ── KJF / synthetic card ────────────────────────────────────────────────────
   if (node.isSynthetic) {
@@ -240,11 +240,57 @@ function renderCard(node: PrintNode): string {
         <td class="tc str-kelas-val">${esc(r.kelas_jabatan || '-')}</td>
         <td class="tc str-num-val">${totalBez}</td>
         <td class="tc str-num-val">${totalKeb}</td>
-        <td class="tc str-num-val" style="color:${totalSelColor};font-weight:bold">${totalSel >= 0 ? '+' : ''}${totalSel}</td>
+        <td class="tc str-num-val" style="color:${totalSelColor};font-weight:bold">${totalSel >= 0 ? '' : ''}${totalSel}</td>
       </tr>
     </tbody>
   </table>
   ${inlineTableHtml}
+</div>`;
+}
+
+// ── Special layout: Pusat/Inspektorat (E2 with Subbag TU + KJF) ──────────────
+function renderPusatNode(node: PrintNode, treeChildren: PrintNode[]): string {
+  const e3Kids = treeChildren.filter(c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 3);
+  const e4Kids = treeChildren.filter(c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 4);
+  const kjfKids = treeChildren.filter(c => c.isSynthetic);
+
+  const headCardHtml = renderCard(node);
+
+  const subbagHtml = e4Kids.map(c => renderNode(c)).join('');
+
+  // T-junction on the vertical connector: branch right to Subbag TU, continue down to bidangs/KJF.
+  // When there is no Subbag TU, render a plain v-line instead.
+  const tjuncHtml = subbagHtml
+    ? `<div class="pusat-tjunc"><div class="pusat-tjunc-line"></div><div class="pusat-tjunc-branch"><div class="pusat-h-conn"></div>${subbagHtml}</div></div>`
+    : `<div class="v-line"></div>`;
+
+  let bidangSection = '';
+  if (e3Kids.length > 0) {
+    const mid = Math.ceil(e3Kids.length / 2);
+    const leftKids = e3Kids.slice(0, mid);
+    const rightKids = e3Kids.slice(mid);
+
+    const leftCols = leftKids.map((c, i) =>
+      `<div class="pusat-bcol${i === 0 ? ' left-edge' : ''}">${renderNode(c)}</div>`
+    ).join('');
+    const rightCols = rightKids.map((c, i) =>
+      `<div class="pusat-bcol${i === rightKids.length - 1 ? ' right-edge' : ''}">${renderNode(c)}</div>`
+    ).join('');
+
+    bidangSection = `<div class="pusat-bidang-row">${leftCols}<div class="pusat-vpass"></div>${rightCols}</div>`;
+  }
+
+  const kjfCards = kjfKids.map(c => renderCard(c)).join('');
+  // For Inspektorat (no bidangs), the tjunc v-line already connects HEAD→KJF.
+  // For Pusat with bidangs, add an extra v-line between the bidang row bottom and KJF.
+  const kjfSection = kjfCards
+    ? (e3Kids.length > 0 ? `<div class="v-line"></div>${kjfCards}` : kjfCards)
+    : '';
+
+  return `<div class="pusat-node">
+  <div class="pusat-head-wrap">${headCardHtml}</div>
+  ${tjuncHtml}
+  ${bidangSection}${kjfSection}
 </div>`;
 }
 
@@ -254,10 +300,57 @@ function renderNode(node: PrintNode): string {
     c => c.isSynthetic || rankJenis(c.row.jenis_jabatan) < 5
   );
 
+  const rank = rankJenis(node.row.jenis_jabatan);
   const cardHtml = renderCard(node);
+
+  // Special layout for Pusat/Inspektorat: E2 with direct E4 children (Subbag TU) + KJF synthetic
+  if (rank === 2) {
+    const hasE4 = treeChildren.some(c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 4);
+    const hasKJF = treeChildren.some(c => c.isSynthetic);
+    if (hasE4 && hasKJF) {
+      return renderPusatNode(node, treeChildren);
+    }
+  }
 
   if (treeChildren.length === 0) {
     return `<div class="node">${cardHtml}</div>`;
+  }
+
+  // Biro (E2, no direct E4) / Kantor Provinsi (E3) layout:
+  // KJF is placed to the right of children-row at Bagian card level.
+  // L-connector: horizontal arm from v-line midpoint going right, then drops down to KJF card.
+  // Arm width is calculated from number of structural children so it always reaches the KJF.
+  // (Rank-2 Pusat with direct E4 is already handled above by renderPusatNode.)
+  if (rank === 2 || rank === 3) {
+    const kjfKids   = treeChildren.filter(c => c.isSynthetic);
+    const structKids = treeChildren.filter(c => !c.isSynthetic);
+    if (kjfKids.length > 0 && structKids.length > 0) {
+      const kjfBranchHtml = kjfKids.map(c => renderCard(c)).join('');
+      const structCols = structKids.map((c, i) => {
+        const isOnly  = structKids.length === 1;
+        const isFirst = i === 0;
+        const isLast  = i === structKids.length - 1;
+        const cls = isOnly ? 'child-col only'
+                  : isFirst ? 'child-col first'
+                  : isLast  ? 'child-col last'
+                  : 'child-col';
+        return `<div class="${cls}">${renderNode(c)}</div>`;
+      }).join('');
+      // Each child-col: 170px card + 40px padding = 210px. Arm goes from center to right edge.
+      // v-line is 30px; midpoint at 15px. Drop from midpoint to Bagian card top = 15 + 16 = 31px.
+      const armH = Math.ceil(structKids.length * 210 / 2);
+      return `<div class="node">
+  ${cardHtml}
+  <div class="biro-vl-tjunc">
+    <div class="biro-l-h" style="width:${armH}px;"></div>
+    <div class="biro-l-v" style="left:${armH + 1}px;height:31px;"></div>
+  </div>
+  <div class="biro-main-and-kjf">
+    <div class="children-row">${structCols}</div>
+    <div class="biro-kjf-side">${kjfBranchHtml}</div>
+  </div>
+</div>`;
+    }
   }
 
   // Left-spine vertical layout for all-E4 children (Subbagian under Bagian)
@@ -331,7 +424,7 @@ function buildSummary(rows: PrintAPIRow[]): string {
     const sc = s < 0 ? 'color:#cc0000' : '';
     return `<tr>
       <td class="sl">${jenis}</td><td>${b}</td><td>${k}</td>
-      <td style="${sc}">${s >= 0 ? '+' : ''}${s}</td>
+      <td style="${sc}">${s >= 0 ? '' : ''}${s}</td>
     </tr>`;
   }).join('');
   const ts = totalB - totalK;
@@ -342,7 +435,7 @@ function buildSummary(rows: PrintAPIRow[]): string {
     ${rowsHtml}
     <tr class="sum-total">
       <td class="sl">JUMLAH TOTAL</td><td>${totalB}</td><td>${totalK}</td>
-      <td style="${tsc}">${ts >= 0 ? '+' : ''}${ts}</td>
+      <td style="${tsc}">${ts >= 0 ? '' : ''}${ts}</td>
     </tr>
   </tbody>
 </table>`;
@@ -369,7 +462,7 @@ body {
   font-weight: bold;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
-  margin-top: 24px;
+  margin-top: 14px;
 }
 .page-subtitle {
   text-align: center;
@@ -416,10 +509,32 @@ body {
   align-items: center;
 }
 
+.node-tjunc {
+  position: relative;
+}
+
+.node-tjunc-line {
+  width: 1px;
+  height: 45px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+/* Branch emerges from the right side of the vertical connector */
+.node-tjunc-branch {
+  position: absolute;
+  left: 1px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
 /* ─── Vertical connector line (explicit element, always prints) ── */
 .v-line, .vert-conn {
   width: 1px;
-  height: 18px;
+  height: 30px;
   background: #333;
   flex-shrink: 0;
   -webkit-print-color-adjust: exact !important;
@@ -684,6 +799,161 @@ body {
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
 }
+
+/* ─── Pusat/Inspektorat special layout ───────────────────────── */
+/* HEAD [-- SUBBAG TU]  /  T-bar  /  [BIDANG1] (gap) [BIDANG2]  /  [KJF] */
+.pusat-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* HEAD card wrapper: width equals HEAD card width so pusat-node centers it correctly */
+.pusat-head-wrap {}
+/* T-junction: 1px-wide vertical segment; branch extends right to Subbag TU */
+.pusat-tjunc {
+  position: relative;
+}
+.pusat-tjunc-line {
+  width: 1px;
+  height: 45px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+/* Branch emerges from the right side of the vertical connector */
+.pusat-tjunc-branch {
+  position: absolute;
+  left: 1px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.pusat-h-conn {
+  width: 240px;
+  height: 1px;
+  background: #333;
+  flex-shrink: 0;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+.pusat-bidang-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  position: relative;
+}
+.pusat-bidang-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+.pusat-bcol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px;
+  position: relative;
+}
+.pusat-bcol::before {
+  content: '';
+  display: block;
+  width: 1px;
+  height: 25px;
+  background: #333;
+  flex-shrink: 0;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+.pusat-bcol.left-edge::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 50%;
+  height: 3px;
+  background: #fff;
+  z-index: 2;
+}
+.pusat-bcol.right-edge::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: 0;
+  width: 50%;
+  height: 3px;
+  background: #fff;
+  z-index: 2;
+}
+.pusat-vpass {
+  width: 72px;
+  flex-shrink: 0;
+  position: relative;
+  min-height: 16px;
+}
+.pusat-vpass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  margin-left: -1px;
+  width: 1px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+/* ─── Biro/Kantor Provinsi: L-connector from v-line midpoint to KJF ── */
+/* The v-line doubles as the tjunc; biro-l-h and biro-l-v are the L arm (absolute) */
+.biro-vl-tjunc {
+  position: relative;
+  width: 1px;
+  height: 30px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+/* Horizontal part of L: starts at v-line midpoint, goes right (width set inline) */
+.biro-l-h {
+  position: absolute;
+  top: 50%;
+  left: 1px;
+  height: 1px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+/* Vertical part of L: drops from midpoint down to KJF card level (left/height set inline) */
+.biro-l-v {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  background: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+/* Row wrapper: children-row + KJF side by side */
+.biro-main-and-kjf {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+/* KJF side: padding-top aligns KJF card with Bagian card tops (child-col drops 16px) */
+.biro-kjf-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 16px;
+  padding-left: 20px;
+}
 `;
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -709,7 +979,7 @@ export function printPetaJabatan(
   <style>${PRINT_CSS}</style>
 </head>
 <body>
-  <div style="text-align: center; font-size: 9pt; font-weight: bold; color: #333; margin-bottom: 20px;">Pandawa - Ortala</div>
+  <div style="text-align: center; font-size: 9pt; font-weight: bold; color: #333; margin-bottom: 10px;">Pandawa - Ortala</div>
   <div class="page-title">${esc(titleText)}</div>
   <div class="org-wrap">
     <div class="org-root">
