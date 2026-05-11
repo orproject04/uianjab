@@ -5,6 +5,7 @@ import { getKeycloakConfig, exchangeCodeForToken, getUserInfo } from '@/lib/keyc
 import pool from '@/lib/db';
 import { signAccessToken, signRefreshToken, ACCESS_TOKEN_MAXAGE_SEC } from '@/lib/auth';
 import { hashRefreshToken } from '@/lib/tokens';
+import { sanitizeInternalNext } from '@/lib/redirect';
 
 export async function GET(req: NextRequest) {
     try {
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
         const cookieStore = await cookies();
         const savedState = cookieStore.get('keycloak_state')?.value;
         const codeVerifier = cookieStore.get('keycloak_code_verifier')?.value;
-        const next = cookieStore.get('keycloak_next')?.value || '/';
+        const next = sanitizeInternalNext(cookieStore.get('keycloak_next')?.value);
 
         // Verifikasi state untuk mencegah CSRF
         if (!savedState || savedState !== state) {

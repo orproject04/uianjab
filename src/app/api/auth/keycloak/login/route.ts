@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getKeycloakConfig, getKeycloakAuthUrl } from '@/lib/keycloak';
 import { randomBytes, createHash } from 'crypto';
+import { sanitizeInternalNext } from '@/lib/redirect';
 
 function generateRandomString(length: number = 32): string {
     return randomBytes(length).toString('base64url');
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
         const code_challenge = generateCodeChallenge(code_verifier);
 
         // Ambil 'next' parameter dari query untuk redirect setelah login
-        const next = req.nextUrl.searchParams.get('next') || '/';
+        const next = sanitizeInternalNext(req.nextUrl.searchParams.get('next'));
         
         // Generate authorization URL
         const authUrl = getKeycloakAuthUrl(config, state, code_challenge);

@@ -7,6 +7,7 @@ import Link from "next/link";
 
 import {ThemeProvider} from "@/context/ThemeContext";
 import {tokenStore} from "@/lib/tokens";
+import { sanitizeInternalNext } from "@/lib/redirect";
 
 // Helper kecil untuk cek exp JWT (tanpa verifikasi kriptografis)
 function isJwtExpired(token: string): boolean {
@@ -23,7 +24,7 @@ function isJwtExpired(token: string): boolean {
 export default function AuthLayoutClient({children}: { children: React.ReactNode }) {
     const router = useRouter();
     const q = useSearchParams();
-    const next = useMemo(() => q.get("next") || "/", [q]);
+    const next = useMemo(() => sanitizeInternalNext(q.get("next")), [q]);
 
     const [canShow, setCanShow] = useState(false);
 

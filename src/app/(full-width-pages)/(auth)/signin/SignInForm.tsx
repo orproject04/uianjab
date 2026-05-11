@@ -1,7 +1,7 @@
 "use client";
 
 import React, {useEffect, useMemo, useState} from "react";
-import {useRouter, useSearchParams} from "next/navigation";
+import {useRouter} from "next/navigation";
 import Link from "next/link";
 
 import Input from "@/components/form/input/InputField";
@@ -10,14 +10,24 @@ import Button from "@/components/ui/button/Button";
 import {EyeCloseIcon, EyeIcon} from "@/icons";
 
 import {useMe} from "@/context/MeContext";
+import { sanitizeInternalNext } from "@/lib/redirect";
 
 type NoticeType = "success" | "info" | "error";
 type Notice = { type: NoticeType; text: string };
 
 export default function SignInForm() {
     const router = useRouter();
-    const q = useSearchParams();
-    const next = useMemo(() => q.get("next") || "/", [q]);
+    const [next, setNext] = useState<string>("/");
+
+    // Read search params only on client to avoid serializing raw `next` into RSC payload
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            setNext(sanitizeInternalNext(params.get("next")));
+        } catch (err) {
+            setNext("/");
+        }
+    }, []);
 
     const {refresh} = useMe();
 
@@ -36,12 +46,17 @@ export default function SignInForm() {
     }, [notice]);
 
     useEffect(() => {
-        if (q.get("verified") === "1") {
-            showNotice({type: "success", text: "Email berhasil diverifikasi. Silakan login."});
-        } else if (q.get("loggedout") === "1") {
-            showNotice({type: "info", text: "Anda telah keluar."});
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("verified") === "1") {
+                showNotice({type: "success", text: "Email berhasil diverifikasi. Silakan login."});
+            } else if (params.get("loggedout") === "1") {
+                showNotice({type: "info", text: "Anda telah keluar."});
+            }
+        } catch (err) {
+            // ignore
         }
-    }, [q]);
+    }, []);
 
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault();
