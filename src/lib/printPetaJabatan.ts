@@ -970,12 +970,14 @@ export function printPetaJabatan(
   const titleText = unitName
     ? `PETA JABATAN — ${unitName.toUpperCase()}`
     : `PETA JABATAN — ${orgName.toUpperCase()}`;
+  // Used as the PDF filename: browsers use document.title when saving print-to-PDF
+  const fileTitle = `PETA JABATAN - ${(unitName || orgName).toUpperCase()}`;
 
   const html = `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>${esc(titleText)}</title>
+  <title>${esc(fileTitle)}</title>
   <style>${PRINT_CSS}</style>
 </head>
 <body>
@@ -997,9 +999,12 @@ export function printPetaJabatan(
 
   iframe.onload = () => {
     setTimeout(() => {
+      const prevTitle = document.title;
+      document.title = fileTitle;
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       setTimeout(() => {
+        document.title = prevTitle;
         document.body.removeChild(iframe);
         URL.revokeObjectURL(url);
       }, 1000);
