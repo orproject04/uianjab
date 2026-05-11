@@ -3,33 +3,55 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Konfigurasi CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
+  ? process.env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean)
+  : [];
+
+// Helper function untuk check apakah origin diizinkan
+// Support exact match dan wildcard pattern
+// Contoh: *.dpd.go.id, https://*.dpd.go.id, https://pandawa-ortala.dpd.go.id
+function isOriginAllowed(origin: string, allowList: string[]): boolean {
+  try {
+    const originHost = new URL(origin).host; // e.g. cmb.dpd.go.id or cmb.dpd.go.id:443
+
+    return allowList.some((pattern) => {
+      // Normalize pattern by stripping scheme if present
+      const raw = pattern.replace(/^https?:\/\//, '');
+
+      // Exact host match
+      if (raw === originHost) return true;
+
+      // Wildcard matching on host (support *.dpd.go.id)
+      // Escape regex special chars except '*', then replace '*' with '.*'
+      const escaped = raw.replace(/[-/\\^$+?.()|[\\]{}]/g, '\\$&');
+      const regexPattern = escaped.replace(/\*/g, '.*');
+
+      try {
+        const regex = new RegExp(`^${regexPattern}$`);
+        return regex.test(originHost);
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
 
 // Fungsi untuk membuat headers CORS
 export function corsHeaders(origin: string | null) {
-  // Jika dalam development, izinkan semua origins
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  
+  // Jika origin tidak ada atau tidak di whitelist, kembalikan header kosong
+  if (!origin || !isOriginAllowed(origin, allowedOrigins)) {
+    return {} as Record<string, string>;
+  }
+
+  // Hanya kirim header preflight dan credentials untuk origin yang diizinkan
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
     'Access-Control-Max-Age': '86400', // 24 hours
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',
   };
-
-  // Tentukan origin yang diizinkan
-  if (isDevelopment) {
-    // Di development, izinkan origin yang diminta atau fallback ke localhost:3000
-    headers['Access-Control-Allow-Origin'] = origin || 'http://localhost:3000';
-  } else {
-    // Di production, cek apakah origin ada dalam daftar yang diizinkan
-    if (origin && allowedOrigins.includes(origin)) {
-      headers['Access-Control-Allow-Origin'] = origin;
-    } else {
-      headers['Access-Control-Allow-Origin'] = allowedOrigins[0];
-    }
-  }
 
   return headers;
 }
