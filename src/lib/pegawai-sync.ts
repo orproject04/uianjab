@@ -129,41 +129,78 @@ async function saveDataErrorRecords(records: UnmatchedRecord[], syncedBy?: strin
   try {
     await client.query('BEGIN');
 
-    // Keep this table as a snapshot of the latest sync errors.
-    await client.query('DELETE FROM data_error');
-
-    if (records.length > 0) {
-      const values: any[] = [];
-      const placeholders: string[] = [];
-
-      for (const rec of records) {
-        const baseIndex = values.length;
-        placeholders.push(
-          `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`
-        );
-        values.push(
-          rec.nip || '',
-          rec.name || '',
-          rec.jabatan_name || '',
-          rec.unit_organisasi_name || '',
-          rec.status || 'ACTIVE',
-          buildSaranPerbaikan(rec),
-          syncedBy || null
-        );
+    const uniqueRecords = new Map<string, UnmatchedRecord>();
+    for (const rec of records) {
+      if (rec.nip) {
+        uniqueRecords.set(rec.nip, rec);
       }
+    }
 
+    const incomingNips = Array.from(uniqueRecords.keys());
+
+    if (incomingNips.length === 0) {
+      await client.query('DELETE FROM data_error');
+    } else {
       await client.query(
-        `INSERT INTO data_error (
-          nip,
-          nama,
-          jabatan,
-          unit_organisasi,
-          status,
-          saran_perbaikan,
-          synced_by
-        ) VALUES ${placeholders.join(',')}`,
-        values
+        'DELETE FROM data_error WHERE NOT (nip = ANY($1::text[]))',
+        [incomingNips]
       );
+
+      const { rows: existingRows } = await client.query<{
+        nip: string;
+        saran_perbaikan: string | null;
+      }>(
+        'SELECT nip, saran_perbaikan FROM data_error WHERE nip = ANY($1::text[])',
+        [incomingNips]
+      );
+
+      const existingByNip = new Map(
+        existingRows.map((row) => [row.nip, row])
+      );
+
+      for (const rec of uniqueRecords.values()) {
+        if (existingByNip.has(rec.nip)) {
+          await client.query(
+            `UPDATE data_error
+             SET nama = $1,
+                 jabatan = $2,
+                 unit_organisasi = $3,
+                 status = $4,
+                 synced_by = $5,
+                 synced_at = CURRENT_TIMESTAMP
+             WHERE nip = $6`,
+            [
+              rec.name || '',
+              rec.jabatan_name || '',
+              rec.unit_organisasi_name || '',
+              rec.status || 'ACTIVE',
+              syncedBy || null,
+              rec.nip,
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO data_error (
+              nip,
+              nama,
+              jabatan,
+              unit_organisasi,
+              status,
+              saran_perbaikan,
+              synced_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              rec.nip,
+              rec.name || '',
+              rec.jabatan_name || '',
+              rec.unit_organisasi_name || '',
+              rec.status || 'ACTIVE',
+              buildSaranPerbaikan(rec),
+              syncedBy || null,
+            ]
+          );
+        }
+      }
     }
 
     await client.query('COMMIT');
