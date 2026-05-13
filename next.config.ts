@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
             "img-src 'self' data: https:",
             "font-src 'self' data: https:",
             "connect-src 'self' https: wss:",
+            "frame-src 'self' blob:",
             "frame-ancestors 'self'",
             "base-uri 'self'",
         ].join('; ');

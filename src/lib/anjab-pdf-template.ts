@@ -561,7 +561,6 @@ export function buildAnjabHtml(data: any): string {
   </style>
 </head>
 <body>
-<div style="text-align: center; font-size: 10pt; font-weight: bold; color: #333; margin-bottom: 10px;">Pandawa - Ortala</div>
 <div class="doc">
   <!-- 1. NAMA JABATAN -->
   <div class="section portrait">
