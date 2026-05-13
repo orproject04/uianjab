@@ -419,14 +419,16 @@ function buildSummary(rows: PrintAPIRow[]): string {
       totalK += k;
     }
   }
-  const rowsHtml = Object.entries(groups).map(([jenis, { b, k }]) => {
-    const s = b - k;
-    const sc = s < 0 ? 'color:#cc0000' : '';
-    return `<tr>
+  const rowsHtml = Object.entries(groups)
+    .filter(([, { b, k }]) => b !== 0 || k !== 0)
+    .map(([jenis, { b, k }]) => {
+      const s = b - k;
+      const sc = s < 0 ? 'color:#cc0000' : '';
+      return `<tr>
       <td class="sl">${jenis}</td><td>${b}</td><td>${k}</td>
       <td style="${sc}">${s >= 0 ? '' : ''}${s}</td>
     </tr>`;
-  }).join('');
+    }).join('');
   const ts = totalB - totalK;
   const tsc = ts < 0 ? 'color:#cc0000' : '';
   return `<table class="sum-tbl">
@@ -461,14 +463,14 @@ body {
   font-size: 9pt;
   font-weight: bold;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: 0px;
   margin-top: 14px;
 }
 .page-subtitle {
   text-align: center;
   font-size: 7pt;
   color: #444;
-  margin-bottom: 6px;
+  margin-bottom: 1px;
   text-transform: uppercase;
 }
 
@@ -476,7 +478,7 @@ body {
 .sum-tbl {
   border-collapse: collapse;
   font-size: 6.5pt;
-  margin-bottom: 8px;
+  margin-bottom: 1px;
 }
 .sum-tbl th, .sum-tbl td {
   border: 1px solid #aaa;
@@ -484,22 +486,37 @@ body {
   text-align: center;
   white-space: nowrap;
 }
-.sum-tbl th { background: #e0e0e0; font-weight: bold; }
+.sum-tbl th { background: #30a2cf; font-weight: bold; }
 .sum-tbl td.sl { text-align: left; }
 .sum-tbl th.sl { text-align: left; }
-.sum-total td { font-weight: bold; background: #f0f0f0; }
+.sum-total td { font-weight: bold; background: #54b7de; }
 
 /* ─── Org tree wrapper ────────────────────────────────────────── */
 .org-wrap {
-  display: flex;
-  justify-content: center;
   width: 100%;
 }
 .org-root {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  position: relative;
   margin-top: 16px;
+  width: 100%;
+}
+.sum-abs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+.tree-center {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+/* ─── Page header: summary pinned top-left, title centered ───────── */
+.page-header {
+  position: relative;
+  width: 100%;
+  margin-top: 1px;
+  text-align: center;
 }
 
 /* ─── Single node (card + connector + children) ───────────────── */
@@ -967,6 +984,19 @@ export function printPetaJabatan(
   const treeHtml    = trees.map(renderNode).join('');
   const summaryHtml = buildSummary(rows);
 
+  // Estimate summary height: each row ≈ 11px (6.5pt + padding + border);
+  // +2 for header & total rows; +10 for bottom margin.
+  const nonZeroJenisCount = (() => {
+    const totals: Record<number, number> = {};
+    for (const r of rows) {
+      const rank = rankJenis(r.jenis_jabatan);
+      if (rank >= 2 && rank <= 6)
+        totals[rank] = (totals[rank] ?? 0) + (r.bezetting ?? 0) + (r.kebutuhan_pegawai ?? 0);
+    }
+    return Object.values(totals).filter(v => v > 0).length;
+  })();
+  const summaryMinHeight = (nonZeroJenisCount + 2) * 11 + 10;
+
   const titleText = unitName
     ? `PETA JABATAN — ${unitName.toUpperCase()}`
     : `PETA JABATAN — ${orgName.toUpperCase()}`;
@@ -981,11 +1011,14 @@ export function printPetaJabatan(
   <style>${PRINT_CSS}</style>
 </head>
 <body>
-  <div style="text-align: center; font-size: 9pt; font-weight: bold; color: #333; margin-bottom: 10px;">Pandawa - Ortala</div>
-  <div class="page-title">${esc(titleText)}</div>
+  <div class="page-header">
+    <div class="sum-abs">${summaryHtml}</div>
+    <div style="font-size:9pt;font-weight:bold;color:#333;margin-bottom:4px;">Pandawa - Ortala</div>
+    <div class="page-title">${esc(titleText)}</div>
+  </div>
   <div class="org-wrap">
     <div class="org-root">
-      ${treeHtml}
+      <div class="tree-center">${treeHtml}</div>
     </div>
   </div>
 </body>
