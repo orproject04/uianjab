@@ -153,7 +153,7 @@ function inlineTableRow(c: PrintNode, index: number): string {
   const cb = c.row.bezetting ?? 0;
   const ck = c.row.kebutuhan_pegawai ?? 0;
   const cs = cb - ck;
-  const csColor = cs < 0 ? '#cc0000' : cs > 0 ? '#006600' : '#111';
+  const csColor = '#111';
   return `<tr>
     <td class="tc">${index + 1}</td>
     <td class="tl">${esc(c.row.nama_jabatan)}</td>
@@ -184,7 +184,7 @@ function renderCard(node: PrintNode): string {
   const totalBez = node.isSynthetic ? childrenBez : (r.bezetting ?? 0);
   const totalKeb = node.isSynthetic ? childrenKeb : (r.kebutuhan_pegawai ?? 0);
   const totalSel = totalBez - totalKeb;
-  const totalSelColor = totalSel < 0 ? '#cc0000' : totalSel > 0 ? '#006600' : '#111';
+  const totalSelColor = '#111';
   const selHtml = `<span style="color:${totalSelColor};font-weight:bold">${totalSel >= 0 ? '' : ''}${totalSel}</span>`;
 
   // ── KJF / synthetic card ────────────────────────────────────────────────────
@@ -322,18 +322,18 @@ function renderNode(node: PrintNode): string {
   // Arm width is calculated from number of structural children so it always reaches the KJF.
   // (Rank-2 Pusat with direct E4 is already handled above by renderPusatNode.)
   if (rank === 2 || rank === 3) {
-    const kjfKids   = treeChildren.filter(c => c.isSynthetic);
+    const kjfKids = treeChildren.filter(c => c.isSynthetic);
     const structKids = treeChildren.filter(c => !c.isSynthetic);
     if (kjfKids.length > 0 && structKids.length > 0) {
       const kjfBranchHtml = kjfKids.map(c => renderCard(c)).join('');
       const structCols = structKids.map((c, i) => {
-        const isOnly  = structKids.length === 1;
+        const isOnly = structKids.length === 1;
         const isFirst = i === 0;
-        const isLast  = i === structKids.length - 1;
+        const isLast = i === structKids.length - 1;
         const cls = isOnly ? 'child-col only'
-                  : isFirst ? 'child-col first'
-                  : isLast  ? 'child-col last'
-                  : 'child-col';
+          : isFirst ? 'child-col first'
+            : isLast ? 'child-col last'
+              : 'child-col';
         return `<div class="${cls}">${renderNode(c)}</div>`;
       }).join('');
       // Each child-col: 170px card + 40px padding = 210px. Arm goes from center to right edge.
@@ -375,13 +375,13 @@ function renderNode(node: PrintNode): string {
 
   // Normal horizontal fan-out (Eselon II → Eselon III)
   const childCols = treeChildren.map((c, i) => {
-    const isOnly  = treeChildren.length === 1;
+    const isOnly = treeChildren.length === 1;
     const isFirst = i === 0;
-    const isLast  = i === treeChildren.length - 1;
+    const isLast = i === treeChildren.length - 1;
     const cls = isOnly ? 'child-col only'
-              : isFirst ? 'child-col first'
-              : isLast  ? 'child-col last'
-              : 'child-col';
+      : isFirst ? 'child-col first'
+        : isLast ? 'child-col last'
+          : 'child-col';
     return `<div class="${cls}">${renderNode(c)}</div>`;
   }).join('');
 
@@ -396,11 +396,11 @@ function renderNode(node: PrintNode): string {
 function buildSummary(rows: PrintAPIRow[]): string {
   type G = { b: number; k: number };
   const groups: Record<string, G> = {
-    'ESELON II':          { b: 0, k: 0 },
-    'ESELON III':         { b: 0, k: 0 },
-    'ESELON IV':          { b: 0, k: 0 },
+    'ESELON II': { b: 0, k: 0 },
+    'ESELON III': { b: 0, k: 0 },
+    'ESELON IV': { b: 0, k: 0 },
     'JABATAN FUNGSIONAL': { b: 0, k: 0 },
-    'JABATAN PELAKSANA':  { b: 0, k: 0 },
+    'JABATAN PELAKSANA': { b: 0, k: 0 },
   };
   let totalB = 0, totalK = 0;
   for (const r of rows) {
@@ -408,10 +408,10 @@ function buildSummary(rows: PrintAPIRow[]): string {
     const b = r.bezetting ?? 0;
     const k = r.kebutuhan_pegawai ?? 0;
     const key = rank === 2 ? 'ESELON II'
-              : rank === 3 ? 'ESELON III'
-              : rank === 4 ? 'ESELON IV'
-              : rank === 5 ? 'JABATAN FUNGSIONAL'
-              : rank === 6 ? 'JABATAN PELAKSANA' : null;
+      : rank === 3 ? 'ESELON III'
+        : rank === 4 ? 'ESELON IV'
+          : rank === 5 ? 'JABATAN FUNGSIONAL'
+            : rank === 6 ? 'JABATAN PELAKSANA' : null;
     if (key && groups[key]) {
       groups[key].b += b;
       groups[key].k += k;
@@ -423,14 +423,14 @@ function buildSummary(rows: PrintAPIRow[]): string {
     .filter(([, { b, k }]) => b !== 0 || k !== 0)
     .map(([jenis, { b, k }]) => {
       const s = b - k;
-      const sc = s < 0 ? 'color:#cc0000' : '';
+      const sc = '';
       return `<tr>
       <td class="sl">${jenis}</td><td>${b}</td><td>${k}</td>
       <td style="${sc}">${s >= 0 ? '' : ''}${s}</td>
     </tr>`;
     }).join('');
   const ts = totalB - totalK;
-  const tsc = ts < 0 ? 'color:#cc0000' : '';
+  const tsc = '';
   return `<table class="sum-tbl">
   <thead><tr><th class="sl">JENIS JABATAN</th><th>B</th><th>K</th><th>+/-</th></tr></thead>
   <tbody>
@@ -448,6 +448,10 @@ const PRINT_CSS = `
 /* ─── Page setup ─────────────────────────────────────────────── */
 @page { size: A3 landscape; margin: 6mm; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%;
+  height: 100%;
+}
 body {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 6.5pt;
@@ -455,6 +459,11 @@ body {
   background: #fff;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
 }
 
 /* ─── Page header ─────────────────────────────────────────────── */
@@ -494,11 +503,15 @@ body {
 /* ─── Org tree wrapper ────────────────────────────────────────── */
 .org-wrap {
   width: 100%;
+  display: flex;
+  justify-content: center;
 }
 .org-root {
   position: relative;
   margin-top: 16px;
-  width: 100%;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
 }
 .sum-abs {
   position: absolute;
@@ -507,7 +520,6 @@ body {
   z-index: 10;
 }
 .tree-center {
-  width: 100%;
   display: flex;
   justify-content: center;
 }
@@ -597,16 +609,18 @@ body {
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
 }
-/* Mask left half of bar for first child */
+/* Mask left half of bar for first child — stop 1px before center so the drop-line isn't clipped */
 .child-col.first::after {
   content: '';
   position: absolute;
   top: -1px;
   left: 0;
-  width: 50%;
+  width: calc(50% - 1px);
   height: 3px;
   background: #fff;
   z-index: 2;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 /* Mask right half of bar for last child */
 .child-col.last::after {
@@ -614,10 +628,12 @@ body {
   position: absolute;
   top: -1px;
   right: 0;
-  width: 50%;
+  width: calc(50% - 1px);
   height: 3px;
   background: #fff;
   z-index: 2;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 .child-col.only::before { display: none; }
 .child-col.only::after  { display: none; }
@@ -894,20 +910,24 @@ body {
   position: absolute;
   top: -1px;
   left: 0;
-  width: 50%;
+  width: calc(50% - 1px);
   height: 3px;
   background: #fff;
   z-index: 2;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 .pusat-bcol.right-edge::after {
   content: '';
   position: absolute;
   top: -1px;
   right: 0;
-  width: 50%;
+  width: calc(50% - 1px);
   height: 3px;
   background: #fff;
   z-index: 2;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 .pusat-vpass {
   width: 72px;
@@ -980,8 +1000,8 @@ export function printPetaJabatan(
   unitName: string | null,
   orgName: string
 ): void {
-  const trees       = buildPrintTree(rows, flags);
-  const treeHtml    = trees.map(renderNode).join('');
+  const trees = buildPrintTree(rows, flags);
+  const treeHtml = trees.map(renderNode).join('');
   const summaryHtml = buildSummary(rows);
 
   // Estimate summary height: each row ≈ 11px (6.5pt + padding + border);
@@ -997,11 +1017,16 @@ export function printPetaJabatan(
   })();
   const summaryMinHeight = (nonZeroJenisCount + 2) * 11 + 10;
 
-  const titleText = unitName
-    ? `PETA JABATAN — ${unitName.toUpperCase()}`
-    : `PETA JABATAN — ${orgName.toUpperCase()}`;
+  let rawName = (unitName || orgName).toUpperCase();
+  let titleHtml = `ANALISIS BEBAN KERJA (ABK) — ${esc(rawName)}`;
+  const kdMatch = rawName.match(/^(?:KANTOR DAERAH|KANTOR DPD RI)\s+(?:DI IBU KOTA\s+)?(?:PROVINSI\s+)?(.+)$/);
+  if (kdMatch) {
+    const prov = kdMatch[1].trim();
+    titleHtml = `ANALISIS BEBAN KERJA (ABK) — KANTOR DPD RI<br/>DI IBU KOTA PROVINSI ${esc(prov)}`;
+  }
+
   // Used as the PDF filename: browsers use document.title when saving print-to-PDF
-  const fileTitle = `PETA JABATAN - ${(unitName || orgName).toUpperCase()}`;
+  const fileTitle = `ANALISIS BEBAN KERJA (ABK) - ${rawName}`;
 
   const html = `<!DOCTYPE html>
 <html lang="id">
@@ -1011,10 +1036,12 @@ export function printPetaJabatan(
   <style>${PRINT_CSS}</style>
 </head>
 <body>
-  <div class="page-header">
-    <div class="sum-abs">${summaryHtml}</div>
+  <div class="page-header" style="position: relative; text-align: center;">
+    <div style="position: absolute; top: 50%; right: 50%; transform: translateY(-50%); margin-right: 300px;">
+      ${summaryHtml}
+    </div>
     <div style="font-size:9pt;font-weight:bold;color:#333;margin-bottom:4px;">Pandawa - Ortala</div>
-    <div class="page-title">${esc(titleText)}</div>
+    <div class="page-title" style="margin-top: 0; line-height: 1.4;">${titleHtml}</div>
   </div>
   <div class="org-wrap">
     <div class="org-root">
@@ -1025,7 +1052,7 @@ export function printPetaJabatan(
 </html>`;
 
   const blob = new Blob([html], { type: 'text/html' });
-  const url  = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
 
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
