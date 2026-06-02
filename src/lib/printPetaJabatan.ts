@@ -446,7 +446,7 @@ function buildSummary(rows: PrintAPIRow[]): string {
 // ── Print CSS ─────────────────────────────────────────────────────────────────
 const PRINT_CSS = `
 /* ─── Page setup ─────────────────────────────────────────────── */
-@page { size: A3 landscape; margin: 6mm; }
+@page { size: landscape; margin: 6mm; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   width: 100%;
