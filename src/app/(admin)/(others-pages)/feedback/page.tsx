@@ -30,6 +30,57 @@ interface Feedback {
   user_email?: string;
 }
 
+interface JabatanSuggestion {
+  value: string;
+  label: string;
+  unit_kerja: string;
+  peta_jabatan_id: string;
+}
+
+interface TugasPokokDetail {
+  id_tahapan: string;
+  nomor_tahapan: number | null;
+  tahapan: string;
+  detail_tahapan: string[];
+}
+
+interface TugasPokokItem {
+  id_tugas: string;
+  nomor_tugas: number | null;
+  uraian_tugas: string[] | string | null;
+  hasil_kerja: unknown;
+  detail_uraian_tugas: TugasPokokDetail[];
+}
+
+interface JabatanDetail {
+  id: string;
+  nama_jabatan: string;
+  tugas_pokok: TugasPokokItem[];
+}
+
+interface TaskSuggestionDraft {
+  uraian_tugas: string;
+  hasil_kerja: string;
+}
+
+interface HasilKerjaNode {
+  text?: string;
+  children?: HasilKerjaNode[];
+}
+
+interface ParsedTaskSuggestionRow {
+  nomor: string;
+  uraian_tugas: string;
+  uraian_tugas_steps: {
+    nomor: string;
+    tahapan: string;
+    detail_tahapan: string[];
+  }[];
+  hasil_kerja: HasilKerjaNode[];
+  usulan_uraian_tugas: string;
+  usulan_hasil_kerja: string;
+}
+
 type TabType = 'submit' | 'history';
 
 export default function FeedbackPage() {
@@ -126,11 +177,17 @@ export default function FeedbackPage() {
   const [adminFormData, setAdminFormData] = useState({ status: '', admin_notes: '' });
   const [adminSubmitting, setAdminSubmitting] = useState(false);
 
-  // Search suggestion states for nama_jabatan
-  const [jabatanSuggestions, setJabatanSuggestions] = useState<string[]>([]);
-  const [showJabatanSuggestions, setShowJabatanSuggestions] = useState(false);
+  // Dropdown states for nama_jabatan
+  const [jabatanList, setJabatanList] = useState<JabatanSuggestion[]>([]);
   const [jabatanLoading, setJabatanLoading] = useState(false);
-  const [jabatanDebounce, setJabatanDebounce] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [jabatanFilter, setJabatanFilter] = useState('');
+  const [jabatanSelectedLabel, setJabatanSelectedLabel] = useState('');
+  const [showJabatanDropdown, setShowJabatanDropdown] = useState(false);
+  const [selectedPetaJabatanId, setSelectedPetaJabatanId] = useState('');
+  const [jabatanDetail, setJabatanDetail] = useState<JabatanDetail | null>(null);
+  const [jabatanDetailLoading, setJabatanDetailLoading] = useState(false);
+  const [taskSuggestionMap, setTaskSuggestionMap] = useState<Record<string, TaskSuggestionDraft>>({});
+  const jabatanRef = useRef<HTMLDivElement>(null);
 
   // Dropdown states for unit_kerja
   const [unitKerjaList, setUnitKerjaList] = useState<string[]>([]);
@@ -153,12 +210,41 @@ export default function FeedbackPage() {
     }
   }, [me]);
 
-  // Close unit kerja dropdown when clicking outside
+  useEffect(() => {
+    if (!formData.unit_kerja.trim()) {
+      setJabatanList([]);
+      setJabatanFilter('');
+      setJabatanSelectedLabel('');
+      setSelectedPetaJabatanId('');
+      setJabatanDetail(null);
+      setTaskSuggestionMap({});
+      setShowJabatanDropdown(false);
+      return;
+    }
+
+    loadJabatanList(formData.unit_kerja);
+  }, [formData.unit_kerja]);
+
+  useEffect(() => {
+    if (!selectedPetaJabatanId.trim()) {
+      setJabatanDetail(null);
+      setTaskSuggestionMap({});
+      return;
+    }
+
+    loadJabatanDetail(selectedPetaJabatanId);
+  }, [selectedPetaJabatanId]);
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (unitKerjaRef.current && !unitKerjaRef.current.contains(e.target as Node)) {
         setShowUnitKerjaDropdown(false);
         setUnitKerjaFilter('');
+      }
+      if (jabatanRef.current && !jabatanRef.current.contains(e.target as Node)) {
+        setShowJabatanDropdown(false);
+        setJabatanFilter('');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -180,39 +266,322 @@ export default function FeedbackPage() {
     }
   };
 
-  // Search jabatan suggestions with debounce
-  const handleJabatanChange = (val: string) => {
-    setFormData((prev) => ({ ...prev, nama_jabatan: val }));
-    setShowJabatanSuggestions(true);
-
-    if (jabatanDebounce) clearTimeout(jabatanDebounce);
-
-    if (val.trim().length < 2) {
-      setJabatanSuggestions([]);
+  const loadJabatanList = async (unitKerja: string) => {
+    if (!unitKerja.trim()) {
+      setJabatanList([]);
       return;
     }
 
-    const timeout = setTimeout(async () => {
-      try {
-        setJabatanLoading(true);
-        const res = await fetch(`/api/feedback/suggestions?type=jabatan&q=${encodeURIComponent(val.trim())}`);
-        if (res.ok) {
-          const json = await res.json();
-          setJabatanSuggestions(json?.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch jabatan suggestions:', err);
-      } finally {
-        setJabatanLoading(false);
+    try {
+      setJabatanLoading(true);
+      const res = await fetch(`/api/feedback/suggestions?type=jabatan&unit_kerja=${encodeURIComponent(unitKerja.trim())}&q=`);
+      if (res.ok) {
+        const json = await res.json();
+        setJabatanList(json?.data || []);
       }
-    }, 300);
-
-    setJabatanDebounce(timeout);
+    } catch (err) {
+      console.error('Failed to load jabatan list:', err);
+      setJabatanList([]);
+    } finally {
+      setJabatanLoading(false);
+    }
   };
 
   const filteredUnitKerja = unitKerjaList.filter((u) =>
     u.toLowerCase().includes(unitKerjaFilter.toLowerCase())
   );
+
+  const filteredJabatan = jabatanList.filter((j) =>
+    j.label.toLowerCase().includes(jabatanFilter.toLowerCase()) ||
+    j.value.toLowerCase().includes(jabatanFilter.toLowerCase())
+  );
+
+  const formatTaskText = (value: unknown) => {
+    if (value == null) {
+      return '-';
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .flatMap((item) => {
+          if (typeof item === 'string') return [item];
+          if (item && typeof item === 'object') {
+            const node = item as HasilKerjaNode;
+            const parts = [node.text || ''];
+            if (Array.isArray(node.children)) {
+              parts.push(...node.children.flatMap((child) => formatTaskText(child)));
+            }
+            return parts;
+          }
+          return [String(item)];
+        })
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join('; ');
+    }
+
+    if (typeof value === 'object') {
+      const node = value as HasilKerjaNode;
+      const parts = [node.text || ''];
+      if (Array.isArray(node.children)) {
+        parts.push(...node.children.flatMap((child) => formatTaskText(child)));
+      }
+      return parts.map((part) => part.trim()).filter(Boolean).join('; ') || '-';
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return '-';
+
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (parsed && typeof parsed === 'object') {
+          return formatTaskText(parsed);
+        }
+      } catch {
+        // fall through to plain string
+      }
+
+      return trimmed;
+    }
+
+    return String(value);
+  };
+
+  const formatStoredTaskText = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '-';
+    }
+
+    const structuredParts = trimmed.includes('};') || trimmed.startsWith('{')
+      ? trimmed.split(/;\s*(?=\{)/g).map((part) => part.trim()).filter(Boolean)
+      : [];
+
+    if (structuredParts.length > 1) {
+      const formattedParts = structuredParts
+        .map((part) => formatTaskText(part))
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      if (formattedParts.length > 0) {
+        return formattedParts.join('\n');
+      }
+    }
+
+    return formatTaskText(trimmed);
+  };
+
+  const parseStoredHasilKerjaNodes = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return [] as HasilKerjaNode[];
+    }
+
+    const structuredParts = trimmed.includes('};') || trimmed.startsWith('{')
+      ? trimmed.split(/;\s*(?=\{)/g).map((part) => part.trim()).filter(Boolean)
+      : [trimmed];
+
+    return structuredParts.flatMap((part) => normalizeHasilKerjaNodes(part));
+  };
+
+  const normalizeHasilKerjaNodes = (value: unknown): HasilKerjaNode[] => {
+    if (!value) return [];
+
+    const walk = (input: unknown): HasilKerjaNode[] => {
+      if (input == null) return [];
+
+      if (Array.isArray(input)) {
+        return input.flatMap((item) => walk(item));
+      }
+
+      if (typeof input === 'string') {
+        const trimmed = input.trim();
+        if (!trimmed) return [];
+
+        try {
+          const parsed = JSON.parse(trimmed) as unknown;
+          if (parsed && typeof parsed === 'object') {
+            return walk(parsed);
+          }
+        } catch {
+          // plain text node
+        }
+
+        return [{ text: trimmed, children: [] }];
+      }
+
+      if (typeof input === 'object') {
+        const node = input as HasilKerjaNode;
+        const text = typeof node.text === 'string' ? node.text.trim() : '';
+        const children = Array.isArray(node.children) ? node.children.flatMap((child) => walk(child)) : [];
+        return [{ text, children }];
+      }
+
+      return [{ text: String(input), children: [] }];
+    };
+
+    return walk(value);
+  };
+
+  const renderHasilKerjaNodes = (nodes: HasilKerjaNode[], level = 0) => (
+    <div className={level > 0 ? 'mt-2 space-y-2 border-l border-gray-200 dark:border-gray-700 pl-3' : 'space-y-2'}>
+      {nodes.map((node, index) => (
+        <div key={`${level}-${index}`} className="text-gray-800 dark:text-gray-200">
+          {node.text && (
+            <div className="flex gap-2">
+              {level === 0 ? (
+                <span className="mt-2 inline-flex h-2 w-2 shrink-0 rounded-full bg-brand-600 dark:bg-brand-400" aria-hidden="true" />
+              ) : (
+                <span className="mt-0.5 shrink-0 font-semibold text-brand-700 dark:text-brand-300">
+                  {index + 1}.
+                </span>
+              )}
+              <span className="whitespace-pre-wrap leading-relaxed">{node.text}</span>
+            </div>
+          )}
+          {Array.isArray(node.children) && node.children.length > 0 && renderHasilKerjaNodes(node.children, level + 1)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const estimateLineCount = (text: string, width = 52) => {
+    const lines = text
+      .split(/\r?\n/)
+      .reduce((count, part) => count + Math.max(1, Math.ceil(Math.max(part.length, 1) / width)), 0);
+
+    return Math.max(1, lines);
+  };
+
+  const estimateHasilKerjaLines = (nodes: HasilKerjaNode[]): number => {
+    if (nodes.length === 0) return 1;
+
+    return nodes.reduce((total, node) => {
+      const own = node.text ? estimateLineCount(node.text, 48) : 1;
+      const children = Array.isArray(node.children) && node.children.length > 0 ? estimateHasilKerjaLines(node.children) : 0;
+      return total + own + children;
+    }, 0);
+  };
+
+  const estimateTaskRows = (row: TugasPokokItem) => {
+    const uraianRows = estimateLineCount(formatTaskText(row.uraian_tugas), 54);
+    const hasilRows = estimateHasilKerjaLines(normalizeHasilKerjaNodes(row.hasil_kerja));
+    return Math.max(4, uraianRows, hasilRows);
+  };
+
+  const loadJabatanDetail = async (petaJabatanId: string) => {
+    if (!petaJabatanId.trim()) {
+      setJabatanDetail(null);
+      setTaskSuggestionMap({});
+      return;
+    }
+
+    try {
+      setJabatanDetailLoading(true);
+      const res = await fetch(`/api/anjab/${encodeURIComponent(petaJabatanId.trim())}`, {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        throw new Error('Gagal memuat rincian tugas pokok');
+      }
+
+      const json = await res.json();
+      const detail = (json?.data ?? json) as JabatanDetail | null;
+      const tugasPokok = Array.isArray(detail?.tugas_pokok) ? detail.tugas_pokok : [];
+
+      setJabatanDetail(detail && detail.id ? detail : null);
+      setTaskSuggestionMap(
+        tugasPokok.reduce<Record<string, TaskSuggestionDraft>>((acc, row) => {
+          acc[row.id_tugas] = { uraian_tugas: '', hasil_kerja: '' };
+          return acc;
+        }, {})
+      );
+    } catch (err) {
+      console.error('Failed to load jabatan detail:', err);
+      setJabatanDetail(null);
+      setTaskSuggestionMap({});
+    } finally {
+      setJabatanDetailLoading(false);
+    }
+  };
+
+  const updateTaskSuggestion = (taskId: string, field: keyof TaskSuggestionDraft, value: string) => {
+    setTaskSuggestionMap((prev) => ({
+      ...prev,
+      [taskId]: {
+        uraian_tugas: prev[taskId]?.uraian_tugas || '',
+        hasil_kerja: prev[taskId]?.hasil_kerja || '',
+        [field]: value,
+      },
+    }));
+  };
+
+  const getTahapanUraianTugas = (row: TugasPokokItem) => {
+    const directDetails = Array.isArray(row.detail_uraian_tugas) ? row.detail_uraian_tugas : [];
+    if (directDetails.length > 0) {
+      return directDetails;
+    }
+
+    const fallbackRow = jabatanDetail?.tugas_pokok.find((item) => item.id_tugas === row.id_tugas);
+    return Array.isArray(fallbackRow?.detail_uraian_tugas) ? fallbackRow.detail_uraian_tugas : [];
+  };
+
+  const buildTaskSuggestionSummary = () => {
+    const rows = jabatanDetail?.tugas_pokok || [];
+    const filledRows = rows
+      .map((row, index) => {
+        const draft = taskSuggestionMap[row.id_tugas] || { uraian_tugas: '', hasil_kerja: '' };
+        const uraianTugas = draft.uraian_tugas.trim();
+        const hasilKerja = draft.hasil_kerja.trim();
+
+        if (!uraianTugas && !hasilKerja) {
+          return null;
+        }
+
+        return { row, index, draft: { uraian_tugas: uraianTugas, hasil_kerja: hasilKerja } };
+      })
+      .filter((item): item is {
+        row: TugasPokokItem;
+        index: number;
+        draft: TaskSuggestionDraft;
+      } => item !== null);
+
+    if (filledRows.length === 0) {
+      return '';
+    }
+
+    return filledRows
+      .map(({ row, draft }, index) => {
+        const uraianTugasSteps = getTahapanUraianTugas(row);
+        const uraianTugasSection = uraianTugasSteps.length > 0
+          ? [
+              '   Tahapan Uraian Tugas:',
+              ...uraianTugasSteps.flatMap((detail, detailIndex) => {
+                const lines = [
+                  `      ${detail.nomor_tahapan || detailIndex + 1}. ${detail.tahapan}`,
+                ];
+
+                if (Array.isArray(detail.detail_tahapan) && detail.detail_tahapan.length > 0) {
+                  lines.push(...detail.detail_tahapan.map((item) => `         - ${item}`));
+                }
+
+                return lines;
+              }),
+            ]
+          : [];
+
+        return [
+          `${index + 1}. Uraian Tugas: ${formatTaskText(row.uraian_tugas)}`,
+          ...uraianTugasSection,
+          `   Hasil Kerja: ${formatTaskText(row.hasil_kerja)}`,
+          `   Usulan Uraian Tugas: ${draft.uraian_tugas || '-'}`,
+          `   Usulan Hasil Kerja: ${draft.hasil_kerja || '-'}`,
+        ].join('\n');
+      })
+      .join('\n\n');
+  };
 
   // Load feedback data
   const loadFeedback = async () => {
@@ -234,9 +603,10 @@ export default function FeedbackPage() {
       const data = json?.data || [];
       setFeedbackList(data);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load feedback';
       console.error('Error loading feedback:', error);
-      Swal.fire('Error', error.message || 'Failed to load feedback', 'error');
+      Swal.fire('Error', message, 'error');
     } finally {
       setLoading(false);
     }
@@ -268,16 +638,30 @@ export default function FeedbackPage() {
       return;
     }
 
-    if (!formData.usulan_perbaikan.trim()) {
-      Swal.fire('Error', 'Usulan perbaikan harus diisi', 'error');
+    const hasTaskSuggestion = Object.values(taskSuggestionMap).some((draft) =>
+      Boolean(draft.uraian_tugas.trim() || draft.hasil_kerja.trim())
+    );
+
+    if (!formData.usulan_perbaikan.trim() && !hasTaskSuggestion) {
+      Swal.fire('Error', 'Isi Usulan Perbaikan Lainnya atau minimal satu baris pada tabel usulan tugas pokok', 'error');
       return;
     }
+
+    const taskSummary = buildTaskSuggestionSummary();
+    const generalUsulan = formData.usulan_perbaikan.trim();
+    const combinedUsulan = [
+      taskSummary ? `Tabel Usulan Perbaikan Tugas Pokok\n${taskSummary}` : '',
+      generalUsulan ? `Usulan Perbaikan Dokumen Anjab\n${generalUsulan}` : '',
+    ].filter(Boolean).join('\n\n');
 
     try {
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          usulan_perbaikan: combinedUsulan,
+        }),
       });
 
       const json = await res.json();
@@ -296,13 +680,21 @@ export default function FeedbackPage() {
         usulan_perbaikan: '',
       });
       setUnitKerjaFilter('');
+      setJabatanFilter('');
+      setJabatanSelectedLabel('');
+      setSelectedPetaJabatanId('');
+      setJabatanDetail(null);
+      setTaskSuggestionMap({});
+      setJabatanList([]);
+      setShowJabatanDropdown(false);
 
       setActiveTab('history');
       loadFeedback();
       setCurrentPage(1);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to submit feedback';
       console.error('Error submitting feedback:', error);
-      Swal.fire('Error', error.message || 'Failed to submit feedback', 'error');
+      Swal.fire('Error', message, 'error');
     }
   };
 
@@ -326,8 +718,9 @@ export default function FeedbackPage() {
       if (!res.ok) throw new Error('Gagal mengirim penilaian');
       Swal.fire('Berhasil', 'Penilaian berhasil disimpan', 'success');
       loadFeedback();
-    } catch (err: any) {
-      Swal.fire('Error', err.message || 'Gagal mengirim penilaian', 'error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal mengirim penilaian';
+      Swal.fire('Error', message, 'error');
     } finally {
       setRatingSubmitting(prev => ({ ...prev, [id]: false }));
     }
@@ -352,8 +745,9 @@ export default function FeedbackPage() {
       Swal.fire('Berhasil', 'Status usulan berhasil diperbarui', 'success');
       setAdminEditId(null);
       loadFeedback();
-    } catch (err: any) {
-      Swal.fire('Error', err.message || 'Gagal memperbarui status', 'error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal memperbarui status';
+      Swal.fire('Error', message, 'error');
     } finally {
       setAdminSubmitting(false);
     }
@@ -388,6 +782,93 @@ export default function FeedbackPage() {
       hour: '2-digit',
       minute: '2-digit',
     }).format(date);
+  };
+
+  const parseUsulanPerbaikan = (value: string) => {
+    const normalized = value.replace(/\r\n/g, '\n').trim();
+    const result = {
+      taskRows: [] as ParsedTaskSuggestionRow[],
+      generalText: '',
+    };
+
+    if (!normalized) {
+      return result;
+    }
+
+    const taskHeading = 'Tabel Usulan Perbaikan Tugas Pokok\n';
+    const generalHeading = 'Usulan Perbaikan Dokumen Anjab\n';
+
+    const taskStart = normalized.indexOf(taskHeading);
+    const generalStart = normalized.indexOf(generalHeading);
+
+    if (taskStart !== -1) {
+      const taskSectionStart = taskStart + taskHeading.length;
+      const taskSectionEnd = generalStart !== -1 && generalStart > taskSectionStart ? generalStart - 2 : normalized.length;
+      const taskSection = normalized.slice(taskSectionStart, taskSectionEnd).trim();
+
+      result.taskRows = taskSection
+        .split(/\n\n+/)
+        .map((block) => block.trim())
+        .filter(Boolean)
+        .map((block) => {
+          const lines = block.split('\n').map((line) => line.trim());
+          const nomorMatch = lines[0]?.match(/^(\d+)\.\s+Uraian Tugas:\s*(.*)$/);
+          const tahapanStart = lines.findIndex((line) => line === 'Tahapan Uraian Tugas:');
+          const hasilKerjaIndex = lines.findIndex((line) => line.startsWith('Hasil Kerja:'));
+          const usulanUraianIndex = lines.findIndex((line) => line.startsWith('Usulan Uraian Tugas:'));
+          const usulanHasilIndex = lines.findIndex((line) => line.startsWith('Usulan Hasil Kerja:'));
+          const hasilKerjaMatch = hasilKerjaIndex !== -1 ? lines[hasilKerjaIndex].match(/^Hasil Kerja:\s*(.*)$/) : null;
+
+          const parsedSteps: ParsedTaskSuggestionRow['uraian_tugas_steps'] = [];
+          if (tahapanStart !== -1 && hasilKerjaIndex !== -1 && hasilKerjaIndex > tahapanStart) {
+            let currentStep: { nomor: string; tahapan: string; detail_tahapan: string[] } | null = null;
+            for (const rawLine of lines.slice(tahapanStart + 1, hasilKerjaIndex)) {
+              const stepMatch = rawLine.match(/^(\d+)\.\s+(.*)$/);
+              const detailMatch = rawLine.match(/^[-•]\s+(.*)$/);
+
+              if (stepMatch) {
+                if (currentStep) {
+                  parsedSteps.push(currentStep);
+                }
+                currentStep = {
+                  nomor: stepMatch[1],
+                  tahapan: stepMatch[2].trim(),
+                  detail_tahapan: [],
+                };
+                continue;
+              }
+
+              if (detailMatch && currentStep) {
+                currentStep.detail_tahapan.push(detailMatch[1].trim());
+              }
+            }
+
+            if (currentStep) {
+              parsedSteps.push(currentStep);
+            }
+          }
+
+          return {
+            nomor: nomorMatch?.[1] || '',
+            uraian_tugas: formatStoredTaskText(nomorMatch?.[2] || lines[0] || '-'),
+            uraian_tugas_steps: parsedSteps,
+            hasil_kerja: parseStoredHasilKerjaNodes(hasilKerjaMatch?.[1] || lines[1] || '-'),
+            usulan_uraian_tugas: formatStoredTaskText((usulanUraianIndex !== -1 ? lines[usulanUraianIndex].slice('Usulan Uraian Tugas:'.length).trim() : '-')),
+            usulan_hasil_kerja: formatStoredTaskText((usulanHasilIndex !== -1 ? lines[usulanHasilIndex].slice('Usulan Hasil Kerja:'.length).trim() : '-')),
+          };
+        })
+        .filter((row) => row.nomor || row.uraian_tugas !== '-');
+    }
+
+    if (generalStart !== -1) {
+      result.generalText = normalized.slice(generalStart + generalHeading.length).trim();
+    }
+
+    if (!result.generalText && taskStart === -1) {
+      result.generalText = normalized;
+    }
+
+    return result;
   };
 
   const getStatusBadge = (status?: string) => {
@@ -429,15 +910,8 @@ export default function FeedbackPage() {
 
 
   // User: how many finished items still need a rating
-  const unratedCount = feedbackList.filter(
-    (f) => (f.status === 'diterima' || f.status === 'ditolak') && !f.rating
-  ).length;
   // Admin: items with a rating not yet opened
   const newRatedCount = feedbackList.filter(isRatingUnread).length;
-  // Admin: how many finished items have NOT been rated yet
-  const selesaiUnratedCount = feedbackList.filter(
-    (f) => (f.status === 'diterima' || f.status === 'ditolak') && !f.rating
-  ).length;
 
   // Filter + Sort
   const filteredAndSorted = feedbackList
@@ -561,65 +1035,7 @@ export default function FeedbackPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
 
-            {/* Nama Jabatan - with search suggestion */}
-            <div>
-              <label
-                htmlFor="nama_jabatan"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Nama Jabatan <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="nama_jabatan"
-                  autoComplete="off"
-                  value={formData.nama_jabatan}
-                  onChange={(e) => handleJabatanChange(e.target.value)}
-                  onFocus={() => {
-                    if (formData.nama_jabatan.trim().length >= 2) setShowJabatanSuggestions(true);
-                  }}
-                  onBlur={() => setTimeout(() => setShowJabatanSuggestions(false), 200)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                  placeholder="Ketik nama jabatan untuk mencari..."
-                />
-                {/* Loading spinner */}
-                {jabatanLoading && (
-                  <div className="absolute right-3 top-2.5">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-500"></div>
-                  </div>
-                )}
-                {/* Suggestion dropdown */}
-                {showJabatanSuggestions && jabatanSuggestions.length > 0 && (
-                  <ul className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                    {jabatanSuggestions.map((s, i) => (
-                      <li
-                        key={i}
-                        onMouseDown={() => {
-                          setFormData((prev) => ({ ...prev, nama_jabatan: s }));
-                          setShowJabatanSuggestions(false);
-                          setJabatanSuggestions([]);
-                        }}
-                        className="px-4 py-2.5 text-sm text-gray-800 dark:text-gray-200 hover:bg-brand-50 dark:hover:bg-brand-900/20 cursor-pointer transition-colors"
-                      >
-                        {s}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {/* No results hint */}
-                {showJabatanSuggestions && !jabatanLoading && jabatanSuggestions.length === 0 && formData.nama_jabatan.trim().length >= 2 && (
-                  <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400">
-                    Tidak ditemukan — Anda dapat tetap mengetik nama jabatan secara manual
-                  </div>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Ketik minimal 2 karakter untuk menampilkan saran dari daftar jabatan
-              </p>
-            </div>
-
-            {/* Unit Kerja - with searchable dropdown */}
+            {/* Unit Kerja - searchable dropdown */}
             <div>
               <label
                 htmlFor="unit_kerja_trigger"
@@ -680,9 +1096,15 @@ export default function FeedbackPage() {
                           <li
                             key={i}
                             onMouseDown={() => {
-                              setFormData((prev) => ({ ...prev, unit_kerja: u }));
+                              setFormData((prev) => ({ ...prev, unit_kerja: u, nama_jabatan: '' }));
                               setUnitKerjaFilter('');
                               setShowUnitKerjaDropdown(false);
+                              setJabatanFilter('');
+                              setJabatanSelectedLabel('');
+                              setSelectedPetaJabatanId('');
+                              setJabatanDetail(null);
+                              setTaskSuggestionMap({});
+                              setShowJabatanDropdown(false);
                             }}
                             className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
                               formData.unit_kerja === u
@@ -701,9 +1123,207 @@ export default function FeedbackPage() {
               {/* Hidden input for accessibility */}
               <input type="hidden" id="unit_kerja" value={formData.unit_kerja} />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Pilih unit kerja dari daftar atau ketik untuk menyaring pilihan
+                Pilih unit kerja dari daftar atau ketik untuk mencari unit kerja yang tersedia.
               </p>
             </div>
+
+            {/* Nama Jabatan - dropdown filtered by selected unit kerja */}
+            <div>
+              <label
+                htmlFor="nama_jabatan_trigger"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Nama Jabatan <span className="text-red-500">*</span>
+              </label>
+              <div className="relative" ref={jabatanRef}>
+                <button
+                  type="button"
+                  id="nama_jabatan_trigger"
+                  disabled={!formData.unit_kerja.trim()}
+                  onClick={() => {
+                    if (!formData.unit_kerja.trim()) return;
+                    setShowJabatanDropdown((prev) => !prev);
+                  }}
+                  className={`w-full px-4 py-2 text-left border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 transition-colors flex items-center justify-between ${
+                    formData.nama_jabatan
+                      ? 'text-gray-900 dark:text-white border-gray-300 dark:border-gray-600'
+                      : 'text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-600'
+                  } ${!formData.unit_kerja.trim() ? 'cursor-not-allowed opacity-70' : ''}`}
+                >
+                  <span className="truncate">
+                    {jabatanSelectedLabel || (formData.unit_kerja.trim() ? 'Pilih nama jabatan...' : 'Pilih unit kerja terlebih dahulu')}
+                  </span>
+                  <ChevronDownIcon
+                    className={`w-4 h-4 flex-shrink-0 ml-2 text-gray-400 transition-transform duration-200 ${
+                      showJabatanDropdown ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {showJabatanDropdown && formData.unit_kerja.trim() && (
+                  <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg">
+                    <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={jabatanFilter}
+                        onChange={(e) => setJabatanFilter(e.target.value)}
+                        placeholder="Cari nama jabatan..."
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-brand-500 focus:border-brand-500 dark:bg-gray-700 dark:text-white outline-none"
+                      />
+                    </div>
+                    <ul className="max-h-52 overflow-y-auto py-1">
+                      {jabatanLoading ? (
+                        <li className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-brand-500"></div>
+                          Memuat nama jabatan...
+                        </li>
+                      ) : filteredJabatan.length === 0 ? (
+                        <li className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          {jabatanFilter ? 'Tidak ditemukan' : 'Tidak ada jabatan untuk unit kerja ini'}
+                        </li>
+                      ) : (
+                        filteredJabatan.map((j, i) => (
+                          <li
+                            key={i}
+                            onMouseDown={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                nama_jabatan: j.value,
+                                unit_kerja: j.unit_kerja || prev.unit_kerja,
+                              }));
+                              setJabatanSelectedLabel(j.label);
+                              setSelectedPetaJabatanId(j.peta_jabatan_id);
+                              setJabatanFilter('');
+                              setShowJabatanDropdown(false);
+                            }}
+                            className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
+                              formData.nama_jabatan === j.value
+                                ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-medium'
+                                : 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {j.label}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Daftar nama jabatan berdasarkan unit kerja yang dipilih.
+              </p>
+            </div>
+
+            {selectedPetaJabatanId && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                      Usulan Perbaikan Uraian Tugas & Hasil Kerja
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Isi usulan pada untuk Uraian Tugas & Hasil Kerja yang tampil (Tidak Wajib).
+                    </p>
+                  </div>
+                  {jabatanDetailLoading && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Memuat rincian anjab...</span>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-700/60">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200 w-[28%]">
+                          Uraian Tugas
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200 w-[22%]">
+                          Hasil Kerja
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200 w-[25%]">
+                          Usulan Perbaikan Uraian Tugas
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200 w-[25%]">
+                          Usulan Perbaikan Hasil Kerja
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                      {jabatanDetailLoading ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                            Memuat data tugas pokok...
+                          </td>
+                        </tr>
+                      ) : (jabatanDetail?.tugas_pokok?.length || 0) === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                            Tidak ada tugas pokok untuk jabatan ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        jabatanDetail?.tugas_pokok.map((row, index) => {
+                          const suggestion = taskSuggestionMap[row.id_tugas] || { uraian_tugas: '', hasil_kerja: '' };
+                          const rowRows = estimateTaskRows(row);
+                          const hasilKerjaNodes = normalizeHasilKerjaNodes(row.hasil_kerja);
+
+                          return (
+                            <tr key={row.id_tugas} className="align-top">
+                              <td className="px-4 py-4 text-gray-800 dark:text-gray-200">
+                                <div className="font-medium">
+                                  {row.nomor_tugas ? `${row.nomor_tugas}. ` : `${index + 1}. `}
+                                  {formatTaskText(row.uraian_tugas)}
+                                </div>
+                                {row.detail_uraian_tugas.length > 0 && (
+                                  <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400 list-disc pl-4">
+                                    {row.detail_uraian_tugas.map((detail) => (
+                                      <li key={detail.id_tahapan}>
+                                        <span className="font-medium text-gray-600 dark:text-gray-300">
+                                          {detail.nomor_tahapan ? `${detail.nomor_tahapan}. ` : ''}
+                                          {detail.tahapan}
+                                        </span>
+                                        {detail.detail_tahapan.length > 0 && (
+                                          <span className="block mt-1">{detail.detail_tahapan.join('; ')}</span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                              <td className="px-4 py-4 text-gray-800 dark:text-gray-200">
+                                <div className="whitespace-pre-wrap leading-relaxed">
+                                  {hasilKerjaNodes.length > 0 ? renderHasilKerjaNodes(hasilKerjaNodes) : '-'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <textarea
+                                  value={suggestion.uraian_tugas}
+                                  onChange={(e) => updateTaskSuggestion(row.id_tugas, 'uraian_tugas', e.target.value)}
+                                  rows={rowRows}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white resize-none min-h-full"
+                                  placeholder="Isi usulan untuk uraian tugas..."
+                                />
+                              </td>
+                              <td className="px-4 py-4">
+                                <textarea
+                                  value={suggestion.hasil_kerja}
+                                  onChange={(e) => updateTaskSuggestion(row.id_tugas, 'hasil_kerja', e.target.value)}
+                                  rows={rowRows}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white resize-none min-h-full"
+                                  placeholder="Isi usulan untuk hasil kerja..."
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Usulan Perbaikan */}
             <div>
@@ -711,7 +1331,7 @@ export default function FeedbackPage() {
                 htmlFor="usulan_perbaikan"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                Usulan Perbaikan Dokumen Anjab <span className="text-red-500">*</span>
+                Usulan Perbaikan Lainnya
               </label>
               <textarea
                 id="usulan_perbaikan"
@@ -722,7 +1342,7 @@ export default function FeedbackPage() {
                 placeholder="Jelaskan usulan perbaikan dokumen anjab secara detail..."
               />
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Jelaskan secara detail usulan perbaikan yang Anda inginkan
+                Jelaskan secara detail usulan perbaikan yang Anda inginkan.
               </p>
             </div>
 
@@ -984,7 +1604,83 @@ export default function FeedbackPage() {
                           {/* Usulan Content */}
                           <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-600">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Usulan Perbaikan:</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.usulan_perbaikan}</p>
+                            {(() => {
+                              const parsed = parseUsulanPerbaikan(item.usulan_perbaikan || '');
+
+                              return (
+                                <div className="space-y-4">
+                                  {parsed.taskRows.length > 0 && (
+                                    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                                        <thead className="bg-gray-100 dark:bg-gray-800">
+                                          <tr>
+                                            <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">No</th>
+                                            <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 min-w-[18rem]">Uraian Tugas</th>
+                                            <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 min-w-[18rem]">Hasil Kerja</th>
+                                            <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 min-w-[18rem]">Usulan Uraian Tugas</th>
+                                            <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 min-w-[18rem]">Usulan Hasil Kerja</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                                          {parsed.taskRows.map((row) => (
+                                            <tr key={`${item.id}-${row.nomor}-${row.uraian_tugas}`} className="align-top">
+                                              <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.nomor || '-'}</td>
+                                              <td className="px-3 py-2 text-gray-700 dark:text-gray-300 align-top">
+                                                <div className="space-y-2 leading-relaxed">
+                                                  <div className="flex gap-2">
+                                                    <span className="mt-2 inline-flex h-2 w-2 shrink-0 rounded-full bg-brand-600 dark:bg-brand-400" aria-hidden="true" />
+                                                    <span className="whitespace-pre-wrap">{row.uraian_tugas}</span>
+                                                  </div>
+                                                  {row.uraian_tugas_steps.length > 0 && (
+                                                    <div className="ml-4 space-y-2 border-l border-gray-200 dark:border-gray-700 pl-4">
+                                                      {row.uraian_tugas_steps.map((step) => (
+                                                        <div key={`${item.id}-${row.nomor}-${step.nomor}-${step.tahapan}`} className="space-y-1">
+                                                          <div className="flex gap-2">
+                                                            <span className="mt-0.5 shrink-0 font-semibold text-brand-700 dark:text-brand-300">
+                                                              {step.nomor}.
+                                                            </span>
+                                                            <span className="whitespace-pre-wrap">{step.tahapan}</span>
+                                                          </div>
+                                                          {step.detail_tahapan.length > 0 && (
+                                                            <ul className="ml-5 space-y-1 list-disc pl-4 text-xs text-gray-600 dark:text-gray-400">
+                                                              {step.detail_tahapan.map((detail, detailIndex) => (
+                                                                <li key={`${item.id}-${row.nomor}-${step.nomor}-${detailIndex}`} className="whitespace-pre-wrap">
+                                                                  {detail}
+                                                                </li>
+                                                              ))}
+                                                            </ul>
+                                                          )}
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </td>
+                                              <td className="px-3 py-2 text-gray-700 dark:text-gray-300 leading-relaxed">
+                                                {row.hasil_kerja.length > 0 ? renderHasilKerjaNodes(row.hasil_kerja) : '-'}
+                                              </td>
+                                              <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{row.usulan_uraian_tugas}</td>
+                                              <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{row.usulan_hasil_kerja}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+
+                                  {parsed.generalText && (
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Usulan Perbaikan Dokumen Anjab Lainnya:</p>
+                                      <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{parsed.generalText}</p>
+                                    </div>
+                                  )}
+
+                                  {parsed.taskRows.length === 0 && !parsed.generalText && (
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.usulan_perbaikan}</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           {/* Admin Edit Form */}
@@ -1119,7 +1815,7 @@ export default function FeedbackPage() {
                           {/* User Rating Section */}
                           {(!isActualAdmin && (item.status === 'diterima' || item.status === 'ditolak')) && (
                             <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Penilaian Layanan Admin</h4>
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Penilaian Layanan Usulan Perbaikan Anjab dan ABK</h4>
                               
                               {item.rating ? (
                                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -1160,7 +1856,7 @@ export default function FeedbackPage() {
                           {/* Completed Rating View for Admin */}
                           {isActualAdmin && item.rating && (
                             <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-lg">
-                              <h4 className="text-xs font-bold text-yellow-800 dark:text-yellow-600 uppercase mb-2">Penilaian dari User</h4>
+                              <h4 className="text-xs font-bold text-yellow-800 dark:text-yellow-600 uppercase mb-2">Penilaian dari Pengguna</h4>
                               <div className="mb-2">
                                 <StarRating value={item.rating} />
                               </div>

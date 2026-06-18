@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
 
     let query: string;
-    let params: any[] = [];
+    let params: (string | number | null)[] = [];
 
     // If admin, show all feedback. Otherwise, only show user's own feedback
     if (user.role === 'admin') {
@@ -78,10 +78,11 @@ export async function GET(req: NextRequest) {
     const result = await pool.query(query, params);
 
     return NextResponse.json({ data: result.rows });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch feedback';
     console.error('Error fetching feedback:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch feedback' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -127,12 +128,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const matchedJabatan = await pool.query(
+      `SELECT nama_jabatan, unit_kerja
+       FROM peta_jabatan
+       WHERE LOWER(TRIM(nama_jabatan)) = LOWER(TRIM($1))
+         AND LOWER(TRIM(unit_kerja)) = LOWER(TRIM($2))
+       LIMIT 1`,
+      [nama_jabatan.trim(), unit_kerja.trim()]
+    );
+
+    if (matchedJabatan.rowCount === 0) {
+      return NextResponse.json(
+        { error: 'Nama jabatan harus dipilih dari unit kerja yang tersedia' },
+        { status: 400 }
+      );
+    }
+
+    const canonicalNamaJabatan = matchedJabatan.rows[0].nama_jabatan;
+    const canonicalUnitKerja = matchedJabatan.rows[0].unit_kerja;
+
     // Insert feedback
     const result = await pool.query(
       `INSERT INTO feedback (user_id, nama_jabatan, unit_kerja, usulan_perbaikan, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, 'diusulkan', NOW(), NOW())
        RETURNING id, user_id, nama_jabatan, unit_kerja, usulan_perbaikan, status, created_at`,
-      [user.id, nama_jabatan.trim(), unit_kerja.trim(), usulan_perbaikan.trim()]
+      [user.id, canonicalNamaJabatan, canonicalUnitKerja, usulan_perbaikan.trim()]
     );
 
     return NextResponse.json(
@@ -142,10 +162,11 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create feedback';
     console.error('Error creating feedback:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create feedback' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -260,10 +281,11 @@ export async function PUT(req: NextRequest) {
     const result = await pool.query(query, values);
 
     return NextResponse.json({ message: 'Feedback updated', data: result.rows[0] });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update feedback';
     console.error('Error updating feedback:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to update feedback' },
+      { error: message },
       { status: 500 }
     );
   }
