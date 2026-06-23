@@ -4,6 +4,7 @@
 import jwt, { JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
+import { generateUserAgentHash } from "./fingerprint";
 
 /* ====== Konfigurasi TTL via .env ====== */
 // ACCESS_TOKEN_TTL_MINUTES=60   (default 60 menit)
@@ -29,6 +30,7 @@ type BaseClaims = JwtPayload & {
     email?: string;
     role?: string;
     full_name?: string | null;
+    fp?: string; // User-Agent Fingerprint
 };
 
 export function signAccessToken(payload: object) {
@@ -44,25 +46,33 @@ export function signRefreshToken(payload: object) {
     });
 }
 
-export function verifyAccessToken(token: string): BaseClaims {
-    return jwt.verify(token, process.env.JWT_ACCESS_SECRET!, {
+export function verifyAccessToken(token: string, expectedFp?: string): BaseClaims {
+    const dec = jwt.verify(token, process.env.JWT_ACCESS_SECRET!, {
         algorithms: ["HS256"],
         clockTolerance: 5, // toleransi drift jam
     }) as BaseClaims;
+    if (expectedFp && dec.fp !== expectedFp) {
+        throw new Error("Invalid Fingerprint");
+    }
+    return dec;
 }
-export function verifyRefreshToken(token: string): BaseClaims {
-    return jwt.verify(token, process.env.JWT_REFRESH_SECRET!, {
+export function verifyRefreshToken(token: string, expectedFp?: string): BaseClaims {
+    const dec = jwt.verify(token, process.env.JWT_REFRESH_SECRET!, {
         algorithms: ["HS256"],
         clockTolerance: 5,
     }) as BaseClaims;
+    if (expectedFp && dec.fp !== expectedFp) {
+        throw new Error("Invalid Fingerprint");
+    }
+    return dec;
 }
 
 // “Safe verify”: balik null jika invalid/expired
-export function safeVerifyAccess(token: string): BaseClaims | null {
-    try { return verifyAccessToken(token); } catch { return null; }
+export function safeVerifyAccess(token: string, expectedFp?: string): BaseClaims | null {
+    try { return verifyAccessToken(token, expectedFp); } catch { return null; }
 }
-export function safeVerifyRefresh(token: string): BaseClaims | null {
-    try { return verifyRefreshToken(token); } catch { return null; }
+export function safeVerifyRefresh(token: string, expectedFp?: string): BaseClaims | null {
+    try { return verifyRefreshToken(token, expectedFp); } catch { return null; }
 }
 
 /* ====== Guard helper untuk API Next.js (Cookie + Bearer fallback) ====== */
@@ -81,7 +91,11 @@ export function getBearerFromReq(req: NextRequest): string | null {
 export function getUserFromReq(req: NextRequest): AuthUser | null {
     const token = getBearerFromReq(req);
     if (!token) return null;
-    const dec = safeVerifyAccess(token);
+
+    const userAgent = req.headers.get('user-agent');
+    const fp = generateUserAgentHash(userAgent);
+
+    const dec = safeVerifyAccess(token, fp);
     if (!dec) return null;
     return {
         id: String(dec.sub ?? ""),

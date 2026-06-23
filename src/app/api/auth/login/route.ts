@@ -8,6 +8,7 @@ import {
     signRefreshToken,
     ACCESS_TOKEN_MAXAGE_SEC
 } from "@/lib/auth";
+import { generateUserAgentHash } from "@/lib/fingerprint";
 import { hashRefreshToken } from "@/lib/tokens";
 import { handleCorsOptions, addCorsHeaders } from "@/lib/cors";
 
@@ -48,8 +49,11 @@ export async function POST(req: NextRequest) {
             return addCorsHeaders(response, origin);
         }
 
-        const access  = signAccessToken({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name });
-        const refresh = signRefreshToken({ sub: user.id });
+        const userAgent = req.headers.get('user-agent');
+        const fp = generateUserAgentHash(userAgent);
+
+        const access  = signAccessToken({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name, fp });
+        const refresh = signRefreshToken({ sub: user.id, fp });
 
         // simpan HASH refresh di DB
         const refreshHash = hashRefreshToken(refresh);

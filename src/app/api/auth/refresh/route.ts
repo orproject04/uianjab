@@ -8,6 +8,7 @@ import {
     signRefreshToken,
     ACCESS_TOKEN_MAXAGE_SEC
 } from "@/lib/auth";
+import { generateUserAgentHash } from "@/lib/fingerprint";
 import { hashRefreshToken } from "@/lib/tokens";
 
 export async function POST(req: NextRequest) {
@@ -21,8 +22,11 @@ export async function POST(req: NextRequest) {
 
     if (!refresh) return NextResponse.json({ error: "Tidak ada refresh token" }, { status: 401 });
 
+    const userAgent = req.headers.get('user-agent');
+    const fp = generateUserAgentHash(userAgent);
+
     try {
-        verifyRefreshToken(refresh); // cek signature & exp
+        verifyRefreshToken(refresh, fp); // cek signature, exp, & fingerprint
 
         const { rows } = await pool.query(
             `SELECT us.id, u.id AS user_id, u.email, u.role, u.full_name
@@ -39,8 +43,8 @@ export async function POST(req: NextRequest) {
         const sess = rows[0];
 
         // Rotasi refresh token
-        const newAccess  = signAccessToken({ sub: sess.user_id, email: sess.email, role: sess.role, full_name: sess.full_name });
-        const newRefresh = signRefreshToken({ sub: sess.user_id });
+        const newAccess  = signAccessToken({ sub: sess.user_id, email: sess.email, role: sess.role, full_name: sess.full_name, fp });
+        const newRefresh = signRefreshToken({ sub: sess.user_id, fp });
         const newHash    = hashRefreshToken(newRefresh);
         const newExpiry  = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
 
