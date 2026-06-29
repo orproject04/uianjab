@@ -6,6 +6,7 @@ import pool from '@/lib/db';
 import { signAccessToken, signRefreshToken, ACCESS_TOKEN_MAXAGE_SEC } from '@/lib/auth';
 import { hashRefreshToken } from '@/lib/tokens';
 import { sanitizeInternalNext } from '@/lib/redirect';
+import { generateUserAgentHash } from '@/lib/fingerprint';
 
 export async function GET(req: NextRequest) {
     try {
@@ -125,13 +126,17 @@ export async function GET(req: NextRequest) {
         }
 
         // Generate JWT tokens untuk aplikasi
+        const userAgent = req.headers.get('user-agent');
+        const fp = generateUserAgentHash(userAgent);
+
         const accessToken = signAccessToken({ 
             sub: userId, 
             email, 
             role: userRole, 
-            full_name: userName 
+            full_name: userName,
+            fp
         });
-        const refreshToken = signRefreshToken({ sub: userId });
+        const refreshToken = signRefreshToken({ sub: userId, fp });
 
         // Simpan refresh token di database
         const refreshHash = hashRefreshToken(refreshToken);
