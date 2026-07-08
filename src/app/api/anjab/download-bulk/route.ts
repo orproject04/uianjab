@@ -10,6 +10,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import archiver from "archiver";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 interface PetaJabatanWithABK {
     peta_id: string;
@@ -175,52 +176,57 @@ export async function GET(req: NextRequest) {
         }
 
         // Organize by folder structure
-        const folderStructure = organizeFolderStructure(allPetaJabatan, petaWithABK);
+        let folderStructure: FolderStructure | null = null;
+        let dfsList: PetaJabatanWithABK[] = [];
+
+        if (scope === "tree") {
+            dfsList = getDFSItems(allPetaJabatan, "sekretaris jenderal dpd ri")
+                .filter(p => !!p.jabatan_id && (p.jenis_jabatan === "JABATAN FUNGSIONAL" || p.has_abk));
+        } else {
+            folderStructure = organizeFolderStructure(allPetaJabatan, petaWithABK);
+        }
 
         // Create temporary directory for files
         tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "anjab-"));
-        // Capture tempDir as a const so async closures always have the correct, non-null value
         const workDir = tempDir;
 
-        // Create folder structure
+        // Create folder structure if not tree
         let filesList: { folder: string; jabatan_id: string; peta_id: string; nama_jabatan: string }[] = [];
 
-        for (const [category, categoryData] of Object.entries(folderStructure)) {
-            // Create main folder
-            const mainFolderPath = path.join(workDir, categoryData.folder);
-            fs.mkdirSync(mainFolderPath, { recursive: true });
+        if (folderStructure) {
+            for (const [category, categoryData] of Object.entries(folderStructure)) {
+                // Create main folder
+                const mainFolderPath = path.join(workDir, categoryData.folder);
+                fs.mkdirSync(mainFolderPath, { recursive: true });
 
-            for (const item of categoryData.items) {
-                // If scope is eselon12, only include JPT (Eselon I & II)
-                if (scope === "eselon12") {
-                    // jptItems are in folderStructure under key 'jpt' — only include those
-                    if (category !== "jpt") continue;
+                for (const item of categoryData.items) {
+                    if (scope === "eselon12" && category !== "jpt") continue;
+                    if (item.jabatan_id) {
+                        filesList.push({
+                            folder: categoryData.folder,
+                            jabatan_id: item.jabatan_id,
+                            peta_id: item.peta_id,
+                            nama_jabatan: item.nama_jabatan,
+                        });
+                    }
                 }
-                if (item.jabatan_id) {
-                    filesList.push({
-                        folder: categoryData.folder,
-                        jabatan_id: item.jabatan_id,
-                        peta_id: item.peta_id,
-                        nama_jabatan: item.nama_jabatan,
-                    });
-                }
-            }
 
-            // Create subfolders
-            if (categoryData.subfolders) {
-                for (const [subcat, subcatData] of Object.entries(categoryData.subfolders)) {
-                    const subFolderPath = path.join(workDir, subcatData.folder);
-                    fs.mkdirSync(subFolderPath, { recursive: true });
+                // Create subfolders
+                if (categoryData.subfolders) {
+                    for (const [subcat, subcatData] of Object.entries(categoryData.subfolders)) {
+                        const subFolderPath = path.join(workDir, subcatData.folder);
+                        fs.mkdirSync(subFolderPath, { recursive: true });
 
-                    for (const item of subcatData.items) {
-                        if (scope === "eselon12") continue; // don't include subfolders for eselon12 scope
-                        if (item.jabatan_id) {
-                            filesList.push({
-                                folder: subcatData.folder,
-                                jabatan_id: item.jabatan_id,
-                                peta_id: item.peta_id,
-                                nama_jabatan: item.nama_jabatan,
-                            });
+                        for (const item of subcatData.items) {
+                            if (scope === "eselon12") continue;
+                            if (item.jabatan_id) {
+                                filesList.push({
+                                    folder: subcatData.folder,
+                                    jabatan_id: item.jabatan_id,
+                                    peta_id: item.peta_id,
+                                    nama_jabatan: item.nama_jabatan,
+                                });
+                            }
                         }
                     }
                 }
@@ -229,6 +235,7 @@ export async function GET(req: NextRequest) {
 
         // Generate PDFs
         let successCount = 0;
+        const pageCounter = { current: 1 };
 
         // If streaming, create a ReadableStream that will emit SSE messages
         if (streamMode) {
@@ -238,63 +245,107 @@ export async function GET(req: NextRequest) {
             const stream = new ReadableStream({
                 async start(controller) {
                     try {
-                        const total = filesList.length;
+                        const total = scope === "tree" ? dfsList.length : filesList.length;
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ total })}\n\n`));
 
-                        for (let i = 0; i < filesList.length; i++) {
-                            const file = filesList[i];
-                            try {
-                                const dedupeKey = `${file.folder}/${sanitizeFileName(file.nama_jabatan)}`;
-                                fileNameCounters[dedupeKey] = (fileNameCounters[dedupeKey] || 0) + 1;
-                                const suffix = fileNameCounters[dedupeKey] > 1 ? `_${fileNameCounters[dedupeKey]}` : '';
-                                await generateAndSavePDF(file.peta_id, file.nama_jabatan, workDir, file.folder, suffix);
-                                successCount++;
-                            } catch (error) {
-                                console.error(`Error generating PDF for ${file.nama_jabatan}:`, error);
-                            }
-                            const progress = { done: successCount, total };
-                            controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
-                            console.log(`[download-bulk] Progress ${successCount}/${total}`);
-                        }
-
-                        // Create ZIP archive
                         const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5);
-                        const archiveFileName = `anjab-abk-${timestamp}.zip`;
-                        const archivePath = path.join(os.tmpdir(), archiveFileName);
 
-                        try {
-                            await new Promise<void>((resolve, reject) => {
-                                const output = fs.createWriteStream(archivePath);
-                                // forceZip64 is critical for large archives with many entries
-                                const archive = archiver('zip', {
-                                    zlib: { level: 3 },
-                                    forceZip64: true,
-                                    forceLocalTime: true
+                        if (scope === "tree") {
+                            const mergedPdf = await PDFDocument.create();
+                            const font = await mergedPdf.embedFont(StandardFonts.Helvetica);
+
+                            for (let i = 0; i < dfsList.length; i++) {
+                                const item = dfsList[i];
+                                try {
+                                    const rawBuffer = await generateRawPDFBuffer(item.peta_id, item.nama_jabatan || "");
+                                    const pdfDoc = await PDFDocument.load(rawBuffer);
+                                    const pages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+
+                                    for (const pdfPage of pages) {
+                                        const { width } = pdfPage.getSize();
+                                        const text = `${pageCounter.current}`;
+                                        const fontSize = 11;
+                                        const textWidth = font.widthOfTextAtSize(text, fontSize);
+
+                                        pdfPage.drawText(text, {
+                                            x: width / 2 - textWidth / 2,
+                                            y: 15,
+                                            size: fontSize,
+                                            font: font,
+                                            color: rgb(0, 0, 0),
+                                        });
+                                        pageCounter.current++;
+                                        mergedPdf.addPage(pdfPage);
+                                    }
+                                    successCount++;
+                                } catch (error) {
+                                    console.error(`Error generating PDF for ${item.nama_jabatan}:`, error);
+                                }
+                                const progress = { done: successCount, total };
+                                controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
+                                console.log(`[download-bulk] Tree Progress ${successCount}/${total} - ${item.nama_jabatan}`);
+                            }
+
+                            const archiveFileName = `anjab-tree-${timestamp}.pdf`;
+                            const archivePath = path.join(os.tmpdir(), archiveFileName);
+                            const mergedPdfBytes = await mergedPdf.save();
+                            fs.writeFileSync(archivePath, mergedPdfBytes);
+
+                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
+
+                        } else {
+                            for (let i = 0; i < filesList.length; i++) {
+                                const file = filesList[i];
+                                try {
+                                    const dedupeKey = `${file.folder}/${sanitizeFileName(file.nama_jabatan)}`;
+                                    fileNameCounters[dedupeKey] = (fileNameCounters[dedupeKey] || 0) + 1;
+                                    const suffix = fileNameCounters[dedupeKey] > 1 ? `_${fileNameCounters[dedupeKey]}` : '';
+                                    await generateAndSavePDF(file.peta_id, file.nama_jabatan, workDir, file.folder, suffix, pageCounter);
+                                    successCount++;
+                                } catch (error) {
+                                    console.error(`Error generating PDF for ${file.nama_jabatan}:`, error);
+                                }
+                                const progress = { done: successCount, total };
+                                controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
+                                console.log(`[download-bulk] Progress ${successCount}/${total} - ${file.nama_jabatan}`);
+                            }
+
+                            // Create ZIP archive
+                            const archiveFileName = `anjab-abk-${timestamp}.zip`;
+                            const archivePath = path.join(os.tmpdir(), archiveFileName);
+
+                            try {
+                                await new Promise<void>((resolve, reject) => {
+                                    const output = fs.createWriteStream(archivePath);
+                                    const archive = archiver('zip', {
+                                        zlib: { level: 3 },
+                                        forceZip64: true,
+                                        forceLocalTime: true
+                                    });
+
+                                    output.on('close', () => resolve());
+                                    output.on('error', reject);
+                                    archive.on('error', reject);
+                                    archive.on('warning', (err: any) => {
+                                        if (err.code !== 'ENOENT') reject(err);
+                                    });
+
+                                    archive.pipe(output);
+                                    archive.directory(workDir, false);
+                                    archive.finalize();
                                 });
+                            } catch (error) {
+                                console.error("Archive creation failed:", error);
+                                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Gagal membuat archive zip" })}\n\n`));
+                                if (fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
+                                controller.close();
+                                return;
+                            }
 
-                                output.on('close', () => resolve());
-                                output.on('error', reject);
-                                archive.on('error', reject);
-                                archive.on('warning', (err: any) => {
-                                    if (err.code !== 'ENOENT') reject(err);
-                                });
-
-                                archive.pipe(output);
-                                archive.directory(workDir, false);
-                                archive.finalize();
-                            });
-                        } catch (error) {
-                            console.error("Archive creation failed:", error);
-                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Gagal membuat archive zip" })}\n\n`));
-                            if (fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
-                            controller.close();
-                            return;
+                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
                         }
 
-                        // Send complete event with archive filename
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
-
-                        // Clean up workDir but keep archive for download via ?file=<name>
+                        // Clean up workDir
                         if (fs.existsSync(workDir)) {
                             fs.rmSync(workDir, { recursive: true, force: true });
                         }
@@ -321,9 +372,9 @@ export async function GET(req: NextRequest) {
                     const dedupeKey = `${file.folder}/${sanitizeFileName(file.nama_jabatan)}`;
                     fileNameCounters[dedupeKey] = (fileNameCounters[dedupeKey] || 0) + 1;
                     const suffix = fileNameCounters[dedupeKey] > 1 ? `_${fileNameCounters[dedupeKey]}` : '';
-                    await generateAndSavePDF(file.peta_id, file.nama_jabatan, workDir, file.folder, suffix);
+                    await generateAndSavePDF(file.peta_id, file.nama_jabatan, workDir, file.folder, suffix, pageCounter);
                     successCount++;
-                    console.log(`[download-bulk] Progress ${successCount}/${filesList.length}`);
+                    console.log(`[download-bulk] Progress ${successCount}/${filesList.length} - ${file.nama_jabatan}`);
                 } catch (error) {
                     console.error(`Error generating PDF for ${file.nama_jabatan}:`, error);
                 }
@@ -421,6 +472,7 @@ function createArchiveResponse(archivePath: string, fileName: string, tempDir: s
 
         let contentType = "application/zip";
         if (fileName.endsWith(".tar.gz")) contentType = "application/gzip";
+        else if (fileName.endsWith(".pdf")) contentType = "application/pdf";
 
         return new NextResponse(webStream, {
             status: 200,
@@ -441,8 +493,45 @@ function sanitizeFileName(name: string): string {
     return name
         .replace(/[<>:"/\\|?*]/g, "")
         .trim()
-        .substring(0, 80)
+        .substring(0, 60)
         .trim(); // Trim again in case substring cuts off right after a space
+}
+
+function buildTreeStructure(
+    petaWithABK: PetaJabatanWithABK[],
+    allPetaJabatan: PetaJabatanWithABK[]
+): FolderStructure {
+    const structure: FolderStructure = {};
+    const subfolders: { [key: string]: { folder: string; items: PetaJabatanWithABK[] } } = {};
+
+    for (const item of petaWithABK) {
+        const pathParts: string[] = [];
+        let current: PetaJabatanWithABK | undefined = item;
+
+        // Find ancestors
+        current = allPetaJabatan.find(p => p.peta_id === current?.parent_id);
+        while (current) {
+            let name = current.nama_jabatan || "Tidak Diketahui";
+            pathParts.unshift(sanitizeFileName(name));
+            current = allPetaJabatan.find(p => p.peta_id === current?.parent_id);
+        }
+
+        const folder = pathParts.length > 0 ? pathParts.join("/") : "Utama";
+
+
+        if (!subfolders[folder]) {
+            subfolders[folder] = { folder, items: [] };
+        }
+        subfolders[folder].items.push(item);
+    }
+
+    structure["tree"] = {
+        folder: "Anjab_Tree",
+        items: [],
+        subfolders
+    };
+
+    return structure;
 }
 
 function organizeFolderStructure(
@@ -1003,7 +1092,8 @@ async function generateAndSavePDF(
     namaJabatan: string,
     workDir: string,
     folderPath: string,
-    suffix: string = ''
+    suffix: string = '',
+    pageCounter?: { current: number }
 ): Promise<void> {
     try {
         // Get anjab data
@@ -1026,18 +1116,157 @@ async function generateAndSavePDF(
         });
 
         await page.setContent(html, { waitUntil: "load" });
-        const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+        const rawPdfBuffer = await page.pdf({
+            format: "A4",
+            printBackground: true,
+            margin: {
+                top: "2cm",
+                bottom: "3.5cm",
+                left: "2.5cm",
+                right: "2.3cm"
+            }
+        });
         await page.close();
+
+        let finalPdfBuffer = rawPdfBuffer;
+
+        if (pageCounter) {
+            const pdfDoc = await PDFDocument.load(rawPdfBuffer);
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const pages = pdfDoc.getPages();
+
+            for (let i = 0; i < pages.length; i++) {
+                const pdfPage = pages[i];
+                const { width } = pdfPage.getSize();
+                const text = `${pageCounter.current + i}`;
+                const fontSize = 11;
+                const textWidth = font.widthOfTextAtSize(text, fontSize);
+
+                pdfPage.drawText(text, {
+                    x: width / 2 - textWidth / 2,
+                    y: 15,
+                    size: fontSize,
+                    font: font,
+                    color: rgb(0, 0, 0),
+                });
+            }
+
+            pageCounter.current += pages.length;
+            const savedBytes = await pdfDoc.save();
+            finalPdfBuffer = Buffer.from(savedBytes);
+        }
 
         // Save to file — ensure target directory exists before writing
         const fileName = sanitizeFileName(namaJabatan);
         const targetDir = path.join(workDir, folderPath);
         fs.mkdirSync(targetDir, { recursive: true });
         const filePath = path.join(targetDir, `${fileName}${suffix}.pdf`);
-        fs.writeFileSync(filePath, pdfBuffer);
+        fs.writeFileSync(filePath, finalPdfBuffer);
         console.log(`[download-bulk] Saved PDF: ${filePath}`);
     } catch (error) {
         console.error(`Error generating PDF for ${namaJabatan}:`, error);
         throw error;
     }
+}
+
+async function generateRawPDFBuffer(
+    petaId: string,
+    namaJabatan: string
+): Promise<Buffer> {
+    try {
+        const data = await getAnjabByIdOrSlug(petaId);
+        if (!data) {
+            throw new Error(`Anjab not found for ID: ${petaId}`);
+        }
+
+        const html = buildAnjabHtml(data);
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+
+        await page.setRequestInterception(true);
+        page.on("request", (r) => {
+            if (r.resourceType() === "image") r.abort();
+            else r.continue();
+        });
+
+        await page.setContent(html, { waitUntil: "load" });
+        const rawPdfBuffer = await page.pdf({
+            format: "A4",
+            printBackground: true,
+            margin: {
+                top: "2cm",
+                bottom: "2.38cm",
+                left: "2.5cm",
+                right: "2.3cm"
+            }
+        });
+        await page.close();
+
+        return Buffer.from(rawPdfBuffer);
+    } catch (error) {
+        console.error(`Error generating raw PDF for ${namaJabatan}:`, error);
+        throw error;
+    }
+}
+
+function getDFSItems(
+    allPetaJabatan: PetaJabatanWithABK[],
+    rootNodeNameMatcher: string
+): PetaJabatanWithABK[] {
+    const childrenMap = new Map<string | null, PetaJabatanWithABK[]>();
+    for (const item of allPetaJabatan) {
+        const parentId = item.parent_id || null;
+        if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+        childrenMap.get(parentId)!.push(item);
+    }
+
+    const result: PetaJabatanWithABK[] = [];
+    
+    // Normal DFS traversal for subtrees
+    function traverse(nodeId: string | null) {
+        const children = childrenMap.get(nodeId) || [];
+        for (const child of children) {
+            result.push(child);
+            traverse(child.peta_id);
+        }
+    }
+
+    const rootNodes = allPetaJabatan.filter(p => p.nama_jabatan?.toLowerCase().includes(rootNodeNameMatcher));
+    for (const root of rootNodes) {
+        result.push(root); // Push Root (Setjen)
+
+        let rootChildren = childrenMap.get(root.peta_id) || [];
+        
+        // Group A: Specifically the two Deputi nodes
+        const deputiAdm = rootChildren.find(c => (c.nama_jabatan || "").toLowerCase().includes("deputi bidang administrasi"));
+        const deputiPersidangan = rootChildren.find(c => (c.nama_jabatan || "").toLowerCase().includes("deputi bidang persidangan"));
+        
+        const groupA: PetaJabatanWithABK[] = [];
+        if (deputiAdm) groupA.push(deputiAdm);
+        if (deputiPersidangan) groupA.push(deputiPersidangan);
+        
+        // Group B: The rest (Inspektorat, Biro, Kantor, dll)
+        const groupB = rootChildren.filter(c => 
+            !(c.nama_jabatan || "").toLowerCase().includes("deputi bidang administrasi") && 
+            !(c.nama_jabatan || "").toLowerCase().includes("deputi bidang persidangan")
+        );
+
+        // 1. Push just the Eselon 1 nodes of Group A first
+        for (const child of groupA) {
+            result.push(child);
+        }
+
+        // 2. Then traverse the subtrees of Group A
+        for (const child of groupA) {
+            traverse(child.peta_id);
+        }
+        
+        // 3. For Group B, do normal DFS (push node, then traverse its children)
+        for (const child of groupB) {
+            result.push(child);
+            traverse(child.peta_id);
+        }
+    }
+
+    return result;
 }

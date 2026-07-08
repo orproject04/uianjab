@@ -506,13 +506,19 @@ export function buildAnjabHtml(data: any): string {
   // Detect master by checking data.kebutuhan_pegawai === null and in that case
   // render KEBUTUHAN PEGAWAI, Jumlah Pegawai, and Pembulatan as blank.
   const isMaster = data.kebutuhan_pegawai == null;
-  const totalKebutuhan = isMaster
-    ? null
-    : (data.tugas_pokok || []).reduce(
-        (sum: number, item: any) =>
-          sum + (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0),
-        0
-      );
+  let totalKebutuhan: number | null = null;
+  
+  if (!isMaster) {
+      if (data.jenis_jabatan && data.jenis_jabatan.toUpperCase() === "JABATAN FUNGSIONAL") {
+          totalKebutuhan = parseFloat(String(data.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0;
+      } else {
+          totalKebutuhan = (data.tugas_pokok || []).reduce(
+            (sum: number, item: any) =>
+              sum + (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0),
+            0
+          );
+      }
+  }
 
     const showSatuanHasil = hasAnySatuanHasil(data);
 

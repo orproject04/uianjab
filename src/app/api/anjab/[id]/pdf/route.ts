@@ -99,7 +99,23 @@ export async function GET(
         });
 
         await page.setContent(html, {waitUntil: "load"});
-        const pdfBuffer = await page.pdf({format: "A4", printBackground: true});
+        const pdfBuffer = await page.pdf({ 
+            format: "A4", 
+            printBackground: true,
+            displayHeaderFooter: true,
+            headerTemplate: "<span></span>",
+            footerTemplate: `
+                <div style="font-size: 11pt; font-family: Tahoma, Arial, sans-serif; width: 100%; text-align: center; padding-top: 40px;">
+                    <span class="pageNumber"></span>
+                </div>
+            `,
+            margin: {
+                top: "2cm",
+                bottom: "3.5cm",
+                left: "2.5cm",
+                right: "2.3cm"
+            }
+        });
         await page.close();
 
         // simpan ke cache

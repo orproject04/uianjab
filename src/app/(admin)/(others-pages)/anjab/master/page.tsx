@@ -25,6 +25,7 @@ export default function AnjabListPage() {
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [error, setError] = useState<string | null>(null);
     const [showUploadSection, setShowUploadSection] = useState(false);
+    const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const [sortField, setSortField] = useState<"nama_jabatan" | "kelas_jabatan" | "created_at">("kelas_jabatan");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
@@ -303,6 +304,7 @@ export default function AnjabListPage() {
     };
 
     const handleDownloadAll = () => handleBulkDownload("all", "Semua Anjab");
+    const handleDownloadTree = () => handleBulkDownload("tree", "Anjab per Biro (Tree)");
 
     const handleViewJabatan = (id: string) => {
         // Langsung ke halaman edit section pertama (jabatan) dengan UUID
@@ -417,17 +419,65 @@ export default function AnjabListPage() {
                         </p>
                     </div>
                     <div className="flex-shrink-0 flex flex-col sm:flex-row gap-2">
-                        {/* Download All Button */}
-                        <button
-                            onClick={handleDownloadAll}
-                            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 text-white border border-transparent rounded-xl hover:bg-brand-700 transition-all duration-200 shadow-sm hover:shadow font-medium whitespace-nowrap"
-                            title="Download semua Anjab dengan ABK"
-                        >
-                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            <span>Download Semua</span>
-                        </button>
+                        {/* Download Dropdown */}
+                        <div className="relative inline-block text-left">
+                            <button
+                                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 text-white border border-transparent rounded-xl hover:bg-brand-700 transition-all duration-200 shadow-sm hover:shadow font-medium whitespace-nowrap"
+                            >
+                                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                <span>Download Data</span>
+                                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {showDownloadMenu && (
+                                <>
+                                    {/* Invisible backdrop to close dropdown when clicking outside */}
+                                    <div 
+                                        className="fixed inset-0 z-10" 
+                                        onClick={() => setShowDownloadMenu(false)}
+                                    ></div>
+                                    <div className="origin-top-right absolute right-0 mt-2 w-72 rounded-xl shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 dark:divide-gray-700 z-20">
+                                        <div className="py-1">
+                                            <button
+                                                onClick={() => { setShowDownloadMenu(false); handleDownloadAll(); }}
+                                                className="group flex w-full items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                            >
+                                                <div className="p-2 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 rounded-lg group-hover:bg-brand-100 dark:group-hover:bg-brand-900/40">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="font-semibold text-gray-900 dark:text-white">Per Jabatan (ZIP)</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">File PDF terpisah dalam ZIP</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                        <div className="py-1">
+                                            <button
+                                                onClick={() => { setShowDownloadMenu(false); handleDownloadTree(); }}
+                                                className="group flex w-full items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                            >
+                                                <div className="p-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg group-hover:bg-green-100 dark:group-hover:bg-green-900/40">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="font-semibold text-gray-900 dark:text-white">Gabungan (1 PDF)</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Seluruh Anjab digabung 1 file</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
 
                         {/* Clear Cache Button */}
                         <button
