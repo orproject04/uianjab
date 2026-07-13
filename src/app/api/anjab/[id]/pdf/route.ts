@@ -13,7 +13,7 @@ let browserPromise: Promise<Browser> | null = null;
 async function getBrowser(): Promise<Browser> {
     if (!browserPromise) {
         browserPromise = puppeteer.launch({
-            headless: "new",
+            headless: true,
             args: ["--no-sandbox", "--disable-setuid-sandbox"],
         });
     }

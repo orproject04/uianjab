@@ -2,319 +2,358 @@
 
 // ===== Helper yang tadinya di route =====
 function renderList(arr?: string[]) {
-    if (!arr || arr.length === 0) return "-";
-    return `<ul style="margin:0; padding-left:0px; list-style-type: none;">${arr.map(item => `<li>${item}</li>`).join("")}</ul>`;
+  if (!arr || arr.length === 0) return "-";
+  return `<ul style="margin:0; padding-left:0px; list-style-type: none;">${arr.map(item => `<li>${item}</li>`).join("")}</ul>`;
 }
 
 function renderNumberList(arr?: string[]) {
-    if (!arr || arr.length === 0) return "-";
-    return `<ol style="margin:0; padding-left:15px;">${arr.map(item => `<li>${item}</li>`).join("")}</ol>`;
+  if (!arr || arr.length === 0) return "-";
+  return `<ol style="margin:0; padding-left:15px;">${arr.map(item => `<li>${item}</li>`).join("")}</ol>`;
 }
 
-function renderPendidikanFormalList(arr?: string[]) {
-    if (!arr || arr.length === 0) return "-";
+function renderPendidikanFormalList(arr?: string[], isWord = false) {
+  if (!arr || arr.length === 0) return "-";
 
-    const liContainerStyle = `
+  const liContainerStyle = `
         margin:0;
         padding-left:15px;
         list-style-type:none;
     `;
-    const subLiStyle = `
+  const subLiStyle = `
         text-indent:-10px;
         padding-left:0;
     `;
 
-    // 1) cari semua index yang merupakan "dari kalangan ..."
-    const kalanganIndexes: number[] = [];
-    arr.forEach((val, idx) => {
-        const v = val?.trim().toLowerCase() || "";
-        if (v.startsWith("dari kalangan pns") || v.startsWith("dari kalangan non-pns")) {
-            kalanganIndexes.push(idx);
-        }
-    });
-
-    if (kalanganIndexes.length === 0) {
-        // tidak ada "dari kalangan ..." ya sudah tampilkan semua apa adanya
-        return arr.join("<br>");
+  // 1) cari semua index yang merupakan "dari kalangan ..."
+  const kalanganIndexes: number[] = [];
+  arr.forEach((val, idx) => {
+    const v = val?.trim().toLowerCase() || "";
+    if (v.startsWith("dari kalangan pns") || v.startsWith("dari kalangan non-pns")) {
+      kalanganIndexes.push(idx);
     }
+  });
 
-    const lastKalanganIdx = kalanganIndexes[kalanganIndexes.length - 1];
+  if (kalanganIndexes.length === 0) {
+    // tidak ada "dari kalangan ..." ya sudah tampilkan semua apa adanya
+    return arr.join("<br>");
+  }
 
-    let html = "<ol style='margin:0; padding-left:15px;'>";
+  const lastKalanganIdx = kalanganIndexes[kalanganIndexes.length - 1];
 
-    for (let k = 0; k < kalanganIndexes.length; k++) {
-        const i = kalanganIndexes[k];
-        const item = arr[i].trim();
+  let html = "<ol style='margin:0; padding-left:15px;'>";
 
-        html += `<li>${item}`;
+  for (let k = 0; k < kalanganIndexes.length; k++) {
+    const i = kalanganIndexes[k];
+    const item = arr[i].trim();
 
-        // cek 1 elemen setelahnya: kalau bukan kalangan -> jadikan sublist "-"
-        const next = arr[i + 1];
-        const nextIsKalangan =
-            next &&
-            (next.trim().toLowerCase().startsWith("dari kalangan pns") ||
-                next.trim().toLowerCase().startsWith("dari kalangan non-pns"));
+    html += `<li>${item}`;
 
-        let skipNext = false;
-        if (next && !nextIsKalangan) {
-            html += `<ul style="${liContainerStyle}">
-                <li style="${subLiStyle}">- ${next.trim()}</li>
+    // cek 1 elemen setelahnya: kalau bukan kalangan -> jadikan sublist "-"
+    const next = arr[i + 1];
+    const nextIsKalangan =
+      next &&
+      (next.trim().toLowerCase().startsWith("dari kalangan pns") ||
+        next.trim().toLowerCase().startsWith("dari kalangan non-pns"));
+
+    let skipNext = false;
+    if (next && !nextIsKalangan) {
+      html += `<ul style="${liContainerStyle}">
+                <li style="${subLiStyle}">${isWord ? '' : '- '}${next.trim()}</li>
             </ul>`;
-            skipNext = true;
-        }
-
-        html += `</li>`;
-
-        // kalau kita bukan di kalangan terakhir, loop akan lanjut ke kalangan berikutnya
-        // dan kita TIDAK memasukkan teks tambahan ke dalam li ini
-        if (skipNext) {
-            // kita hanya "melewati" di perhitungan luar
-            // tapi karena kita pakai index dari kalanganIndexes, tidak perlu modifikasi di sini
-        }
+      skipNext = true;
     }
 
-    html += "</ol>";
+    html += `</li>`;
 
-    // 2) ambil semua elemen SETELAH kalangan terakhir (plus 1 kemungkinan sublist-nya)
-    const tail: string[] = [];
-    let startTailAt = lastKalanganIdx + 1;
-
-    // kalau elemen setelah kalangan terakhir tadi sudah dipakai sebagai sublist, lompat 1
-    const afterLast = arr[lastKalanganIdx + 1];
-    if (
-        afterLast &&
-        !afterLast.trim().toLowerCase().startsWith("dari kalangan pns") &&
-        !afterLast.trim().toLowerCase().startsWith("dari kalangan non-pns")
-    ) {
-        // elemen ini dipakai jadi sublist di atas, jadi tail mulai sesudahnya
-        startTailAt = lastKalanganIdx + 2;
+    // kalau kita bukan di kalangan terakhir, loop akan lanjut ke kalangan berikutnya
+    // dan kita TIDAK memasukkan teks tambahan ke dalam li ini
+    if (skipNext) {
+      // kita hanya "melewati" di perhitungan luar
+      // tapi karena kita pakai index dari kalanganIndexes, tidak perlu modifikasi di sini
     }
+  }
 
-    for (let t = startTailAt; t < arr.length; t++) {
-        tail.push(arr[t].trim());
-    }
+  html += "</ol>";
 
-    // 3) render tail di luar <ol> supaya sejajar dengan angka 1/2
-    if (tail.length > 0) {
-        html += tail.map(t => `<div style="margin-top:4px;">${t}</div>`).join("");
-    }
+  // 2) ambil semua elemen SETELAH kalangan terakhir (plus 1 kemungkinan sublist-nya)
+  const tail: string[] = [];
+  let startTailAt = lastKalanganIdx + 1;
 
-    return html;
+  // kalau elemen setelah kalangan terakhir tadi sudah dipakai sebagai sublist, lompat 1
+  const afterLast = arr[lastKalanganIdx + 1];
+  if (
+    afterLast &&
+    !afterLast.trim().toLowerCase().startsWith("dari kalangan pns") &&
+    !afterLast.trim().toLowerCase().startsWith("dari kalangan non-pns")
+  ) {
+    // elemen ini dipakai jadi sublist di atas, jadi tail mulai sesudahnya
+    startTailAt = lastKalanganIdx + 2;
+  }
+
+  for (let t = startTailAt; t < arr.length; t++) {
+    tail.push(arr[t].trim());
+  }
+
+  // 3) render tail di luar <ol> supaya sejajar dengan angka 1/2
+  if (tail.length > 0) {
+    html += tail.map(t => `<div style="margin-top:4px;">${t}</div>`).join("");
+  }
+
+  return html;
 }
 
-function renderPengalamanKerjaList(arr?: string[]) {
-    if (!arr || arr.length === 0) return "-";
+function renderPengalamanKerjaList(arr?: string[], isWord = false) {
+  if (!arr || arr.length === 0) return "-";
 
-    // cek dulu: ada nggak yang dimulai "dari kalangan ..."
-    const hasKalangan = arr.some(item => {
-        const t = item?.trim().toLowerCase() || "";
-        return (
-            t.startsWith("dari kalangan pns") ||
-            t.startsWith("dari kalangan non-pns")
-        );
-    });
+  // cek dulu: ada nggak yang dimulai "dari kalangan ..."
+  const hasKalangan = arr.some(item => {
+    const t = item?.trim().toLowerCase() || "";
+    return (
+      t.startsWith("dari kalangan pns") ||
+      t.startsWith("dari kalangan non-pns")
+    );
+  });
 
-    // kalau gak ada sama sekali → pakai logic lama
-    if (!hasKalangan) {
-        return renderNumberList(arr);
-    }
+  // kalau gak ada sama sekali → pakai logic lama
+  if (!hasKalangan) {
+    return renderNumberList(arr);
+  }
 
-    // === logic lama yang pakai grup "dari kalangan ..." ===
-    let html = "<ol style='margin:0; padding-left:15px;'>";
-    let subItems: string[] = [];
+  // === logic lama yang pakai grup "dari kalangan ..." ===
+  let html = "<ol style='margin:0; padding-left:15px;'>";
+  let subItems: string[] = [];
 
-    const liStyle = `
+  const liStyle = `
         margin:0;
         padding-left:15px;
         list-style-type:none;
     `;
 
-    const subLiStyle = `
+  const subLiStyle = `
         text-indent:-10px;
         padding-left:0;
     `;
 
-    for (let i = 0; i < arr.length; i++) {
-        const item = arr[i]?.trim();
-        const isKalangan =
-            item.toLowerCase().startsWith("dari kalangan pns") ||
-            item.toLowerCase().startsWith("dari kalangan non-pns");
+  for (let i = 0; i < arr.length; i++) {
+    const item = arr[i]?.trim();
+    const isKalangan =
+      item.toLowerCase().startsWith("dari kalangan pns") ||
+      item.toLowerCase().startsWith("dari kalangan non-pns");
 
-        if (isKalangan) {
-            // tutup sublist sebelumnya
-            if (subItems.length > 0) {
-                html += `<ul style="${liStyle}">${subItems
-                    .map(sub => `<li style="${subLiStyle}">- ${sub}</li>`)
-                    .join("")}</ul>`;
-                subItems = [];
-            }
-            // buka item baru
-            html += `<li>${item}`;
-        } else {
-            // kumpulkan jadi sublist
-            subItems.push(item);
-        }
-
-        const nextItem = arr[i + 1];
-        const nextIsKalangan =
-            nextItem &&
-            (
-                nextItem.toLowerCase().startsWith("dari kalangan pns") ||
-                nextItem.toLowerCase().startsWith("dari kalangan non-pns")
-            );
-
-        // kalau habis atau ketemu kalangan baru → render sublist + tutup li
-        if (nextIsKalangan || i === arr.length - 1) {
-            if (subItems.length > 0) {
-                html += `<ul style="${liStyle}">${subItems
-                    .map(sub => `<li style="${subLiStyle}">- ${sub}</li>`)
-                    .join("")}</ul>`;
-                subItems = [];
-            }
-            html += `</li>`;
-        }
+    if (isKalangan) {
+      // tutup sublist sebelumnya
+      if (subItems.length > 0) {
+        html += `<ul style="${liStyle}">${subItems
+          .map(sub => `<li style="${subLiStyle}">${isWord ? '' : '- '}${sub}</li>`)
+          .join("")}</ul>`;
+        subItems = [];
+      }
+      // buka item baru
+      html += `<li>${item}`;
+    } else {
+      // kumpulkan jadi sublist
+      subItems.push(item);
     }
 
-    html += "</ol>";
-    return html;
+    const nextItem = arr[i + 1];
+    const nextIsKalangan =
+      nextItem &&
+      (
+        nextItem.toLowerCase().startsWith("dari kalangan pns") ||
+        nextItem.toLowerCase().startsWith("dari kalangan non-pns")
+      );
+
+    // kalau habis atau ketemu kalangan baru → render sublist + tutup li
+    if (nextIsKalangan || i === arr.length - 1) {
+      if (subItems.length > 0) {
+        html += `<ul style="${liStyle}">${subItems
+          .map(sub => `<li style="${subLiStyle}">${isWord ? '' : '- '}${sub}</li>`)
+          .join("")}</ul>`;
+        subItems = [];
+      }
+      html += `</li>`;
+    }
+  }
+
+  html += "</ol>";
+  return html;
 }
 
 function renderBulletList(value: string | string[]) {
-    if (Array.isArray(value)) {
-        return `
+  if (Array.isArray(value)) {
+    return `
       <ul style="margin:0; padding-left:1.5em; list-style-type: disc;">
         ${value.map((sub) => `<li>${sub}</li>`).join("")}
       </ul>
     `;
-    }
-    return value;
+  }
+  return value;
 }
 
-function renderTableList(value: string | string[]) {
-    // helper: 0 -> "a", 25 -> "z", 26 -> "aa", 27 -> "ab", dst.
-    const alphaIndex = (n: number) => {
-        let s = "";
-        do {
-            s = String.fromCharCode(97 + (n % 26)) + s;
-            n = Math.floor(n / 26) - 1;
-        } while (n >= 0);
-        return s;
-    };
+function renderTableList(value: string | string[], isWord = false) {
+  // helper: 0 -> "a", 25 -> "z", 26 -> "aa", 27 -> "ab", dst.
+  const alphaIndex = (n: number) => {
+    let s = "";
+    do {
+      s = String.fromCharCode(97 + (n % 26)) + s;
+      n = Math.floor(n / 26) - 1;
+    } while (n >= 0);
+    return s;
+  };
 
-    if (Array.isArray(value) && value.length > 0) {
-        if (value.length === 1) return value[0];
+  if (Array.isArray(value) && value.length > 0) {
+    if (value.length === 1) return value[0];
 
-        const skipNumbering = value[0].trim().endsWith(":");
+    const skipNumbering = value[0].trim().endsWith(":");
 
-        return `
+    return isWord ? `
+      <div style="margin:0; padding:0;">
+        ${value
+        .map((sub, i) => {
+          if (i === 0 && skipNumbering) {
+            return `<div style="margin:0; padding:0;">${sub}</div>`;
+          } else {
+            const numIndex = skipNumbering ? i - 1 : i;
+            const label = alphaIndex(numIndex) + ".";
+            return `
+                <table style="width:100%; border:none; margin:0; padding:0;" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="width:1.8em; border:none; padding:0; vertical-align:top;">${label}</td>
+                    <td style="border:none; padding:0; vertical-align:top;">${sub}</td>
+                  </tr>
+                </table>
+              `;
+          }
+        })
+        .join("")}
+      </div>
+    ` : `
       <ol style="margin:0; padding-left:0; list-style:none;">
         ${value
-            .map((sub, i) => {
-                if (i === 0 && skipNumbering) {
-                    // item pertama tetap tanpa penomoran
-                    return `<li style="margin:0; padding:0;">${sub}</li>`;
-                } else {
-                    const numIndex = skipNumbering ? i - 1 : i; // mulai dari 0
-                    const label = alphaIndex(numIndex) + ".";
-                    return `
+      .map((sub, i) => {
+        if (i === 0 && skipNumbering) {
+          // item pertama tetap tanpa penomoran
+          return `<li style="margin:0; padding:0;">${sub}</li>`;
+        } else {
+          const numIndex = skipNumbering ? i - 1 : i; // mulai dari 0
+          const label = alphaIndex(numIndex) + ".";
+          return `
                 <li style="margin:0; padding:0; display:flex;">
                   <span style="flex-shrink:0; width:1.8em;">${label}</span>
                   <span style="flex:1;">${sub}</span>
                 </li>
               `;
-                }
-            })
-            .join("")}
+        }
+      })
+      .join("")}
       </ol>
     `;
-    }
-    return value;
+  }
+  return value;
 }
 
-function renderHasilKerjaList(value: any): string {
-    const escapeHtml = (s: string) =>
-        s.replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;")
-            .replaceAll("'", "&#39;");
+function renderHasilKerjaList(value: any, isWord = false): string {
+  const escapeHtml = (s: string) =>
+    s.replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
 
-    const alphaLabel = (i: number): string => {
-        const base = 26;
-        let n = i, out = "";
-        do {
-            out = String.fromCharCode(97 + (n % base)) + out; // a..z, aa..az...
-            n = Math.floor(n / base) - 1;
-        } while (n >= 0);
-        return out;
-    };
+  const alphaLabel = (i: number): string => {
+    const base = 26;
+    let n = i, out = "";
+    do {
+      out = String.fromCharCode(97 + (n % base)) + out; // a..z, aa..az...
+      n = Math.floor(n / base) - 1;
+    } while (n >= 0);
+    return out;
+  };
 
-    const getText = (n: any): string => (typeof n === "string" ? n : n?.text ?? "");
-    const isLeaf = (n: any): boolean => typeof n === "string" || !n?.children || n.children.length === 0;
+  const getText = (n: any): string => (typeof n === "string" ? n : n?.text ?? "");
+  const isLeaf = (n: any): boolean => typeof n === "string" || !n?.children || n.children.length === 0;
 
-    const tryParseJson = (s: string) => {
-        const t = s.trim();
-        if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
-            try { return JSON.parse(t); } catch { }
+  const tryParseJson = (s: string) => {
+    const t = s.trim();
+    if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+      try { return JSON.parse(t); } catch { }
+    }
+    return s;
+  };
+
+  const normalize = (v: any): any[] => {
+    if (v == null) return [];
+
+    if (typeof v === "string") {
+      const parsed = tryParseJson(v);
+      if (parsed !== v) return normalize(parsed);
+      return [v];
+    }
+
+    if (Array.isArray(v)) {
+      return v.map((item) => {
+        if (typeof item === "string") {
+          const parsed = tryParseJson(item);
+          return typeof parsed === "string" ? parsed : normalize(parsed)[0];
         }
-        return s;
-    };
-
-    const normalize = (v: any): any[] => {
-        if (v == null) return [];
-
-        if (typeof v === "string") {
-            const parsed = tryParseJson(v);
-            if (parsed !== v) return normalize(parsed);
-            return [v];
+        if (item && typeof item === "object") {
+          return { text: item.text ?? "", children: Array.isArray(item.children) ? item.children : [] };
         }
+        return String(item);
+      });
+    }
 
-        if (Array.isArray(v)) {
-            return v.map((item) => {
-                if (typeof item === "string") {
-                    const parsed = tryParseJson(item);
-                    return typeof parsed === "string" ? parsed : normalize(parsed)[0];
-                }
-                if (item && typeof item === "object") {
-                    return { text: item.text ?? "", children: Array.isArray(item.children) ? item.children : [] };
-                }
-                return String(item);
-            });
+    if (typeof v === "object") {
+      return [{ text: v.text ?? "", children: Array.isArray(v.children) ? v.children : [] }];
+    }
+
+    return [String(v)];
+  };
+
+  const renderList = (nodes: any[]): string => {
+    if (!nodes.length) return "";
+
+    // ✅ jika lebih dari 1 item, item pertama tetap bernomor
+    const multipleItems = nodes.length > 1;
+    const firstLooksLikeHeader = getText(nodes[0]).trim().endsWith(":");
+    const firstIsHeader = firstLooksLikeHeader && !multipleItems; // kalau >1 item, header juga dikasih label
+
+    const items = nodes.map((node, i) => {
+      const isHeader = i === 0 && firstIsHeader;
+      const labelIndex = isHeader ? -1 : i - (firstIsHeader ? 1 : 0);
+      const text = escapeHtml(getText(node));
+      const hasChild = !isLeaf(node);
+      const label = labelIndex >= 0 ? alphaLabel(labelIndex) + "." : "";
+
+      if (isWord) {
+        if (isHeader) {
+          const childHtml = hasChild ? renderList(node.children) : "";
+          return `<div style="margin:0; padding:0;">${text}${childHtml}</div>`;
         }
+        const childHtml = hasChild ? renderList(node.children) : "";
+        return `
+<table style="width:100%; border:none; margin:0; padding:0;" cellpadding="0" cellspacing="0">
+  <tr>
+    <td style="width:1.5em; border:none; padding:0; vertical-align:top;">${label}</td>
+    <td style="border:none; padding:0; vertical-align:top;">
+      ${text}
+      ${childHtml ? `<div>${childHtml}</div>` : ""}
+    </td>
+  </tr>
+</table>`;
+      }
 
-        if (typeof v === "object") {
-            return [{ text: v.text ?? "", children: Array.isArray(v.children) ? v.children : [] }];
-        }
-
-        return [String(v)];
-    };
-
-    const renderList = (nodes: any[]): string => {
-        if (!nodes.length) return "";
-
-        // ✅ jika lebih dari 1 item, item pertama tetap bernomor
-        const multipleItems = nodes.length > 1;
-        const firstLooksLikeHeader = getText(nodes[0]).trim().endsWith(":");
-        const firstIsHeader = firstLooksLikeHeader && !multipleItems; // kalau >1 item, header juga dikasih label
-
-        const items = nodes.map((node, i) => {
-            const isHeader = i === 0 && firstIsHeader;
-            const labelIndex = isHeader ? -1 : i - (firstIsHeader ? 1 : 0);
-            const text = escapeHtml(getText(node));
-            const hasChild = !isLeaf(node);
-            const label = labelIndex >= 0 ? alphaLabel(labelIndex) + "." : "";
-
-            if (isHeader) {
-                const childHtml = hasChild ? renderList(node.children) : "";
-                return `
+      if (isHeader) {
+        const childHtml = hasChild ? renderList(node.children) : "";
+        return `
 <li style="margin:0; padding:0;">
   <span style="display:block;">${text}</span>
   ${childHtml}
 </li>`;
-            }
+      }
 
-            const childHtml = hasChild ? renderList(node.children) : "";
-            return `
+      const childHtml = hasChild ? renderList(node.children) : "";
+      return `
 <li style="margin:0; padding:0; display:flex;">
   <span style="flex-shrink:0; width:1.5em;">${label}</span>
   <span style="flex:1;">
@@ -322,51 +361,52 @@ function renderHasilKerjaList(value: any): string {
     ${childHtml ? `<div>${childHtml}</div>` : ""}
   </span>
 </li>`;
-        }).join("");
+    }).join("");
 
-        return `<ol style="margin:0; padding-left:0; list-style:none;">${items}</ol>`;
-    };
+    return isWord ? `<div style="margin:0; padding:0;">${items}</div>`
+      : `<ol style="margin:0; padding-left:0; list-style:none;">${items}</ol>`;
+  };
 
-    // ===== main =====
-    const nodes = normalize(value);
-    if (nodes.length === 0) return "";
-    if (nodes.length === 1 && isLeaf(nodes[0])) return escapeHtml(getText(nodes[0]));
-    return renderList(nodes);
+  // ===== main =====
+  const nodes = normalize(value);
+  if (nodes.length === 0) return "";
+  if (nodes.length === 1 && isLeaf(nodes[0])) return escapeHtml(getText(nodes[0]));
+  return renderList(nodes);
 }
 
 
 /** ====== BARU: render detail_uraian_tugas (tahapan + detail_tahapan) ====== */
 function renderDetailUraian(detailArr?: Array<{
-    nomor_tahapan?: number | null;
-    tahapan?: string;
-    detail_tahapan?: string[]
+  nomor_tahapan?: number | null;
+  tahapan?: string;
+  detail_tahapan?: string[]
 }>) {
-    if (!Array.isArray(detailArr) || detailArr.length === 0) return "";
+  if (!Array.isArray(detailArr) || detailArr.length === 0) return "";
 
-    // urutkan berdasar nomor_tahapan jika ada, kalau tidak biarkan urutan asli
-    const items = [...detailArr].sort((a, b) => {
-        const na = a?.nomor_tahapan ?? null;
-        const nb = b?.nomor_tahapan ?? null;
-        if (na == null && nb == null) return 0;
-        if (na == null) return 1;
-        if (nb == null) return -1;
-        return na - nb;
-    });
+  // urutkan berdasar nomor_tahapan jika ada, kalau tidak biarkan urutan asli
+  const items = [...detailArr].sort((a, b) => {
+    const na = a?.nomor_tahapan ?? null;
+    const nb = b?.nomor_tahapan ?? null;
+    if (na == null && nb == null) return 0;
+    if (na == null) return 1;
+    if (nb == null) return -1;
+    return na - nb;
+  });
 
-    const li = items.map((it) => {
-        const head = (it?.tahapan ?? "").trim();
-        const details = Array.isArray(it?.detail_tahapan) ? it!.detail_tahapan.filter(Boolean) : [];
-        const sub =
-            details.length > 0
-                ? `
-            <ol class="alpha" style="margin-top:4px;">
-              ${details.map((d) => `<li>${d}</li>`).join("")}
+  const li = items.map((it) => {
+    const head = (it?.tahapan ?? "").trim();
+    const details = Array.isArray(it?.detail_tahapan) ? it!.detail_tahapan.filter(Boolean) : [];
+    const sub =
+      details.length > 0
+        ? `
+            <ol style="margin-top:4px; margin-left: 1.2em; padding: 0; list-style-type: lower-alpha;">
+              ${details.map((d) => `<li style="margin-bottom: 2px;">${d}</li>`).join("")}
             </ol>`
-                : "";
-        return `<li style="margin-bottom:4px;">${head}${sub}</li>`;
-    }).join("");
+        : "";
+    return `<li style="margin-bottom:4px;">${head}${sub}</li>`;
+  }).join("");
 
-    return `
+  return `
       <br><p>Tahapan :</p>
       <ol class="num" style="margin:0; padding-left:1.5em; list-style-type: decimal;">
         ${li}
@@ -374,118 +414,118 @@ function renderDetailUraian(detailArr?: Array<{
     `;
 }
 
-function renderUraianTugasDanTahapan(item: any) {
-    // uraian_tugas tetap pakai renderer lama (menerima string atau string[])
-    const uraian = renderTableList(item.uraian_tugas);
+function renderUraianTugasDanTahapan(item: any, isWord = false) {
+  // uraian_tugas tetap pakai renderer lama (menerima string atau string[])
+  const uraian = renderTableList(item.uraian_tugas, isWord);
 
-    // ===== perubahan: gunakan detail_uraian_tugas (ganti dari item.tahapan) =====
-    const tahapanHtml = renderDetailUraian(item.detail_uraian_tugas);
+  // ===== perubahan: gunakan detail_uraian_tugas (ganti dari item.tahapan) =====
+  const tahapanHtml = renderDetailUraian(item.detail_uraian_tugas);
 
-    return `${uraian}${tahapanHtml}`;
+  return `${uraian}${tahapanHtml}`;
 }
 
 function hasAnySatuanHasil(data: any): boolean {
-    const list = Array.isArray(data?.hasil_kerja) ? data.hasil_kerja : [];
-    return list.some((it: any) => {
-        const v = it?.satuan_hasil;
-        if (Array.isArray(v)) return v.some((s) => String(s ?? "").trim() !== "");
-        if (typeof v === "string") return v.trim() !== "";
-        return false;
-    });
+  const list = Array.isArray(data?.hasil_kerja) ? data.hasil_kerja : [];
+  return list.some((it: any) => {
+    const v = it?.satuan_hasil;
+    if (Array.isArray(v)) return v.some((s) => String(s ?? "").trim() !== "");
+    if (typeof v === "string") return v.trim() !== "";
+    return false;
+  });
 }
 
 // ===== Perangkat Kerja: split & render table multi-halaman =====
 function splitPerangkatKeHalaman(data: any[], maxRowsPerPage = 50) {
-    const pages: any[] = [];
-    let currentPage: any[] = [];
-    let rowCount = 0;
+  const pages: any[] = [];
+  let currentPage: any[] = [];
+  let rowCount = 0;
 
-    data.forEach((item, index) => {
-        const perangkatList = item.perangkat_kerja || [];
-        const penggunaanList = item.penggunaan_untuk_tugas || [];
-        const total = Math.max(1, perangkatList.length);
+  data.forEach((item, index) => {
+    const perangkatList = item.perangkat_kerja || [];
+    const penggunaanList = item.penggunaan_untuk_tugas || [];
+    const total = Math.max(1, perangkatList.length);
 
-        let i = 0;
-        while (i < total) {
-            const available = maxRowsPerPage - rowCount;
+    let i = 0;
+    while (i < total) {
+      const available = maxRowsPerPage - rowCount;
 
-            if (total - i > available && rowCount > 0) {
-                pages.push({rows: currentPage, continued: true});
-                currentPage = [];
-                rowCount = 0;
-                continue;
-            }
+      if (total - i > available && rowCount > 0) {
+        pages.push({ rows: currentPage, continued: true });
+        currentPage = [];
+        rowCount = 0;
+        continue;
+      }
 
-            const take = Math.min(available, total - i);
+      const take = Math.min(available, total - i);
 
-            for (let j = 0; j < take; j++) {
-                const isFirst = (i + j === 0);
-                currentPage.push({
-                    index,
-                    perangkat: perangkatList[i + j] || "",
-                    penggunaan: isFirst ? (penggunaanList || []) : null,
-                    firstRow: isFirst,
-                    totalRowsInItem: total
-                });
-                rowCount++;
-            }
+      for (let j = 0; j < take; j++) {
+        const isFirst = (i + j === 0);
+        currentPage.push({
+          index,
+          perangkat: perangkatList[i + j] || "",
+          penggunaan: isFirst ? (penggunaanList || []) : null,
+          firstRow: isFirst,
+          totalRowsInItem: total
+        });
+        rowCount++;
+      }
 
-            i += take;
+      i += take;
 
-            if (rowCount >= maxRowsPerPage) {
-                pages.push({rows: currentPage, continued: true});
-                currentPage = [];
-                rowCount = 0;
-            }
-        }
-    });
-
-    if (currentPage.length > 0) {
-        pages.push({rows: currentPage, continued: false});
+      if (rowCount >= maxRowsPerPage) {
+        pages.push({ rows: currentPage, continued: true });
+        currentPage = [];
+        rowCount = 0;
+      }
     }
+  });
 
-    return pages;
+  if (currentPage.length > 0) {
+    pages.push({ rows: currentPage, continued: false });
+  }
+
+  return pages;
 }
 
 function renderPerangkatTable(data: any[], maxRowsPerPage = 50) {
-    const pages = splitPerangkatKeHalaman(data, maxRowsPerPage);
+  const pages = splitPerangkatKeHalaman(data, maxRowsPerPage);
 
-    return pages.map((page, pageIdx) => {
-        const countInPage: Record<number, number> = {};
-        page.rows.forEach((r: any) => {
-            countInPage[r.index] = (countInPage[r.index] || 0) + 1;
-        });
+  return pages.map((page, pageIdx) => {
+    const countInPage: Record<number, number> = {};
+    page.rows.forEach((r: any) => {
+      countInPage[r.index] = (countInPage[r.index] || 0) + 1;
+    });
 
-        const emittedInPage: Record<number, number> = {};
-        const tbody = page.rows.map((r: any) => {
-            const firstInThisPage = !emittedInPage[r.index];
-            emittedInPage[r.index] = (emittedInPage[r.index] || 0) + 1;
+    const emittedInPage: Record<number, number> = {};
+    const tbody = page.rows.map((r: any) => {
+      const firstInThisPage = !emittedInPage[r.index];
+      emittedInPage[r.index] = (emittedInPage[r.index] || 0) + 1;
 
-            let cells = "";
+      let cells = "";
 
-            // NO
-            if (firstInThisPage) {
-                cells += `<td style="text-align:center" rowspan="${countInPage[r.index]}">${r.index + 1}.</td>`;
-            }
+      // NO
+      if (firstInThisPage) {
+        cells += `<td style="text-align:center" rowspan="${countInPage[r.index]}">${r.index + 1}.</td>`;
+      }
 
-            // PERANGKAT
-            cells += `<td>${r.perangkat || ""}</td>`;
+      // PERANGKAT
+      cells += `<td>${r.perangkat || ""}</td>`;
 
-            // PENGGUNAAN
-            if (firstInThisPage) {
-                if (r.penggunaan && r.penggunaan.length > 0) {
-                    cells += `<td rowspan="${countInPage[r.index]}">${renderTableList(r.penggunaan)}</td>`;
-                } else {
-                    cells += `<td rowspan="${countInPage[r.index]}"></td>`;
-                }
-            }
+      // PENGGUNAAN
+      if (firstInThisPage) {
+        if (r.penggunaan && r.penggunaan.length > 0) {
+          cells += `<td rowspan="${countInPage[r.index]}">${renderTableList(r.penggunaan)}</td>`;
+        } else {
+          cells += `<td rowspan="${countInPage[r.index]}"></td>`;
+        }
+      }
 
-            return `<tr>${cells}</tr>`;
-        }).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
 
-        const breakStyle = pageIdx < pages.length - 1 ? 'page-break-after:always;' : '';
+    const breakStyle = pageIdx < pages.length - 1 ? 'page-break-after:always;' : '';
 
-        return `
+    return `
       <table style="margin-left:0; width:99%; border-collapse:collapse; ${breakStyle}" class="word-table" border="1">
         <thead>
           <tr>
@@ -497,41 +537,57 @@ function renderPerangkatTable(data: any[], maxRowsPerPage = 50) {
         <tbody>${tbody}</tbody>
       </table>
     `;
-    }).join('');
+  }).join('');
 }
 
 // ===== Export utama: bangun HTML lengkap =====
-export function buildAnjabHtml(data: any): string {
+export function buildAnjabHtml(data: any, options?: { isWord?: boolean, bodyOnly?: boolean }): string {
+  const isWord = options?.isWord ?? false;
+  const bodyOnly = options?.bodyOnly ?? false;
+
   // If this is the master path (SELECT_ANJAB) we set so.kebutuhan_pegawai = NULL.
   // Detect master by checking data.kebutuhan_pegawai === null and in that case
   // render KEBUTUHAN PEGAWAI, Jumlah Pegawai, and Pembulatan as blank.
   const isMaster = data.kebutuhan_pegawai == null;
   let totalKebutuhan: number | null = null;
-  
+
   if (!isMaster) {
-      if (data.jenis_jabatan && data.jenis_jabatan.toUpperCase() === "JABATAN FUNGSIONAL") {
-          totalKebutuhan = parseFloat(String(data.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0;
-      } else {
-          totalKebutuhan = (data.tugas_pokok || []).reduce(
-            (sum: number, item: any) =>
-              sum + (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0),
-            0
-          );
-      }
+    if (data.jenis_jabatan && data.jenis_jabatan.toUpperCase() === "JABATAN FUNGSIONAL") {
+      totalKebutuhan = parseFloat(String(data.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0;
+    } else {
+      totalKebutuhan = (data.tugas_pokok || []).reduce(
+        (sum: number, item: any) =>
+          sum + (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0),
+        0
+      );
+    }
   }
 
-    const showSatuanHasil = hasAnySatuanHasil(data);
+  const showSatuanHasil = hasAnySatuanHasil(data);
 
-    return `<!doctype html>
+  const headHtml = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>${data.nama_jabatan}</title>
+  <title>${data.nama_jabatan || 'Anjab'}</title>
   <style>
+    ${isWord ? `
+    @page Section1 { size: 595.3pt 841.9pt; margin: 2cm 2.5cm 2.38cm 2.3cm; mso-page-orientation: portrait; }
+    @page Section2 { size: 841.9pt 595.3pt; margin: 1.2cm 1.2cm 1.2cm 1.2cm; mso-page-orientation: landscape; }
+    div.Section1 { page: Section1; }
+    div.Section2 { page: Section2; }
+    table.word-table { page-break-inside: auto; width: 100%; border-collapse: collapse; mso-table-layout-alt: fixed; margin: 6px 0 30px 0; table-layout: auto; font-size: 11pt; border: .5pt solid windowtext; }
+    table.word-table th, table.word-table td { border: .5pt solid windowtext; padding: 6px; vertical-align: top; word-break: normal; white-space: normal; }
+    table.word-table th { font-weight: normal; vertical-align: middle; text-align: center; background: #C3C3C3; }
+    ` : `
     @page portrait { size: A4 portrait; margin: 2cm 2.5cm 2.38cm 2.3cm; }
     @page landscape { size: A4 landscape; margin: 1.2cm 1.2cm 1.2cm 1.2cm; }
     .section.landscape { page: landscape; }
     .section.portrait { page: portrait; }
+    table.word-table { page-break-inside: auto; width: 100%; border-collapse: collapse; margin: 6px 0 30px 0; table-layout: auto; font-size: 11pt; }
+    table.word-table th, table.word-table td { border: 1px solid #000; padding: 6px; vertical-align: top; word-break: normal; white-space: normal; }
+    table.word-table th { font-weight: normal; vertical-align: middle; text-align: center; background: #C3C3C3; }
+    `}
     html, body { height: 100%; }
     body { font-family: "Tahoma", Times, serif; font-size: 11pt; line-height: 1.35; color: #000; margin: 0; -webkit-font-smoothing: antialiased; }
     .doc-title { text-align: center; margin-bottom: 19px; }
@@ -551,10 +607,6 @@ export function buildAnjabHtml(data: any): string {
     .key-value td.custom-padding { padding-top: 0; padding-bottom: 0; }
     .kv-left { width: 33%; } .kv-sep { width: 7%; } .kv-right { width: 60%; }
 
-    table.word-table { page-break-inside: auto; width: 100%; border-collapse: collapse; margin: 6px 0 30px 0; table-layout: auto; font-size: 11pt; }
-    table.word-table th, table.word-table td { border: 1px solid #000; padding: 6px; vertical-align: top; word-break: normal; white-space: normal; }
-    table.word-table th { font-weight: normal; vertical-align: middle; text-align: center; background: #C3C3C3; }
-
     ol.alpha { list-style-type: lower-alpha; margin: 0 0 0 1.2em; padding: 0; }
     ol.num   { list-style-type: decimal;      margin: 0 0 0 1.2em; padding: 0; }
     ul.simple{ margin: 0 0 0 1.2em; padding: 0; list-style-type: disc; }
@@ -567,9 +619,11 @@ export function buildAnjabHtml(data: any): string {
   </style>
 </head>
 <body>
-<div class="doc">
+`;
+
+  const bodyContent = `<div class="${isWord ? 'Section1' : 'doc'}">
   <!-- 1. NAMA JABATAN -->
-  <div class="section portrait">
+  <div class="section ${isWord ? '' : 'portrait'}">
     <div class="doc-title" style="padding-bottom: 20px">INFORMASI JABATAN</div>
     <table class="key-value">
       <tr><td class="kv-left">1. NAMA JABATAN</td><td class="kv-sep">:</td><td class="kv-right">${data.nama_jabatan}</td></tr>
@@ -616,7 +670,7 @@ export function buildAnjabHtml(data: any): string {
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">a. Pendidikan Formal</td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderPendidikanFormalList(data.pendidikan_formal)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderPendidikanFormalList(data.pendidikan_formal, isWord)}</td>
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px;">b. Pendidikan dan Pelatihan</td>
@@ -625,10 +679,9 @@ export function buildAnjabHtml(data: any): string {
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
-          ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
-            ? "Diklat Penjenjangan"
-            : "Manajerial"
+          ${!data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
+      ? "Diklat Penjenjangan"
+      : "Manajerial"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
@@ -636,10 +689,9 @@ export function buildAnjabHtml(data: any): string {
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
-          ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
-            ? "Diklat Teknis"
-            : "Teknis"
+          ${!data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
+      ? "Diklat Teknis"
+      : "Teknis"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
@@ -647,10 +699,9 @@ export function buildAnjabHtml(data: any): string {
       </tr>
       <tr>
         <td class="custom-padding kv-left" style="padding-left:43px;">
-          ${
-        !data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
-            ? "Diklat Fungsional"
-            : "Fungsional"
+          ${!data.jenis_jabatan || data.jenis_jabatan.toUpperCase() === "JABATAN PELAKSANA"
+      ? "Diklat Fungsional"
+      : "Fungsional"
     }
         </td>
         <td class="custom-padding kv-sep">:</td>
@@ -659,15 +710,16 @@ export function buildAnjabHtml(data: any): string {
       <tr>
         <td class="custom-padding kv-left" style="padding-left:25px; width:36%;">c. Pengalaman Kerja</td>
         <td class="custom-padding kv-sep">:</td>
-        <td class="custom-padding kv-right custom-justify">${renderPengalamanKerjaList(data.pengalaman_kerja)}</td>
+        <td class="custom-padding kv-right custom-justify">${renderPengalamanKerjaList(data.pengalaman_kerja, isWord)}</td>
       </tr>
     </table>
   </div>
 
   <!-- 6. TUGAS POKOK -->
-  <div class="section page-break landscape table-section">
+  ${isWord ? `</div><br clear="all" style="page-break-before:always; mso-break-type:section-break" /><div class="Section2">` : ''}
+  <div class="section page-break ${isWord ? '' : 'landscape'} table-section">
     <p>6. TUGAS POKOK :</p>
-    <table style="width: 99%" class="word-table">
+    <table style="width: 99%" class="word-table" border="1" cellspacing="0">
       <thead>
         <tr>
           <th style="width:3%;">NO</th>
@@ -681,21 +733,21 @@ export function buildAnjabHtml(data: any): string {
       </thead>
       <tbody>
         ${(data.tugas_pokok || []).map((item: any, index: number) => {
-          const kebutuhanPegawai = isMaster
-              ? null
-              : (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0);
-          return `
+      const kebutuhanPegawai = isMaster
+        ? null
+        : (parseFloat(String(item.kebutuhan_pegawai ?? "0").replace(",", ".")) || 0);
+      return `
           <tr>
             <td style="text-align:center">${index + 1}.</td>
-            <td style="text-align: justify">${renderUraianTugasDanTahapan(item)}</td>
-            <td>${renderHasilKerjaList(item.hasil_kerja)}</td>
+            <td style="text-align: justify">${renderUraianTugasDanTahapan(item, isWord)}</td>
+            <td>${renderHasilKerjaList(item.hasil_kerja, isWord)}</td>
             <td class="center">${item.jumlah_hasil}</td>
             <td class="center">${item.waktu_penyelesaian_jam}</td>
             <td class="center">${item.waktu_efektif}</td>
             <td class="center">${kebutuhanPegawai == null ? "null" : kebutuhanPegawai.toFixed(4)}</td>
           </tr>
         `;
-        }).join("")}
+    }).join("")}
         <tr>
           <td colspan="6" class="center">Jumlah Pegawai Yang Dibutuhkan</td>
           <td class="center">${totalKebutuhan == null ? "null" : totalKebutuhan.toFixed(4)}</td>
@@ -709,9 +761,10 @@ export function buildAnjabHtml(data: any): string {
   </div>
 
   <!-- 7. HASIL KERJA -->
-  <div class="section portrait table-section">
+  ${isWord ? `</div><br clear="all" style="page-break-before:always; mso-break-type:section-break" /><div class="Section1">` : ''}
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>7. HASIL KERJA :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead>
         <tr>
           <th style="width:${showSatuanHasil ? "5%" : "7%"};">NO</th>
@@ -723,8 +776,8 @@ export function buildAnjabHtml(data: any): string {
         ${(data.hasil_kerja || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
-            <td>${renderHasilKerjaList(item.hasil_kerja)}</td>
-            ${showSatuanHasil ? `<td>${renderTableList(item.satuan_hasil)}</td>` : ""}
+            <td>${renderHasilKerjaList(item.hasil_kerja, isWord)}</td>
+            ${showSatuanHasil ? `<td>${renderTableList(item.satuan_hasil, isWord)}</td>` : ""}
           </tr>
         `).join("")}
       </tbody>
@@ -732,16 +785,16 @@ export function buildAnjabHtml(data: any): string {
   </div>
 
   <!-- 8. BAHAN KERJA -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>8. BAHAN KERJA :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead><tr><th style="width:5%;">NO</th><th>BAHAN KERJA</th><th style="width:45%;">PENGGUNAAN DALAM TUGAS</th></tr></thead>
       <tbody>
         ${(data.bahan_kerja || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
-            <td>${renderTableList(item.bahan_kerja)}</td>
-            <td>${renderTableList(item.penggunaan_dalam_tugas)}</td>
+            <td>${renderTableList(item.bahan_kerja, isWord)}</td>
+            <td>${renderTableList(item.penggunaan_dalam_tugas, isWord)}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -749,9 +802,9 @@ export function buildAnjabHtml(data: any): string {
   </div>
   
    <!-- 9. PERANGKAT KERJA -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>9. PERANGKAT KERJA :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead>
         <tr>
           <th style="width:5%;">NO</th>
@@ -761,57 +814,57 @@ export function buildAnjabHtml(data: any): string {
       </thead>
       <tbody>
           ${data.perangkat_kerja
-        .map(
-            (item, index) => `
+      .map(
+        (item, index) => `
                 <tr>
                   <td style="text-align: center">${index + 1}.</td>
-                  <td>${renderTableList(item.perangkat_kerja)}</td>
-                  <td>${renderTableList(item.penggunaan_untuk_tugas)}</td>
+                  <td>${renderTableList(item.perangkat_kerja, isWord)}</td>
+                  <td>${renderTableList(item.penggunaan_untuk_tugas, isWord)}</td>
                 </tr>
               `
-        )
-        .join("")}
+      )
+      .join("")}
       </tbody>
     </table>
   </div>
 
   <!-- 10. TANGGUNG JAWAB -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>10. TANGGUNG JAWAB :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead><tr><th style="width:5%;">NO</th><th>URAIAN</th></tr></thead>
       <tbody>
         ${(data.tanggung_jawab || []).map((item: any, index: number) => `
-          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.uraian_tanggung_jawab)}</td></tr>
+          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.uraian_tanggung_jawab, isWord)}</td></tr>
         `).join("")}
       </tbody>
     </table>
   </div>
 
   <!-- 11. WEWENANG -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>11. WEWENANG :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead><tr><th style="width:5%;">NO</th><th>URAIAN</th></tr></thead>
       <tbody>
         ${(data.wewenang || []).map((item: any, index: number) => `
-          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.uraian_wewenang)}</td></tr>
+          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.uraian_wewenang, isWord)}</td></tr>
         `).join("")}
       </tbody>
     </table>
   </div>
 
   <!-- 12. KORELASI JABATAN -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>12. KORELASI JABATAN :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead><tr><th style="width:5%;">NO</th><th>Jabatan</th><th>Unit Kerja/Instansi</th><th>Dalam Hal</th></tr></thead>
       <tbody>
         ${(data.korelasi_jabatan || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
-            <td>${renderTableList(item.jabatan_terkait)}</td>
-            <td>${renderTableList(item.unit_kerja_instansi)}</td>
+            <td>${renderTableList(item.jabatan_terkait, isWord)}</td>
+            <td>${renderTableList(item.unit_kerja_instansi, isWord)}</td>
             <td>${renderBulletList(item.dalam_hal)}</td>
           </tr>
         `).join("")}
@@ -820,22 +873,22 @@ export function buildAnjabHtml(data: any): string {
   </div>
 
   <!-- 13. KONDISI LINGKUNGAN KERJA -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>13. KONDISI LINGKUNGAN KERJA :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead><tr><th style="width:5%;">NO</th><th>ASPEK</th><th>FAKTOR</th></tr></thead>
       <tbody>
         ${(data.kondisi_lingkungan_kerja || []).map((item: any, index: number) => `
-          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.aspek)}</td><td>${renderTableList(item.faktor)}</td></tr>
+          <tr><td class="center">${index + 1}.</td><td>${renderTableList(item.aspek, isWord)}</td><td>${renderTableList(item.faktor, isWord)}</td></tr>
         `).join("")}
       </tbody>
     </table>
   </div>
 
   <!-- 14. RISIKO BAHAYA -->
-  <div class="section portrait table-section">
+  <div class="section ${isWord ? '' : 'portrait'} table-section">
     <p>14. RISIKO BAHAYA :</p>
-    <table style="margin-left: 0; width: 99%" class="word-table">
+    <table style="margin-left: 0; width: 99%" class="word-table" border="1" cellspacing="0">
       <thead>
         <tr>
           <th style="width:5%;">NO</th>
@@ -847,8 +900,8 @@ export function buildAnjabHtml(data: any): string {
         ${(data.risiko_bahaya || []).map((item: any, index: number) => `
           <tr>
             <td class="center">${index + 1}.</td>
-            <td class="center">${renderTableList(item.nama_risiko)}</td>
-            <td class="center">${renderTableList(item.penyebab)}</td>
+            <td class="center">${renderTableList(item.nama_risiko, isWord)}</td>
+            <td class="center">${renderTableList(item.penyebab, isWord)}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -891,7 +944,11 @@ export function buildAnjabHtml(data: any): string {
       <tr><td class="custom-padding kv-left" style="padding-left:30px; width:36%;">${data.kelas_jabatan}</td></tr>
     </table>
   </div>
-</div>
-</body>
-</html>`;
+</div>`;
+
+  if (bodyOnly) {
+    return bodyContent;
+  }
+
+  return headHtml + bodyContent + `\n</body>\n</html>`;
 }

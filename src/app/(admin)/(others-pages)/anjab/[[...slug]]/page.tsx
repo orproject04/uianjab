@@ -218,6 +218,49 @@ export default function InformasiJabatanPage() {
         a.remove();
     };
 
+    const handleDownloadDocx = async () => {
+        if (!id) return;
+        try {
+            MySwal.fire({
+                title: "Sedang memproses...",
+                text: "Mohon tunggu sebentar",
+                allowOutsideClick: false,
+                didOpen: () => {
+                    MySwal.showLoading();
+                }
+            });
+
+            const res = await apiFetch(`/api/anjab/${encodedId}/docx`, {
+                method: "GET",
+            });
+            
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = (fileName || fallbackNiceName).replace('.pdf', '.doc');
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                MySwal.close();
+            } else {
+                MySwal.fire({
+                    title: "Gagal",
+                    text: "Gagal mengunduh dokumen Word",
+                    icon: "error"
+                });
+            }
+        } catch (error) {
+            MySwal.fire({
+                title: "Error",
+                text: "Terjadi kesalahan saat mengunduh dokumen Word",
+                icon: "error"
+            });
+        }
+    };
+
     // Handler hapus jabatan (admin only)
     const handleDelete = async () => {
         if (!isAdmin || !id) return;
@@ -346,7 +389,7 @@ export default function InformasiJabatanPage() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Dokumen PDF
+                                Dokumen
                                 <div className="inline-flex items-center justify-center w-4 h-4">
                                     <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                                 </div>
@@ -412,7 +455,7 @@ export default function InformasiJabatanPage() {
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
-                                    Dokumen PDF
+                                    Dokumen
                                     <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full"></span>
                                 </div>
                             </button>
@@ -483,7 +526,7 @@ export default function InformasiJabatanPage() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Dokumen PDF
+                                Dokumen
                                 <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full"></span>
                             </div>
                         </button>
@@ -553,7 +596,7 @@ export default function InformasiJabatanPage() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                <span className="hidden sm:inline">Dokumen PDF</span>
+                                <span className="hidden sm:inline">Dokumen</span>
                                 <span className="sm:hidden">PDF</span>
                                 {pdfSrc && (
                                     <span className="inline-flex items-center justify-center w-2 h-2 bg-green-500 rounded-full"></span>
@@ -601,7 +644,7 @@ export default function InformasiJabatanPage() {
                                 </span>
                                 {pdfSrc && (
                                     <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 flex-shrink-0">
-                                        PDF Tersedia
+                                        Dokumen Tersedia
                                     </span>
                                 )}
                             </div>
@@ -621,6 +664,16 @@ export default function InformasiJabatanPage() {
                                         <span className="sm:hidden">Layar Penuh</span>
                                     </a>
                                     <button
+                                        onClick={handleDownloadDocx}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                    >
+                                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Unduh Word</span>
+                                        <span className="sm:hidden">Word</span>
+                                    </button>
+                                    <button
                                         onClick={handleDownload}
                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm bg-brand-600 text-white rounded hover:bg-brand-700 transition-colors"
                                     >
@@ -628,7 +681,7 @@ export default function InformasiJabatanPage() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
                                         <span className="hidden sm:inline">Unduh PDF</span>
-                                        <span className="sm:hidden">Unduh</span>
+                                        <span className="sm:hidden">PDF</span>
                                     </button>
                                 </div>
                             )}

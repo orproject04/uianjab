@@ -4,6 +4,7 @@ import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
 import { getAnjabByIdOrSlug } from "@/lib/anjab-queries";
 import { buildAnjabHtml } from "@/lib/anjab-pdf-template";
+import { getDownloadGroups } from "@/lib/download-groups";
 import puppeteer, { Browser } from "puppeteer";
 import { execSync } from "child_process";
 import * as path from "path";
@@ -51,18 +52,16 @@ async function getBrowser(): Promise<Browser> {
     return browserPromise;
 }
 
-
-
 export async function GET(req: NextRequest) {
     let tempDir: string | null = null;
     try {
-        console.log("[download-bulk] Request started");
         const url = new URL(req.url);
         const streamMode = url.searchParams.get("stream") === "1";
-        const scope = url.searchParams.get("scope") || "all"; // 'eselon12' for only Eselon 1 & 2
+        const scope = url.searchParams.get("scope") || "all";
+        const groupId = url.searchParams.get("group_id");
+        const fileParam = url.searchParams.get("file");
 
         // If `file` param is provided, serve an existing archive from tmp
-        const fileParam = url.searchParams.get("file");
         if (fileParam) {
             const archivePath = path.join(os.tmpdir(), fileParam);
             if (!fs.existsSync(archivePath)) {
@@ -178,10 +177,20 @@ export async function GET(req: NextRequest) {
         // Organize by folder structure
         let folderStructure: FolderStructure | null = null;
         let dfsList: PetaJabatanWithABK[] = [];
+        let groups = getDownloadGroups(allPetaJabatan);
+        let startingPageNumber = 1;
+        let isGroupMode = false;
+        let groupName = "Semua Anjab";
 
-        if (scope === "tree") {
-            dfsList = getDFSItems(allPetaJabatan, "sekretaris jenderal dpd ri")
-                .filter(p => !!p.jabatan_id && (p.jenis_jabatan === "JABATAN FUNGSIONAL" || p.has_abk));
+        if (scope === "tree" || scope === "all") {
+            for (const g of groups) {
+                dfsList.push(...g.nodes);
+            }
+        } else if (scope === "groups") {
+            isGroupMode = true;
+            for (const g of groups) {
+                dfsList.push(...g.nodes); // We still need total count for progress
+            }
         } else {
             folderStructure = organizeFolderStructure(allPetaJabatan, petaWithABK);
         }
@@ -245,7 +254,7 @@ export async function GET(req: NextRequest) {
             const stream = new ReadableStream({
                 async start(controller) {
                     try {
-                        const total = scope === "tree" ? dfsList.length : filesList.length;
+                        const total = (scope === "tree" || scope === "groups") ? dfsList.length : filesList.length;
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ total })}\n\n`));
 
                         const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5);
@@ -293,6 +302,62 @@ export async function GET(req: NextRequest) {
 
                             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
 
+                        } else if (isGroupMode) {
+                            const archiveFileName = `Seluruh_Anjab_PDF_${timestamp}.zip`;
+                            const archivePath = path.join(os.tmpdir(), archiveFileName);
+                            const output = fs.createWriteStream(archivePath);
+                            const archive = archiver('zip', { zlib: { level: 3 } });
+                            
+                            archive.on('error', (err: any) => { throw err; });
+                            archive.pipe(output);
+
+                            for (let gIdx = 0; gIdx < groups.length; gIdx++) {
+                                const group = groups[gIdx];
+                                if (group.nodes.length === 0) continue;
+
+                                const mergedPdf = await PDFDocument.create();
+                                const font = await mergedPdf.embedFont(StandardFonts.Helvetica);
+                                
+                                for (let i = 0; i < group.nodes.length; i++) {
+                                    const item = group.nodes[i];
+                                    try {
+                                        const rawBuffer = await generateRawPDFBuffer(item.peta_id, item.nama_jabatan || "");
+                                        const pdfDoc = await PDFDocument.load(rawBuffer);
+                                        const pages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+
+                                        for (const pdfPage of pages) {
+                                            const { width } = pdfPage.getSize();
+                                            const text = `${pageCounter.current}`;
+                                            const fontSize = 11;
+                                            const textWidth = font.widthOfTextAtSize(text, fontSize);
+
+                                            pdfPage.drawText(text, {
+                                                x: width / 2 - textWidth / 2,
+                                                y: 15,
+                                                size: fontSize,
+                                                font: font,
+                                                color: rgb(0, 0, 0),
+                                            });
+                                            pageCounter.current++;
+                                            mergedPdf.addPage(pdfPage);
+                                        }
+                                        successCount++;
+                                    } catch (error) {
+                                        console.error(`Error generating PDF for ${item.nama_jabatan}:`, error);
+                                    }
+                                    const progress = { done: successCount, total };
+                                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
+                                    console.log(`[download-bulk] Groups Progress ${successCount}/${total} - ${item.nama_jabatan}`);
+                                }
+
+                                const mergedPdfBytes = await mergedPdf.save();
+                                const prefix = String(gIdx + 1).padStart(2, '0');
+                                const safeName = group.name.replace(/[^a-zA-Z0-9 -]/g, "").trim();
+                                archive.append(Buffer.from(mergedPdfBytes), { name: `${prefix} - ${safeName}.pdf` });
+                            }
+                            
+                            await archive.finalize();
+                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
                         } else {
                             for (let i = 0; i < filesList.length; i++) {
                                 const file = filesList[i];
@@ -1209,64 +1274,4 @@ async function generateRawPDFBuffer(
     }
 }
 
-function getDFSItems(
-    allPetaJabatan: PetaJabatanWithABK[],
-    rootNodeNameMatcher: string
-): PetaJabatanWithABK[] {
-    const childrenMap = new Map<string | null, PetaJabatanWithABK[]>();
-    for (const item of allPetaJabatan) {
-        const parentId = item.parent_id || null;
-        if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
-        childrenMap.get(parentId)!.push(item);
-    }
 
-    const result: PetaJabatanWithABK[] = [];
-    
-    // Normal DFS traversal for subtrees
-    function traverse(nodeId: string | null) {
-        const children = childrenMap.get(nodeId) || [];
-        for (const child of children) {
-            result.push(child);
-            traverse(child.peta_id);
-        }
-    }
-
-    const rootNodes = allPetaJabatan.filter(p => p.nama_jabatan?.toLowerCase().includes(rootNodeNameMatcher));
-    for (const root of rootNodes) {
-        result.push(root); // Push Root (Setjen)
-
-        let rootChildren = childrenMap.get(root.peta_id) || [];
-        
-        // Group A: Specifically the two Deputi nodes
-        const deputiAdm = rootChildren.find(c => (c.nama_jabatan || "").toLowerCase().includes("deputi bidang administrasi"));
-        const deputiPersidangan = rootChildren.find(c => (c.nama_jabatan || "").toLowerCase().includes("deputi bidang persidangan"));
-        
-        const groupA: PetaJabatanWithABK[] = [];
-        if (deputiAdm) groupA.push(deputiAdm);
-        if (deputiPersidangan) groupA.push(deputiPersidangan);
-        
-        // Group B: The rest (Inspektorat, Biro, Kantor, dll)
-        const groupB = rootChildren.filter(c => 
-            !(c.nama_jabatan || "").toLowerCase().includes("deputi bidang administrasi") && 
-            !(c.nama_jabatan || "").toLowerCase().includes("deputi bidang persidangan")
-        );
-
-        // 1. Push just the Eselon 1 nodes of Group A first
-        for (const child of groupA) {
-            result.push(child);
-        }
-
-        // 2. Then traverse the subtrees of Group A
-        for (const child of groupA) {
-            traverse(child.peta_id);
-        }
-        
-        // 3. For Group B, do normal DFS (push node, then traverse its children)
-        for (const child of groupB) {
-            result.push(child);
-            traverse(child.peta_id);
-        }
-    }
-
-    return result;
-}

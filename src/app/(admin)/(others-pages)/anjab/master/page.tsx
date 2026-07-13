@@ -197,14 +197,17 @@ export default function AnjabListPage() {
 
 
 
-    const handleBulkDownload = async (scope: string = "all", label: string = "Semua Anjab") => {
+    const handleBulkDownload = async (scope: string = "all", label: string = "Semua Anjab", format: "pdf" | "word" = "pdf") => {
         try {
+            const baseUrl = format === "word" ? "/api/anjab/download-bulk-docx" : "/api/anjab/download-bulk";
+            const docTypeStr = format === "word" ? "Word" : "PDF";
+
             Swal.fire({
                 title: `Memproses Download`,
                 html: `
                     <div class="mb-4 text-left">
                         <p class="text-xs text-gray-500 mb-2">${label}</p>
-                        <p class="text-sm text-gray-600 mb-3" id="swal-progress-message">Mengumpulkan dan membuat Anjab PDF...</p>
+                        <p class="text-sm text-gray-600 mb-3" id="swal-progress-message">Mengumpulkan dan membuat Anjab ${docTypeStr}...</p>
                         <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
                             <div id="swal-progress-bar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
                         </div>
@@ -220,7 +223,7 @@ export default function AnjabListPage() {
                 didOpen: () => { Swal.showLoading(); },
             });
 
-            const response = await apiFetch(`/api/anjab/download-bulk?stream=1&scope=${encodeURIComponent(scope)}`, {
+            const response = await apiFetch(`${baseUrl}?stream=1&scope=${encodeURIComponent(scope)}`, {
                 method: "GET",
                 cache: "no-store",
             });
@@ -265,7 +268,7 @@ export default function AnjabListPage() {
                                     const textEl = document.getElementById("swal-progress-text");
                                     const barEl = document.getElementById("swal-progress-bar");
                                     const percentEl = document.getElementById("swal-progress-percent");
-                                    if (messageEl) messageEl.innerText = `Sedang membuat PDF (${data.done}/${data.total})`;
+                                    if (messageEl) messageEl.innerText = `Sedang membuat ${docTypeStr} (${data.done}/${data.total})`;
                                     if (textEl) textEl.innerText = `${data.done} / ${data.total}`;
                                     if (barEl) barEl.style.width = `${percent}%`;
                                     if (percentEl) percentEl.innerText = `${percent}%`;
@@ -283,7 +286,7 @@ export default function AnjabListPage() {
             }
 
             if (fileToDownload) {
-                const url = `/api/anjab/download-bulk?file=${encodeURIComponent(fileToDownload)}`;
+                const url = `${baseUrl}?file=${encodeURIComponent(fileToDownload)}`;
                 const a = document.createElement("a");
                 a.href = url;
                 a.download = fileToDownload;
@@ -303,8 +306,9 @@ export default function AnjabListPage() {
         }
     };
 
-    const handleDownloadAll = () => handleBulkDownload("all", "Semua Anjab");
-    const handleDownloadTree = () => handleBulkDownload("tree", "Anjab per Biro (Tree)");
+    const handleDownloadAll = () => handleBulkDownload("all", "Semua Anjab", "pdf");
+    const handleDownloadGrouped = () => handleBulkDownload("groups", "Gabungan Kelompok (ZIP - PDF)", "pdf");
+    const handleDownloadWordGrouped = () => handleBulkDownload("groups", "Gabungan Kelompok (ZIP - Word)", "word");
 
     const handleViewJabatan = (id: string) => {
         // Langsung ke halaman edit section pertama (jabatan) dengan UUID
@@ -460,7 +464,7 @@ export default function AnjabListPage() {
                                         </div>
                                         <div className="py-1">
                                             <button
-                                                onClick={() => { setShowDownloadMenu(false); handleDownloadTree(); }}
+                                                onClick={() => { setShowDownloadMenu(false); handleDownloadGrouped(); }}
                                                 className="group flex w-full items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                                             >
                                                 <div className="p-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg group-hover:bg-green-100 dark:group-hover:bg-green-900/40">
@@ -469,8 +473,24 @@ export default function AnjabListPage() {
                                                     </svg>
                                                 </div>
                                                 <div className="text-left">
-                                                    <div className="font-semibold text-gray-900 dark:text-white">Gabungan (1 PDF)</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Seluruh Anjab digabung 1 file</div>
+                                                    <div className="font-semibold text-gray-900 dark:text-white">Per Kelompok (ZIP - PDF)</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Halaman bersambung, file dipisah</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                        <div className="py-1">
+                                            <button
+                                                onClick={() => { setShowDownloadMenu(false); handleDownloadWordGrouped(); }}
+                                                className="group flex w-full items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                            >
+                                                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="font-semibold text-gray-900 dark:text-white">Per Kelompok (ZIP - Word)</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Format Word dipisah per kelompok</div>
                                                 </div>
                                             </button>
                                         </div>
