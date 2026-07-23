@@ -31,6 +31,8 @@ type APIRow = {
   is_pusat?: boolean;
   jenis_jabatan: string | null;
   kelas_jabatan?: string | null;
+  pejabat_st?: PegawaiInfo[];
+  pejabat_sk?: PegawaiInfo[];
   pejabat?: PegawaiInfo[];
   biroList?: string[]; // Optional list of biro for filter dropdown
 };
@@ -53,6 +55,8 @@ type D3Node = {
   bezetting: number | null;
   kebutuhan_pegawai: number | null;
   kelas_jabatan: string | null;
+  pejabat_st?: PegawaiInfo[];
+  pejabat_sk?: PegawaiInfo[];
   pejabat?: PegawaiInfo[];
   children: D3Node[];
   _ghost?: boolean;
@@ -250,6 +254,7 @@ export default function PetaJabatanClient() {
   // Filter UI (default: Pusat + Struktural)
   const [scope, setScope] = useState<ScopeOpt>("PUSAT");
   const [fungsionalMode, setFungsionalMode] = useState<FungsionalOpt>("STRUKTURAL");
+  const [displayMode, setDisplayMode] = useState<"ST" | "SK">("SK");
   const [filterText, setFilterText] = useState("");
   const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([]); // Detailed match info
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -279,6 +284,8 @@ export default function PetaJabatanClient() {
   const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
   const [unitSearch, setUnitSearch] = useState("");
   const unitDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [refDropdownOpen, setRefDropdownOpen] = useState(false);
+  const refDropdownRef = useRef<HTMLDivElement | null>(null);
 
 
   // Save state to sessionStorage whenever it changes
@@ -322,6 +329,10 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     sessionStorage.setItem('petaJabatan_fungsionalMode', fungsionalMode);
   }, [fungsionalMode]);
+
+  useEffect(() => {
+    sessionStorage.setItem('petaJabatan_displayMode', displayMode);
+  }, [displayMode]);
 
   useEffect(() => {
     if (selectedUnit !== null) {
@@ -413,6 +424,7 @@ export default function PetaJabatanClient() {
     sessionStorage.removeItem('petaJabatan_collapseMap');
     sessionStorage.removeItem('petaJabatan_scope');
     sessionStorage.removeItem('petaJabatan_fungsionalMode');
+    sessionStorage.removeItem('petaJabatan_displayMode');
     sessionStorage.removeItem('petaJabatan_returnFromAnjab');
     sessionStorage.removeItem('petaJabatan_selectedUnit');
 
@@ -424,6 +436,7 @@ export default function PetaJabatanClient() {
     setCurrentZoom(null);
     setScope("PUSAT");
     setFungsionalMode("STRUKTURAL");
+    setDisplayMode("SK");
     setSelectedUnit(null);
     setUnitSearch("");
     hasFocusedOnce.current = false;
@@ -450,6 +463,7 @@ export default function PetaJabatanClient() {
       const savedCollapseMap = sessionStorage.getItem('petaJabatan_collapseMap');
       const savedScope = sessionStorage.getItem('petaJabatan_scope');
       const savedFungsionalMode = sessionStorage.getItem('petaJabatan_fungsionalMode');
+      const savedDisplayMode = sessionStorage.getItem('petaJabatan_displayMode');
       const savedFilterText = sessionStorage.getItem('petaJabatan_filterText');
       const savedLastPath = sessionStorage.getItem('petaJabatan_lastClickedPath');
       const returnFromAnjab = sessionStorage.getItem('petaJabatan_returnFromAnjab');
@@ -460,6 +474,10 @@ export default function PetaJabatanClient() {
 
       if (savedFungsionalMode && (savedFungsionalMode === 'STRUKTURAL' || savedFungsionalMode === 'FUNGSIONAL')) {
         setFungsionalMode(savedFungsionalMode as FungsionalOpt);
+      }
+
+      if (savedDisplayMode && (savedDisplayMode === 'ST' || savedDisplayMode === 'SK')) {
+        setDisplayMode(savedDisplayMode as "ST" | "SK");
       }
 
       if (savedFilterText) {
@@ -613,7 +631,16 @@ export default function PetaJabatanClient() {
     return filterByScenario(allRows, pusat, fungsional);
   }, [allRows, scope, fungsionalMode]);
 
-  const rows = scenario.rows;
+  const rows = useMemo(() => {
+    return scenario.rows.map(r => {
+      const p = displayMode === "SK" ? r.pejabat_sk : r.pejabat_st;
+      return {
+        ...r,
+        pejabat: p,
+        bezetting: p ? p.length : 0
+      };
+    });
+  }, [scenario.rows, displayMode]);
   const syntheticFlags = scenario.synthetic;
 
   // Map unit_kerja → scope yang dibutuhkan (untuk auto-switch saat pilih Provinsi)
@@ -771,9 +798,10 @@ export default function PetaJabatanClient() {
       printRows as any,
       printSyntheticFlags,
       selectedUnit,
-      'DPD RI'
+      'DPD RI',
+      displayMode
     );
-  }, [printRows, printSyntheticFlags, selectedUnit]);
+  }, [printRows, printSyntheticFlags, selectedUnit, displayMode]);
 
   // Reset collapse state when scope or unit filter changes
   useEffect(() => {
@@ -828,13 +856,18 @@ export default function PetaJabatanClient() {
         const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
         const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
         
-        // Check which pejabat names match
+        // Check which pejabat names match in the ACTIVE pejabat list
         const matchedNameIndices: number[] = [];
         (row.pejabat || []).forEach((p, idx) => {
           if ((p.name || "").toLowerCase().includes(lcFilter)) {
             matchedNameIndices.push(idx);
           }
         });
+
+        // Also check the OTHER pejabat list (cross-mode search)
+        // Fixes: when ST is selected but pejabat_st is empty, still find by pejabat_sk name
+        const altPejabat = displayMode === "SK" ? (row.pejabat_st || []) : (row.pejabat_sk || []);
+        const altNameMatch = altPejabat.some(p => (p.name || "").toLowerCase().includes(lcFilter));
 
         if (nameMatch || slugMatch || unitMatch) {
           // Jabatan name matched - highlight whole card
@@ -844,10 +877,17 @@ export default function PetaJabatanClient() {
             matchType: 'jabatan'
           });
         } else if (matchedNameIndices.length > 0) {
-          // Only pejabat name(s) matched - highlight specific names
+          // Active pejabat name(s) matched - highlight specific names
           matches.push({
             nodeId: row.id,
             matchedNameIndices,
+            matchType: 'pejabat'
+          });
+        } else if (altNameMatch) {
+          // Name found in the alternate pejabat list - highlight card (no specific index)
+          matches.push({
+            nodeId: row.id,
+            matchedNameIndices: [],
             matchType: 'pejabat'
           });
         }
@@ -863,7 +903,7 @@ export default function PetaJabatanClient() {
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [filterText, unitFilteredRows]);
+  }, [filterText, unitFilteredRows, displayMode]);
 
   // ==== Show only current match (collapse all others) ====
   useEffect(() => {
@@ -936,6 +976,8 @@ export default function PetaJabatanClient() {
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
           pejabat: [],
+          pejabat_st: [],
+          pejabat_sk: [],
           _ghost: true,
           children: [result],
         };
@@ -955,6 +997,8 @@ export default function PetaJabatanClient() {
         kebutuhan_pegawai: n.kebutuhan_pegawai ?? null,
         kelas_jabatan: n.kelas_jabatan ?? null,
         pejabat: n.pejabat ?? [],
+        pejabat_st: n.pejabat_st ?? [],
+        pejabat_sk: n.pejabat_sk ?? [],
         children: [],
       };
 
@@ -977,6 +1021,8 @@ export default function PetaJabatanClient() {
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
           pejabat: [],
+          pejabat_st: [],
+          pejabat_sk: [],
           children: [],
           _syntheticSimple: true,
           _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
@@ -995,6 +1041,8 @@ export default function PetaJabatanClient() {
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
           pejabat: [],
+          pejabat_st: [],
+          pejabat_sk: [],
           children: [],
           _syntheticSimple: true,
           _syntheticLabel: "KANTOR DPD RI DI IBU KOTA PROVINSI",
@@ -1013,6 +1061,8 @@ export default function PetaJabatanClient() {
           kebutuhan_pegawai: null,
           kelas_jabatan: null,
           pejabat: [],
+          pejabat_st: [],
+          pejabat_sk: [],
           children: [],
           _syntheticSimple: true,
           _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
@@ -1080,17 +1130,20 @@ export default function PetaJabatanClient() {
     }
     
     // Original filter logic when no specific match is selected
+    // Searches in BOTH pejabat_st and pejabat_sk so cross-mode search always works
     const match = (n: D3Node) =>
       (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
       (n._slug || "").toLowerCase().includes(lcFilter) ||
-      (n.pejabat || []).some(p => (p.name || "").toLowerCase().includes(lcFilter));
+      (n.pejabat || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
+      (n.pejabat_st || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
+      (n.pejabat_sk || []).some(p => (p.name || "").toLowerCase().includes(lcFilter));
     const walk = (n: D3Node): D3Node | null => {
       const kids = n.children.map(walk).filter(Boolean) as D3Node[];
       if (match(n) || kids.length) return { ...n, children: kids };
       return null;
     };
     return roots.map(walk).filter(Boolean) as D3Node[];
-  }, [roots, lcFilter, searchMatches, currentMatchIndex, rows]);
+  }, [roots, lcFilter, searchMatches, currentMatchIndex, unitFilteredRows]);
 
   // ==== Convert to RawNodeDatum ====
   function collectIds(node: RawNodeDatum): string[] {
@@ -1901,156 +1954,66 @@ export default function PetaJabatanClient() {
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
-      {/* ===== TOP BAR (mobile seperti screenshot, desktop seperti semula) ===== */}
-      {bp.isMobile ? (
-        <div className="flex flex-col gap-2">
-          {/* Baris 1: Search + Reset */}
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <input
-              placeholder="Cari Jabatan atau Nama Pejabat"
-              value={filterText}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                setFilterText(newValue);
-                // Trigger reset if input is cleared
-                if (newValue === "") {
-                  handleReset();
-                }
-              }}
-              className="px-3 py-2 rounded border text-sm"
-            />
-            <button
-              onClick={handleReset}
-              className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Reset
-            </button>
-          </div>
-          {/* Search Results Navigation Mobile */}
-          {searchMatches.length > 0 && (
-            <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-              <span className="text-sm text-green-700 font-medium">
-                {searchMatches.length} hasil ({currentMatchIndex + 1}/{searchMatches.length})
-              </span>
-              {searchMatches.length > 1 && (
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
-                    className="p-1 hover:bg-green-100 rounded transition-colors"
-                    title="Sebelumnya"
-                  >
-                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
-                    className="p-1 hover:bg-green-100 rounded transition-colors"
-                    title="Berikutnya"
-                  >
-                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {/* Unit / Biro Filter - Mobile */}
-          <select
-            value={selectedUnit || ""}
-            onChange={(e) => handleSelectUnit(e.target.value || null)}
-            className="w-full px-3 py-2 rounded border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            <option value="">Semua Biro / Pusat / Provinsi</option>
-            {unitOptions.map(u => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
-
-          {/* Baris 2: Reload & Fullscreen full-width */}
-          <button
-            onClick={load}
-            disabled={loading}
-            className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            {loading ? "Memuat…" : "Reload"}
-          </button>
-          <button
-            onClick={handlePrint}
-            className="w-full px-3 py-2 rounded border text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-          >
-            Cetak
-          </button>
-          {!isFullscreen ? (
-            <button
-              onClick={enterFullscreen}
-              className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Fullscreen
-            </button>
-          ) : (
-            <button
-              onClick={exitFullscreen}
-              className="w-full px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            >
-              Exit Fullscreen
-            </button>
-          )}
+      {/* ===== HEADER BAR (Title & Search Actions) ===== */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 pt-2 sm:pt-4">
+        <div className="flex-1 shrink-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white leading-none">Peta Jabatan</h1>
         </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-2 mb-2">Peta Jabatan</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              placeholder="Cari Jabatan atau Nama Pejabat"
-              value={filterText}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                setFilterText(newValue);
-                // Trigger reset if input is cleared
-                if (newValue === "") {
-                  handleReset();
-                }
-              }}
-              className="px-3 py-2 rounded border text-sm w-[320px]"
-            />
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <input
+            placeholder="Cari Jabatan atau Nama Pejabat..."
+            value={filterText}
+            onChange={(e) => {
+              const newValue = e.target.value;
+              setFilterText(newValue);
+              if (newValue === "") handleReset();
+            }}
+            className="px-3 py-2 rounded-md border text-sm w-full sm:w-[280px] focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <button
+            onClick={handleReset}
+            className="px-3 py-2 rounded-md border text-sm hover:bg-gray-50 flex-1 sm:flex-none text-center"
+          >
+            Reset
+          </button>
+          
+          {selectedUnit !== null && (
             <button
-              onClick={handleReset}
-              className="px-2 py-2 rounded border text-sm hover:bg-gray-50"
+              onClick={handlePrint}
+              title="Cetak peta jabatan sesuai filter aktif"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-blue-300 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
             >
-              Reset
-            </button>
-            {selectedUnit !== null && (
-              <button
-                onClick={handlePrint}
-                title="Cetak peta jabatan sesuai filter aktif"
-                className="flex items-center gap-1.5 px-3 py-2 rounded border text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-              >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
               </svg>
               Cetak
             </button>
-            )}
-            {!isFullscreen ? (
-              <button onClick={enterFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
-                Fullscreen
-              </button>
+          )}
+          
+          <button 
+            onClick={isFullscreen ? exitFullscreen : enterFullscreen} 
+            className="flex-1 sm:flex-none px-3 py-2 rounded-md border text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"
+          >
+            {isFullscreen ? (
+              <>
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>
+                <span className="hidden sm:inline">Exit Fullscreen</span>
+              </>
             ) : (
-              <button onClick={exitFullscreen} className="px-3 py-2 rounded border text-sm hover:bg-gray-50">
-                Exit Fullscreen
-              </button>
+              <>
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                <span className="hidden sm:inline">Fullscreen</span>
+              </>
             )}
-          </div>
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* ===== BARIS FILTER (Wilayah/Jenis di bawah) ===== */}
-      <div className="mt-2 flex flex-wrap items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-2">
+      {/* ===== FILTER BAR & REFERENCES ===== */}
+      <div className="flex flex-col gap-3 bg-gray-50/50 p-2 sm:p-3 rounded-lg border border-gray-100">
+        
+        {/* Row 1: Advanced Filters */}
+        <div className="flex flex-wrap items-center gap-2">
           <Segmented
             value={scope}
             onChange={setScope}
@@ -2063,226 +2026,168 @@ export default function PetaJabatanClient() {
             options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
             size={bp.isMobile ? "sm" : "md"}
           />
-        </div>
+          <Segmented
+            value={displayMode}
+            onChange={setDisplayMode}
+            options={[{ label: "SK", value: "SK" }, { label: "ST", value: "ST" }]}
+            size={bp.isMobile ? "sm" : "md"}
+          />
 
-        {/* Unit / Biro Filter Dropdown */}
-        <div className="relative" ref={unitDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setUnitDropdownOpen(prev => !prev)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-              selectedUnit
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            <span className="max-w-[150px] truncate">{selectedUnit || "Pilih Biro / Pusat / Provinsi"}</span>
-            {selectedUnit ? (
-              <span
-                role="button"
-                onClick={(e) => { e.stopPropagation(); setSelectedUnit(null); setUnitSearch(""); }}
-                className="ml-0.5 text-blue-400 hover:text-blue-600 font-bold leading-none"
-                title="Hapus filter unit"
-              >×</span>
-            ) : (
-              <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${unitDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            )}
-          </button>
-
-          {unitDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 w-64 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
-              <div className="p-2 border-b">
-                <input
-                  autoFocus
-                  placeholder="Cari Biro / Pusat / Provinsi..."
-                  value={unitSearch}
-                  onChange={(e) => setUnitSearch(e.target.value)}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-              <div className="max-h-56 overflow-y-auto">
-                {unitOptions
-                  .filter(u => u.toLowerCase().includes(unitSearch.toLowerCase()))
-                  .map(unit => (
-                    <button
-                      key={unit}
-                      type="button"
-                      onClick={() => { handleSelectUnit(unit); setUnitDropdownOpen(false); setUnitSearch(""); }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                        selectedUnit === unit ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                      }`}
-                    >
-                      {unit}
-                    </button>
-                  ))
-                }
-                {unitOptions.filter(u => u.toLowerCase().includes(unitSearch.toLowerCase())).length === 0 && (
-                  <div className="px-3 py-4 text-sm text-gray-400 text-center">Tidak ditemukan</div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Search Results Navigation */}
-        {searchMatches.length > 0 && (
-          <div className="flex items-center gap-2 ml-auto bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
-            <span className="text-sm text-green-700 font-medium">
-              {searchMatches.length} hasil ditemukan
-            </span>
-            {searchMatches.length > 1 && (
-              <>
-                <span className="text-xs text-green-600">
-                  ({currentMatchIndex + 1}/{searchMatches.length})
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))}
-                    className="p-1 hover:bg-green-100 rounded transition-colors"
-                    title="Hasil sebelumnya"
-                  >
-                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))}
-                    className="p-1 hover:bg-green-100 rounded transition-colors"
-                    title="Hasil berikutnya"
-                  >
-                    <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {err && <div className="text-sm text-red-600">{err}</div>}
-
-
-      {/* Tips Navigasi - Collapsible tooltip */}
-      {!loading && rd3Data.length > 0 && (
-        <div className="space-y-2">
-          {/* Desktop: Tips dan Persesjen dalam satu baris */}
-          <div className="hidden sm:flex sm:items-center sm:justify-between gap-3">
+          {/* Unit / Biro Filter Dropdown */}
+          <div className="relative z-30" ref={unitDropdownRef}>
             <button
-              onClick={() => setShowTips(!showTips)}
-              className="flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm hover:bg-brand-100 transition-colors"
+              type="button"
+              onClick={() => setUnitDropdownOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                selectedUnit
+                  ? 'bg-blue-50 border-blue-300 text-blue-700'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
             >
-              <svg className="w-5 h-5 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              <span className="font-medium text-brand-900">Tips Navigasi</span>
-              <svg 
-                className={`w-4 h-4 text-brand-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <span className="max-w-[140px] truncate">{selectedUnit || "Pilih Biro/Pusat..."}</span>
+              {selectedUnit ? (
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedUnit(null); setUnitSearch(""); }}
+                  className="ml-0.5 text-blue-400 hover:text-blue-600 font-bold leading-none"
+                  title="Hapus filter unit"
+                >×</span>
+              ) : (
+                <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${unitDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
             </button>
 
-            {/* Persesjen Buttons - Desktop */}
-            <div className="flex items-center gap-2">
-              {petaJabatanDoc && (
-                <button
-                  onClick={() => window.open(petaJabatanDoc, '_blank')}
-                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2"
-                  title="Lihat Peta Jabatan (Persesjen)"
-                >
-                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span className="truncate">Persesjen Peta Jabatan</span>
-                </button>
-              )}
-              {isAdmin && kelasJabatanDoc && (
-                <button
-                  onClick={() => window.open(kelasJabatanDoc, '_blank')}
-                  className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-2"
-                  title="Lihat Kelas Jabatan (Persesjen)"
-                >
-                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span className="truncate">Persesjen Kelas Jabatan</span>
-                </button>
-              )}
-            </div>
+            {unitDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 w-64 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+                <div className="p-2 border-b">
+                  <input
+                    autoFocus
+                    placeholder="Cari Biro / Pusat / Provinsi..."
+                    value={unitSearch}
+                    onChange={(e) => setUnitSearch(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div className="max-h-56 overflow-y-auto">
+                  {unitOptions
+                    .filter(u => u.toLowerCase().includes(unitSearch.toLowerCase()))
+                    .map(unit => (
+                      <button
+                        key={unit}
+                        type="button"
+                        onClick={() => { handleSelectUnit(unit); setUnitDropdownOpen(false); setUnitSearch(""); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                          selectedUnit === unit ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                        }`}
+                      >
+                        {unit}
+                      </button>
+                    ))
+                  }
+                  {unitOptions.filter(u => u.toLowerCase().includes(unitSearch.toLowerCase())).length === 0 && (
+                    <div className="px-3 py-4 text-sm text-gray-400 text-center">Tidak ditemukan</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Mobile: Tips button saja */}
+        </div>
+
+        {/* Row 2: Tips & References */}
+        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <button
             onClick={() => setShowTips(!showTips)}
-            className="sm:hidden flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm hover:bg-brand-100 transition-colors w-full justify-center"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 border border-brand-200 text-brand-700 rounded-lg text-sm hover:bg-brand-100 transition-colors"
           >
-            <svg className="w-5 h-5 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="font-medium text-brand-900">Tips Navigasi</span>
-            <svg 
-              className={`w-4 h-4 text-brand-600 transition-transform ${showTips ? 'rotate-180' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
+            <span className="font-medium hidden sm:inline">Tips Navigasi</span>
+            <svg className={`w-3.5 h-3.5 transition-transform ${showTips ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          
-          {/* Tips content */}
-          {showTips && (
-            <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
-              <ul className="list-disc list-inside space-y-0.5 text-xs text-brand-900">
-                <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
-                <li>Drag background untuk menggeser tampilan</li>
-                <li>Klik panah di card untuk expand/collapse cabang</li>
-                {bp.isMobile && <li className="text-brand-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
-              </ul>
+
+          <div className="flex items-center gap-2 ml-auto">
+          {searchMatches.length > 0 && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-2 py-1.5">
+              <span className="text-xs text-green-700 font-medium">{searchMatches.length} hasil</span>
+              {searchMatches.length > 1 && (
+                <div className="flex gap-1 items-center">
+                  <span className="text-[10px] text-green-600">({currentMatchIndex + 1}/{searchMatches.length})</span>
+                  <button onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))} className="p-0.5 hover:bg-green-100 rounded">
+                    <svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <button onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))} className="p-0.5 hover:bg-green-100 rounded">
+                    <svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Mobile: Persesjen Buttons di bawah tips */}
-          <div className="sm:hidden flex flex-col gap-2">
-            {petaJabatanDoc && (
+          {(petaJabatanDoc || (isAdmin && kelasJabatanDoc)) && (
+            <div className="relative z-20" ref={refDropdownRef}>
               <button
-                onClick={() => window.open(petaJabatanDoc, '_blank')}
-                className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                title="Lihat Peta Jabatan (Persesjen)"
+                onClick={() => setRefDropdownOpen(!refDropdownOpen)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm hover:bg-green-100 transition-colors"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span className="truncate">Persesjen Peta Jabatan</span>
-              </button>
-            )}
-            {isAdmin && kelasJabatanDoc && (
-              <button
-                onClick={() => window.open(kelasJabatanDoc, '_blank')}
-                className="px-3 py-2 rounded border text-sm bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                title="Lihat Kelas Jabatan (Persesjen)"
-              >
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <span className="font-medium">Persesjen</span>
+                <svg className={`w-3.5 h-3.5 transition-transform ${refDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-                <span className="truncate">Persesjen Kelas Jabatan</span>
               </button>
-            )}
+
+              {refDropdownOpen && (
+                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-50 w-56 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden py-1">
+                  {petaJabatanDoc && (
+                    <button
+                      onClick={() => { window.open(petaJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors"
+                    >
+                      Persesjen Peta Jabatan
+                    </button>
+                  )}
+                  {isAdmin && kelasJabatanDoc && (
+                    <button
+                      onClick={() => { window.open(kelasJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
+                    >
+                      Persesjen Kelas Jabatan
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           </div>
+        </div>
+      </div>
+
+      {err && <div className="text-sm text-red-600 px-2">{err}</div>}
+
+      {/* Tips Content */}
+      {showTips && (
+        <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200 mx-1">
+          <ul className="list-disc list-inside space-y-0.5 text-xs text-brand-900">
+            <li>Gunakan scroll mouse atau pinch gesture untuk zoom in/out</li>
+            <li>Drag background untuk menggeser tampilan</li>
+            <li>Klik panah di card untuk expand/collapse cabang</li>
+            {bp.isMobile && <li className="text-brand-600 font-medium">💡 Rotate device ke landscape untuk tampilan lebih luas</li>}
+          </ul>
         </div>
       )}
 
-      <div
+<div
         ref={containerRef}
         style={{
           width: "100%",
@@ -2346,6 +2251,12 @@ export default function PetaJabatanClient() {
                       value={fungsionalMode}
                       onChange={setFungsionalMode}
                       options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
+                      size="sm"
+                    />
+                    <Segmented
+                      value={displayMode}
+                      onChange={setDisplayMode}
+                      options={[{ label: "Surat Keputusan", value: "SK" }, { label: "Surat Tugas", value: "ST" }]}
                       size="sm"
                     />
                   </div>

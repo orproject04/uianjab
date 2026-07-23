@@ -16,7 +16,6 @@ type APIRow = {
   order_index: number;
   is_pusat?: boolean;
   jenis_jabatan?: string | null;
-  bezetting?: number;
   kebutuhan_pegawai?: number;
 };
 

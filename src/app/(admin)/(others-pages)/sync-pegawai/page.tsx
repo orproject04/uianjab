@@ -38,16 +38,22 @@ export default function SyncPegawaiPage() {
   const router = useRouter();
   const [result, setResult] = useState<SyncResult | null>(null);
   const [lastSync, setLastSync] = useState<SyncHistory | null>(null);
-  const [apiConfig, setApiConfig] = useState<{ url: string; perPage: number } | null>(null);
+  const [apiConfig, setApiConfig] = useState<{ url: string; perPage: number; skListUrl: string; skProfilUrl: string } | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ST' | 'SK'>('SK');
+  const [nipManual, setNipManual] = useState('');
+  const [syncingManual, setSyncingManual] = useState(false);
 
   // Fetch last sync history
-  const fetchLastSync = async () => {
+  const fetchLastSync = async (type: 'ST' | 'SK') => {
     try {
-      const res = await fetch('/api/sync/history?limit=1');
+      const syncTypeParam = type === 'ST' ? 'pegawai' : 'SK_PEGAWAI';
+      const res = await fetch(`/api/sync/history?limit=1&type=${syncTypeParam}`);
       const data = await res.json();
       if (data.ok && data.history.length > 0) {
         setLastSync(data.history[0]);
+      } else {
+        setLastSync(null);
       }
     } catch (err) {
       console.error('Failed to fetch last sync:', err);
@@ -61,14 +67,16 @@ export default function SyncPegawaiPage() {
       .then(data => {
         setApiConfig({
           url: data.externalPegawaiApiUrl,
-          perPage: data.externalApiPerPage
+          perPage: data.externalApiPerPage,
+          skListUrl: data.externalSkApiUrlList,
+          skProfilUrl: data.externalSkApiUrlProfil
         });
       })
       .catch(err => console.error('Failed to load API config:', err));
-    
+
     // Fetch last sync history
-    fetchLastSync();
-  }, []);
+    fetchLastSync(activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!meLoading && !isAdmin) {
@@ -100,15 +108,17 @@ export default function SyncPegawaiPage() {
 
   const startSync = async () => {
     // Show confirmation first
+    const isST = activeTab === 'ST';
+
     const confirm = await Swal.fire({
-      title: 'Mulai Sinkronisasi?',
+      title: isST ? 'Mulai Sinkronisasi Surat Tugas?' : 'Mulai Sinkronisasi Surat Keputusan?',
       html: `
         <div class="text-left">
           <p class="text-sm text-gray-600 mb-3">Proses ini akan:</p>
           <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
-            <li>Menghapus semua data pegawai yang ada di kolom pejabat</li>
-            <li>Mengambil data terbaru dari API eksternal</li>
-            <li>Memperbarui data jabatan dengan pegawai terbaru</li>
+            <li>Menghapus data pegawai yang ada di Database ${isST ? 'Surat Tugas' : 'Surat Keputusan'}</li>
+            <li>Mengambil data terbaru dari API eksternal (${isST ? 'PSDM' : 'AKK'})</li>
+            <li>Memperbarui data dengan yang terbaru</li>
             <li>Memakan waktu beberapa menit</li>
           </ul>
         </div>
@@ -148,7 +158,8 @@ export default function SyncPegawaiPage() {
 
     try {
       // Use EventSource for SSE (Server-Sent Events) to get real-time progress
-      const eventSource = new EventSource('/api/sync/pegawai');
+      const apiEndpoint = activeTab === 'ST' ? '/api/sync/pegawai' : '/api/sync/sk-pegawai';
+      const eventSource = new EventSource(apiEndpoint);
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -183,12 +194,12 @@ export default function SyncPegawaiPage() {
           }
 
           // Refresh last sync history
-          fetchLastSync();
+          fetchLastSync(activeTab);
 
           Swal.fire({
             icon: 'success',
             title: 'Sinkronisasi Selesai!',
-            text: 'Data pegawai berhasil disinkronkan.',
+            text: `Data pegawai (${activeTab}) berhasil disinkronkan.`,
             timer: 2000,
             showConfirmButton: false,
           });
@@ -213,21 +224,159 @@ export default function SyncPegawaiPage() {
     }
   };
 
+  const startRetry = async () => {
+    const isST = activeTab === 'ST';
+    if (isST) {
+      Swal.fire('Info', 'Fitur retry saat ini hanya didukung untuk Surat Keputusan.', 'info');
+      return;
+    }
+
+    const confirm = await Swal.fire({
+      title: 'Ulangi Sinkronisasi Error?',
+      html: `
+        <div class="text-left">
+          <p class="text-sm text-gray-600 mb-3">Sistem akan mencoba menarik ulang NIP yang sebelumnya gagal (Timeout/Error API).</p>
+          <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
+            <li>Tidak akan menghapus data yang sudah berhasil disinkronisasi</li>
+            <li>Hanya menyisipkan data bagi yang berhasil ditarik ulang</li>
+          </ul>
+        </div>
+      `,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Coba Lagi',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#2563eb',
+      cancelButtonColor: '#6b7280',
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({
+      title: 'Mencoba Ulang...',
+      html: `
+        <div class="mb-4">
+          <p class="text-sm text-gray-600 mb-3">Sedang memproses ulang error...</p>
+          <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
+            <div id="swal-progress-bar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between text-xs text-gray-500">
+            <span id="swal-progress-message">Memulai...</span>
+            <span id="swal-progress-percent">0%</span>
+          </div>
+        </div>
+      `,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        const source = new EventSource('/api/sync/sk-pegawai/retry');
+        
+        source.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.error) {
+              source.close();
+              Swal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: data.error,
+              });
+              return;
+            }
+            
+            const progressBar = document.getElementById('swal-progress-bar');
+            const progressMessage = document.getElementById('swal-progress-message');
+            const progressPercent = document.getElementById('swal-progress-percent');
+            
+            if (progressBar && progressMessage && progressPercent) {
+              progressBar.style.width = `${data.progress}%`;
+              progressMessage.textContent = data.message;
+              progressPercent.textContent = `${data.progress}%`;
+            }
+
+            if (data.done) {
+              source.close();
+              if (data.result) {
+                setResult(data.result);
+              }
+              fetchLastSync(activeTab);
+              Swal.fire({
+                icon: 'success',
+                title: 'Selesai!',
+                text: 'Proses mencoba ulang berhasil diselesaikan.',
+              });
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE message:', e);
+          }
+        };
+
+        source.onerror = (err) => {
+          console.error('EventSource failed:', err);
+          source.close();
+          Swal.fire({
+            icon: 'error',
+            title: 'Koneksi Terputus',
+            text: 'Terjadi kesalahan saat menghubungi server',
+          });
+        };
+      }
+    });
+  };
+
+  const startManualSync = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nipManual.trim()) return;
+
+    setSyncingManual(true);
+    try {
+      const res = await fetch('/api/sync/sk-pegawai/manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nip: nipManual.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Terjadi kesalahan sinkronisasi');
+      }
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: data.message,
+      });
+      setNipManual('');
+    } catch (err: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal',
+        text: err.message,
+      });
+    } finally {
+      setSyncingManual(false);
+    }
+  };
+
   const downloadLatestCsv = async () => {
     try {
       const res = await fetch('/api/sync/download-csv');
-      
+
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Gagal mengunduh CSV');
       }
-      
+
       // Create blob and download
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      
+
       // Get filename from Content-Disposition header
       const contentDisposition = res.headers.get('Content-Disposition');
       let filename = 'unmatched-pegawai.csv';
@@ -237,13 +386,13 @@ export default function SyncPegawaiPage() {
           filename = matches[1];
         }
       }
-      
+
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       Swal.fire({
         icon: 'success',
         title: 'Berhasil',
@@ -274,18 +423,18 @@ export default function SyncPegawaiPage() {
     if (!confirm.isConfirmed) return;
 
     setClearingCache(true);
-    
+
     try {
       const res = await fetch('/api/sync/clear-cache', {
         method: 'DELETE',
       });
-      
+
       const data = await res.json();
-      
+
       if (!res.ok) {
         throw new Error(data.error || 'Gagal membersihkan cache');
       }
-      
+
       Swal.fire({
         icon: 'success',
         title: 'Berhasil',
@@ -305,30 +454,71 @@ export default function SyncPegawaiPage() {
   };
 
   return (
-    <div className="pt-6">
-      <div className="">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Sinkronisasi Data Pegawai
-          </h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Sinkronkan data pegawai dari API eksternal ke database Peta Jabatan
-          </p>
-        </div>
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sinkronisasi Data Pegawai</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Sinkronkan data pegawai dari sistem HR external ke dalam Peta Jabatan.
+        </p>
+      </div>
 
+      {/* Tabs */}
+      <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <button
+            onClick={() => {
+              setActiveTab('SK');
+              setResult(null);
+            }}
+            className={`
+              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+              ${activeTab === 'SK'
+                ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }
+            `}
+          >
+            Sinkronisasi Surat Keputusan (AKK)
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('ST');
+              setResult(null);
+            }}
+            className={`
+              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+              ${activeTab === 'ST'
+                ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }
+            `}
+          >
+            Sinkronisasi Surat Tugas (PSDM)
+          </button>
+        </nav>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 border border-gray-100 dark:border-gray-700 p-6">
         {/* API Configuration Info */}
         <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
           <h3 className="mb-2 font-semibold text-blue-light-900 dark:text-blue-light-100">
             Informasi API Data Pegawai
           </h3>
           <div className="space-y-1 text-sm text-blue-light-800 dark:text-blue-light-200">
-            <p>
-              <strong>API URL:</strong>{' '}
-              {apiConfig ? apiConfig.url : 'Memuat...'}
-            </p>
-            <p>
-              <strong>Per Page:</strong> {apiConfig ? apiConfig.perPage : 'Memuat...'}
-            </p>
+            {activeTab === 'ST' ? (
+              <>
+                <p>
+                  <strong>API URL:</strong>{' '}
+                  {apiConfig ? apiConfig.url : 'Memuat...'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>API URL:</strong> {apiConfig ? apiConfig.skListUrl : 'Memuat...'}
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -338,8 +528,8 @@ export default function SyncPegawaiPage() {
           <div className="text-sm text-yellow-800 dark:text-yellow-200">
             <p className="font-semibold">Perhatian:</p>
             <ul className="mt-1 list-inside list-disc space-y-1">
-              <li>Proses ini akan menghapus semua data pegawai yang ada di kolom pejabat</li>
-              <li>Data akan diganti dengan data terbaru dari API eksternal</li>
+              <li>Proses ini akan menghapus semua data pegawai yang ada di Database {activeTab === 'ST' ? 'Surat Tugas' : 'Surat Keputusan'}</li>
+              <li>Data akan diganti dengan data terbaru dari API eksternal ({activeTab === 'ST' ? 'PSDM' : 'AKK'})</li>
               <li>Proses dapat memakan waktu beberapa menit tergantung jumlah data</li>
               <li>Data yang tidak cocok akan dicatat dalam file log</li>
             </ul>
@@ -348,15 +538,49 @@ export default function SyncPegawaiPage() {
 
         {/* Sync Button */}
         <div className="mb-6">
-          <Button
+          <Button 
             onClick={startSync}
-            variant="primary"
             className="w-full sm:w-auto"
           >
             <ArrowRightIcon className="mr-2 h-4 w-4" />
             Mulai Sinkronisasi
           </Button>
+          
+          {lastSync && lastSync.sync_type === 'SK_PEGAWAI' && lastSync.errors && lastSync.errors.length > 0 && (
+             <Button 
+               onClick={startRetry}
+               className="w-full sm:w-auto mt-2 sm:mt-0 sm:ml-2 bg-orange-600 hover:bg-orange-700 text-white"
+             >
+               Coba Lagi yang Error
+             </Button>
+          )}
         </div>
+
+        {/* Sync Manual 1 NIP (SK Only) */}
+        {activeTab === 'SK' && (
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Sinkronisasi Manual 1 NIP</h3>
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              Gunakan fitur ini untuk menarik ulang data profil 1 pegawai secara spesifik dari Talenta (misal: jika sebelumnya data profil kosong).
+            </p>
+            <form onSubmit={startManualSync} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                placeholder="Masukkan NIP (18 digit)"
+                value={nipManual}
+                onChange={(e) => setNipManual(e.target.value)}
+                className="block w-full max-w-sm rounded-md border border-gray-300 p-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                required
+                pattern="[0-9]+"
+                title="Masukkan NIP berupa angka"
+                disabled={syncingManual}
+              />
+              <Button type="submit" disabled={syncingManual || !nipManual.trim()} className="whitespace-nowrap">
+                {syncingManual ? 'Mencari...' : 'Cari & Sinkron NIP'}
+              </Button>
+            </form>
+          </div>
+        )}
 
         {/* Last Sync Info & Action Buttons */}
         {lastSync && (
@@ -396,7 +620,7 @@ export default function SyncPegawaiPage() {
                 </Button>
               </div>
             </div>
-            
+
             {/* Mini Stats from Last Sync */}
             <div className="grid gap-2 sm:grid-cols-4">
               <div className="rounded bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
@@ -490,7 +714,7 @@ export default function SyncPegawaiPage() {
                 <ul className="mt-2 space-y-1 text-sm text-red-800 dark:text-red-200">
                   {result.errors.map((err, idx) => (
                     <li key={idx} className="list-inside list-disc">
-                      {err}
+                      {typeof err === 'object' ? `${err.nip} - ${err.name} (${err.reason})` : err}
                     </li>
                   ))}
                 </ul>

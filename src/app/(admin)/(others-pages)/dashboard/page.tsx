@@ -129,6 +129,7 @@ export default function DashboardPage() {
     const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
     const [expandedSubJenis, setExpandedSubJenis] = useState<string | null>(null);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [displayMode, setDisplayMode] = useState<'ST' | 'SK'>('SK');
 
     // Responsive YAxis width: mobile -> 150, desktop -> 220
     const [yAxisWidth, setYAxisWidth] = useState<number>(220);
@@ -179,10 +180,11 @@ export default function DashboardPage() {
         if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
         if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
         if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
+        if (displayMode) params.append("mode", displayMode);
         const url = `/api/dashboard/jabatan?${params.toString()}`;
         if (lastFetchUrlRef.current === url) return; // already fetched this exact URL
         loadData();
-    }, [selectedBiro, selectedJenis, selectedLokasi, selectedKelas]);
+    }, [selectedBiro, selectedJenis, selectedLokasi, selectedKelas, displayMode]);
 
     // Initial load after user authentication completes
     const hasLoadedOnce = useRef(false);
@@ -206,6 +208,7 @@ export default function DashboardPage() {
             if (selectedJenis?.value) params.append("jenis_jabatan", selectedJenis.value);
             if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
             if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
+            if (displayMode) params.append("mode", displayMode);
 
             const url = `/api/dashboard/jabatan?${params.toString()}`;
             const res = await apiFetch(url, forceNoCache ? { cache: 'no-store' } : undefined);
@@ -413,7 +416,12 @@ export default function DashboardPage() {
 
     const hasAnyDashboardFilter = Boolean(selectedBiro || selectedJenis || selectedLokasi || selectedKelas);
 
-    const additionalErrorPNS = hasAnyDashboardFilter ? 0 : (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PNS').length;
+    // Hitung error data jika sedang tidak ada filter
+    // Tambahkan CPNS ke dalam hitungan PNS agar tidak hilang dari Total Bezetting
+    const additionalErrorPNS = hasAnyDashboardFilter ? 0 : (dataError || []).filter((r) => {
+        const st = String(r.status || '').toUpperCase();
+        return st === 'PNS' || st === 'CPNS';
+    }).length;
     const additionalErrorPPPK = hasAnyDashboardFilter ? 0 : (dataError || []).filter((r) => String(r.status || '').toUpperCase() === 'PPPK').length;
 
     const displaySummary = {
@@ -635,11 +643,11 @@ export default function DashboardPage() {
 
     function handleExportCSV() {
         if (!data || !data.byNamaJabatan) return;
-        
+
         let csvContent = "nama_unit,nama_jabatan,abk,cpns,pns,pppk\n";
-        
+
         const rowsToExport = data.byNamaJabatan;
-        
+
         rowsToExport.forEach(row => {
             const unit = String(row.unit_kerja || '').replace(/"/g, '""');
             const jabatan = String(row.nama_jabatan || '').replace(/"/g, '""');
@@ -647,14 +655,14 @@ export default function DashboardPage() {
             const cpns = 0;
             const pns = Number(row.bezetting_pns ?? 0);
             const pppk = Number(row.bezetting_pppk ?? 0);
-            
+
             csvContent += `"${unit}","${jabatan}",${abk},${cpns},${pns},${pppk}\n`;
         });
-        
+
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        
+
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -663,7 +671,7 @@ export default function DashboardPage() {
         const min = String(now.getMinutes()).padStart(2, '0');
         const ss = String(now.getSeconds()).padStart(2, '0');
         const filename = `jabatan_${yyyy}-${mm}-${dd}_${hh}${min}${ss}.csv`;
-        
+
         link.setAttribute("href", url);
         link.setAttribute("download", filename);
         document.body.appendChild(link);
@@ -683,11 +691,11 @@ export default function DashboardPage() {
             pns: Number(row.bezetting_pns ?? 0),
             pppk: Number(row.bezetting_pppk ?? 0)
         }));
-        
+
         const ws = XLSX.utils.json_to_sheet(normalizedData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Jabatan");
-        
+
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -696,7 +704,7 @@ export default function DashboardPage() {
         const min = String(now.getMinutes()).padStart(2, '0');
         const ss = String(now.getSeconds()).padStart(2, '0');
         const filename = `jabatan_${yyyy}-${mm}-${dd}_${hh}${min}${ss}.xlsx`;
-        
+
         XLSX.writeFile(wb, filename);
         setExportMenuOpen(false);
     }
@@ -1022,7 +1030,7 @@ export default function DashboardPage() {
                 <td class="right">${totalJenisJabatan.toLocaleString('id-ID')}</td>
                 <td class="right">${totalBezetting.toLocaleString('id-ID')}</td>
                 <td class="right">${totalKebutuhan.toLocaleString('id-ID')}</td>
-                <td class="right">${includeErrorRow? (totalSelisih + errorTotal).toLocaleString('id-ID'): totalSelisih.toLocaleString('id-ID')}</td>
+                <td class="right">${includeErrorRow ? (totalSelisih + errorTotal).toLocaleString('id-ID') : totalSelisih.toLocaleString('id-ID')}</td>
             </tr>
         </tbody>
     </table>
@@ -1232,60 +1240,60 @@ export default function DashboardPage() {
 
     // Narrower Y-axis tick renderer for side-by-side panels (width=190)
     const renderYAxisTickNarrow = (props: any) => {
-    const { x, y, payload } = props;
+        const { x, y, payload } = props;
 
-    const raw: string = String(payload?.value ?? "");
-    const labelSource = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
+        const raw: string = String(payload?.value ?? "");
+        const labelSource = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
 
-    const maxLen = 22;
-    const words = String(labelSource).split(/\s+/);
-    const lines: string[] = [];
+        const maxLen = 22;
+        const words = String(labelSource).split(/\s+/);
+        const lines: string[] = [];
 
-    let current = "";
+        let current = "";
 
-    for (const w of words) {
-        if ((current + " " + w).trim().length <= maxLen) {
-            current = (current + " " + w).trim();
-        } else {
-            if (current) lines.push(current);
-            current = w;
-        }
-    }
-
-    if (current) lines.push(current);
-
-    if (lines.length > 4) {
-        const first = lines.slice(0, 3);
-        let last = lines.slice(3).join(" ");
-
-        if (last.length > maxLen) {
-            last = last.slice(0, maxLen - 3) + "...";
+        for (const w of words) {
+            if ((current + " " + w).trim().length <= maxLen) {
+                current = (current + " " + w).trim();
+            } else {
+                if (current) lines.push(current);
+                current = w;
+            }
         }
 
-        lines.length = 0;
-        lines.push(...first, last);
-    }
+        if (current) lines.push(current);
 
-    const anchorX = x - 4;
-    const lineGap = 11;
+        if (lines.length > 4) {
+            const first = lines.slice(0, 3);
+            let last = lines.slice(3).join(" ");
 
-    return (
-        <text
-            x={anchorX}
-            y={y}
-            textAnchor="end"
-            fontSize={9}
-            fill="#374151"
-            dominantBaseline="middle"
-        >
-            {lines.map((ln, i) => (
-                <tspan key={i} x={anchorX} dy={i === 0 ? 0 : lineGap}>
-                    {ln}
-                </tspan>
-            ))}
-        </text>
-    );
-};
+            if (last.length > maxLen) {
+                last = last.slice(0, maxLen - 3) + "...";
+            }
+
+            lines.length = 0;
+            lines.push(...first, last);
+        }
+
+        const anchorX = x - 4;
+        const lineGap = 11;
+
+        return (
+            <text
+                x={anchorX}
+                y={y}
+                textAnchor="end"
+                fontSize={9}
+                fill="#374151"
+                dominantBaseline="middle"
+            >
+                {lines.map((ln, i) => (
+                    <tspan key={i} x={anchorX} dy={i === 0 ? 0 : lineGap}>
+                        {ln}
+                    </tspan>
+                ))}
+            </text>
+        );
+    };
     // Custom styles for react-select dark mode
     const selectStyles = {
         control: (base: any, state: any) => ({
@@ -1372,7 +1380,8 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3 items-center">
+
                         <div className="relative w-full sm:w-auto">
                             <button
                                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
@@ -1435,10 +1444,25 @@ export default function DashboardPage() {
                         </div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filter Data</h3>
                         {(selectedBiro || selectedJenis || selectedLokasi || selectedKelas) && (
-                            <span className="ml-auto text-xs px-2.5 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full font-medium">
+                            <span className="ml-2 text-xs px-2.5 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full font-medium">
                                 Filter Aktif
                             </span>
                         )}
+
+                        <div className="ml-auto flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl h-[42px] items-center">
+                            <button
+                                onClick={() => setDisplayMode('SK')}
+                                className={`h-full px-4 text-sm font-medium rounded-lg transition-all ${displayMode === 'SK' ? 'bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                            >
+                                Surat Keputusan
+                            </button>
+                            <button
+                                onClick={() => setDisplayMode('ST')}
+                                className={`h-full px-4 text-sm font-medium rounded-lg transition-all ${displayMode === 'ST' ? 'bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                            >
+                                Surat Tugas
+                            </button>
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                         <div className="sm:col-span-2 lg:col-span-2 xl:col-span-2">
@@ -1458,23 +1482,23 @@ export default function DashboardPage() {
                                 className="react-select-container text-xs"
                             />
                         </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                    </svg>
-                                    Jenis Jabatan
-                                </label>
-                                <Select
-                                    options={jenisOptions}
-                                    value={selectedJenis}
-                                    onChange={setSelectedJenis}
-                                    styles={selectStyles}
-                                    placeholder="Jenis Jabatan"
-                                    isClearable
-                                    className="react-select-container text-xs"
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                Jenis Jabatan
+                            </label>
+                            <Select
+                                options={jenisOptions}
+                                value={selectedJenis}
+                                onChange={setSelectedJenis}
+                                styles={selectStyles}
+                                placeholder="Jenis Jabatan"
+                                isClearable
+                                className="react-select-container text-xs"
+                            />
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1897,32 +1921,32 @@ export default function DashboardPage() {
                             );
                         })}
                         {totalDataError > 0 && !hasAnyDashboardFilter && (
-                        <div className="relative group flex flex-col h-full bg-white dark:bg-gray-800 rounded-xl transition-all">
-                            <div className="flex-1 w-full flex flex-col bg-gradient-to-br from-red-100/70 to-orange-100/70 dark:bg-gray-700/50 rounded-xl p-4 border-2 border-transparent shadow-sm relative z-10">
-                                <div className="flex items-start justify-between mb-1 w-full">
-                                    <div className="flex-1 mr-2">
-                                        <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Data Perlu Disesuaikan</h4>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-2xl font-bold text-gray-900 dark:text-white">{totalDataError}</span>
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">orang</span>
+                            <div className="relative group flex flex-col h-full bg-white dark:bg-gray-800 rounded-xl transition-all">
+                                <div className="flex-1 w-full flex flex-col bg-gradient-to-br from-red-100/70 to-orange-100/70 dark:bg-gray-700/50 rounded-xl p-4 border-2 border-transparent shadow-sm relative z-10">
+                                    <div className="flex items-start justify-between mb-1 w-full">
+                                        <div className="flex-1 mr-2">
+                                            <h4 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Data Perlu Disesuaikan</h4>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-2xl font-bold text-gray-900 dark:text-white">{totalDataError}</span>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">orang</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm bg-red-100 text-red-600">
+                                            ⚠️
                                         </div>
                                     </div>
-                                    <div className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xl shadow-sm bg-red-100 text-red-600">
-                                        ⚠️
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5 mt-1 w-full h-full flex flex-col justify-start">
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-600 dark:text-gray-400">PNS</span>
-                                        <span className="font-semibold text-gray-900 dark:text-white">{dataErrorPNS.toLocaleString('id-ID')}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-600 dark:text-gray-400">PPPK</span>
-                                        <span className="font-semibold text-gray-900 dark:text-white">{dataErrorPPPK.toLocaleString('id-ID')}</span>
+                                    <div className="space-y-1.5 mt-1 w-full h-full flex flex-col justify-start">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-gray-600 dark:text-gray-400">PNS</span>
+                                            <span className="font-semibold text-gray-900 dark:text-white">{dataErrorPNS.toLocaleString('id-ID')}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-gray-600 dark:text-gray-400">PPPK</span>
+                                            <span className="font-semibold text-gray-900 dark:text-white">{dataErrorPPPK.toLocaleString('id-ID')}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
                         )}
                     </div>
                 </div>
@@ -2057,52 +2081,11 @@ export default function DashboardPage() {
 
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             {(() => {
-                                                    const key = `bezetting|||${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
-                                                    const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
-                                                    const displayed = existing === '' ? '' : String(existing);
-                                                    if (!(isAdminAKK)) {
-                                                        return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
-                                                    }
-                                                    return (
-                                                        <input
-                                                            type="text"
-                                                            inputMode="numeric"
-                                                            pattern="[0-9]*"
-                                                            className="w-28 text-center rounded border px-2 py-1 text-sm"
-                                                            value={displayed}
-                                                            onFocus={() => {
-                                                                // if current displayed value is '0', clear it so typing '12' doesn't produce '012'
-                                                                const curr = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
-                                                                if ((curr === 0 || curr === '0') && !overrides.hasOwnProperty(key)) {
-                                                                    setOverrides((prev) => ({ ...prev, [key]: '' }));
-                                                                }
-                                                            }}
-                                                            onBlur={() => {
-                                                                // if user focused and left without typing, remove temporary override so original value shows again
-                                                                if (overrides.hasOwnProperty(key) && overrides[key] === '') {
-                                                                    setOverrides((prev) => {
-                                                                        const next = { ...prev } as Record<string, string | number>;
-                                                                        delete next[key];
-                                                                        return next;
-                                                                    });
-                                                                }
-                                                            }}
-                                                            onKeyDown={(e) => {
-                                                                // allow only digits and control keys while typing
-                                                                if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
-                                                                    e.preventDefault();
-                                                                }
-                                                            }}
-                                                            onChange={(e) => {
-                                                                const raw = e.target.value;
-                                                                // keep raw string while editing; we'll coerce when saving
-                                                                setOverrides((prev) => ({ ...prev, [key]: raw }));
-                                                                setUnsavedChanges(true);
-                                                            }}
-                                                            // bezetting input — uses prefixed key 'bezetting|||...' to avoid collision with kebutuhan
-                                                        />
-                                                    );
-                                                })()}
+                                                const key = `bezetting|||${String(item.nama_jabatan || '').trim()}|||${String(item.unit_kerja || '').trim()}`;
+                                                const existing = overrides.hasOwnProperty(key) ? overrides[key] : String(Number(item.bezetting ?? 0));
+                                                const displayed = existing === '' ? '' : String(existing);
+                                                return <span className="text-xs font-medium text-gray-900 dark:text-white">{displayed}</span>;
+                                            })()}
                                         </td>
                                         <td className="px-3 py-3 whitespace-normal break-words text-center">
                                             <span className="text-xs font-medium text-gray-900 dark:text-white">
@@ -2425,107 +2408,107 @@ export default function DashboardPage() {
                 {/* Top Jabatan side-by-side */}
                 <div className="flex gap-4 flex-col lg:flex-row">
 
-                {/* Top Jabatan (Selisih Positif) */}
-                <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-blue-light-500 to-blue-light-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
+                    {/* Top Jabatan (Selisih Positif) */}
+                    <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-blue-light-500 to-blue-light-600 rounded-xl flex items-center justify-center shadow-lg">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
+                                    Top 10 Jabatan dengan Kelebihan Pegawai Terbanyak
+                                </h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting melebihi kebutuhan pegawai</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
-                                Top 10 Jabatan dengan Kelebihan Pegawai Terbanyak
-                            </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting melebihi kebutuhan pegawai</p>
-                        </div>
+                        <ResponsiveContainer width="100%" height={400}>
+                            <BarChart data={topPositive} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis
+                                    dataKey="display_label"
+                                    type="category"
+                                    width={190}
+                                    tick={renderYAxisTickNarrow}
+                                    interval={0}
+                                    tickLine={false}
+                                    axisLine={false}
+                                />
+                                <Tooltip
+                                    cursor={{ fill: 'rgba(60,168,205,0.08)' }}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                                                    <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
+                                                    <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
+                                                    <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
+                                                    <p className="text-xs text-[#3CA8CD] font-semibold">Kelebihan: +{payload[0].payload.selisih}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 6, 6, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
-                    <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={topPositive} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                            <YAxis
-                                dataKey="display_label"
-                                type="category"
-                                width={190}
-                                tick={renderYAxisTickNarrow}
-                                interval={0}
-                                tickLine={false}
-                                axisLine={false}
-                            />
-                            <Tooltip
-                                cursor={{ fill: 'rgba(60,168,205,0.08)' }}
-                                content={({ active, payload }) => {
-                                    if (active && payload && payload.length) {
-                                        return (
-                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
-                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
-                                                <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
-                                                <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-[#3CA8CD] font-semibold">Kelebihan: +{payload[0].payload.selisih}</p>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                }}
-                            />
-                            <Bar dataKey="selisih" fill="#3CA8CD" name="Kelebihan" radius={[0, 6, 6, 0]} barSize={20} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
 
-                {/* Top Jabatan (Selisih Negatif) */}
-                <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-400 to-brand-500 rounded-xl flex items-center justify-center shadow-lg">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                            </svg>
+                    {/* Top Jabatan (Selisih Negatif) */}
+                    <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-brand-400 to-brand-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">Top 10 Jabatan dengan Kekurangan Pegawai Terbanyak</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">Top 10 Jabatan dengan Kekurangan Pegawai Terbanyak</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Jabatan dengan bezetting kurang dari kebutuhan pegawai</p>
-                        </div>
+                        <ResponsiveContainer width="100%" height={400}>
+                            <BarChart data={topNegative} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 'dataMax']} />
+                                <YAxis
+                                    dataKey="display_label"
+                                    type="category"
+                                    width={190}
+                                    tick={renderYAxisTickNarrow}
+                                    interval={0}
+                                    tickLine={false}
+                                    axisLine={false}
+                                />
+                                <Tooltip
+                                    cursor={{ fill: 'rgba(143,197,74,0.08)' }}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                                                    <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
+                                                    <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
+                                                    <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
+                                                    <p className="text-xs text-[#8FC54A] font-semibold">Kekurangan: {payload[0].payload.selisih}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 6, 6, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
-                    <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={topNegative} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 'dataMax']} />
-                            <YAxis
-                                dataKey="display_label"
-                                type="category"
-                                width={190}
-                                tick={renderYAxisTickNarrow}
-                                interval={0}
-                                tickLine={false}
-                                axisLine={false}
-                            />
-                            <Tooltip
-                                cursor={{ fill: 'rgba(143,197,74,0.08)' }}
-                                content={({ active, payload }) => {
-                                    if (active && payload && payload.length) {
-                                        return (
-                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
-                                                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{payload[0].payload.nama_jabatan}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{payload[0].payload.unit_kerja}</p>
-                                                <p className="text-xs text-brand-600 dark:text-brand-400">Bezetting: {payload[0].payload.bezetting}</p>
-                                                <p className="text-xs text-blue-light-600 dark:text-blue-light-400">Kebutuhan: {payload[0].payload.kebutuhan}</p>
-                                                <p className="text-xs text-[#8FC54A] font-semibold">Kekurangan: {payload[0].payload.selisih}</p>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                }}
-                            />
-                            <Bar dataKey="abs_selisih" fill="#8FC54A" name="Kekurangan" radius={[0, 6, 6, 0]} barSize={20} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
 
                 </div>{/* end side-by-side */}
 
-                                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
                     <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-brand-50 to-blue-light-50 dark:from-gray-800 dark:to-gray-800">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                             <div className="flex items-center gap-3 w-full sm:w-auto">

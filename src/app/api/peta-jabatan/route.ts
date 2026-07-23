@@ -20,12 +20,12 @@ type Row = {
     unit_kerja: string | null;
     level: number;
     order_index: number | null;
-    bezetting: number;
     kebutuhan_pegawai: number;
     is_pusat: boolean;
     jenis_jabatan: string | null;
     kelas_jabatan: string | null;
-    pejabat: PegawaiInfo[];
+    pejabat_st: PegawaiInfo[];
+    pejabat_sk: PegawaiInfo[];
     jabatan_id: string | null;
 };
 
@@ -81,13 +81,13 @@ export async function GET(req: NextRequest) {
                     pj.unit_kerja,
                     pj.level,
                     pj.order_index,
-                    pj.bezetting,
                     pj.kebutuhan_pegawai,
                     pj.is_pusat,
                     pj.jenis_jabatan,
                     pj.jabatan_id,
                     j.kelas_jabatan,
-                    COALESCE(pj.pejabat, '[]'::jsonb) AS pejabat
+                    COALESCE(pj.pejabat_st, '[]'::jsonb) AS pejabat_st,
+                    COALESCE(pj.pejabat_sk, '[]'::jsonb) AS pejabat_sk
                  FROM peta_jabatan pj
                  LEFT JOIN jabatan j ON pj.jabatan_id = j.id
                  WHERE pj.jabatan_id = $1::uuid
@@ -108,13 +108,13 @@ export async function GET(req: NextRequest) {
         t.unit_kerja,
         t.level,
         t.order_index,
-        t.bezetting,
         t.kebutuhan_pegawai,
         t.is_pusat,
         t.jenis_jabatan,
         t.jabatan_id,
         j.kelas_jabatan,
-        t.pejabat
+        t.pejabat_st,
+        t.pejabat_sk
       FROM tree t
       LEFT JOIN jabatan j
         ON t.jabatan_id = j.id
@@ -139,12 +139,12 @@ export async function GET(req: NextRequest) {
             unit_kerja,
             level,
             order_index,
-            bezetting,
             kebutuhan_pegawai,
             is_pusat,
             jenis_jabatan,
             jabatan_id,
-            COALESCE(pejabat, '[]'::jsonb) AS pejabat,
+            COALESCE(pejabat_st, '[]'::jsonb) AS pejabat_st,
+            COALESCE(pejabat_sk, '[]'::jsonb) AS pejabat_sk,
             ARRAY[
               lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
             ]::text[] AS sort_path
@@ -161,12 +161,12 @@ export async function GET(req: NextRequest) {
             c.unit_kerja,
             c.level,
             c.order_index,
-            c.bezetting,
             c.kebutuhan_pegawai,
             c.is_pusat,
             c.jenis_jabatan,
             c.jabatan_id,
-            COALESCE(c.pejabat, '[]'::jsonb),
+            COALESCE(c.pejabat_st, '[]'::jsonb),
+            COALESCE(c.pejabat_sk, '[]'::jsonb),
             t.sort_path || (
               lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
             )
@@ -193,12 +193,12 @@ export async function GET(req: NextRequest) {
           unit_kerja,
           level,
           order_index,
-          bezetting,
           kebutuhan_pegawai,
           is_pusat,
           jenis_jabatan,
           jabatan_id,
-          COALESCE(pejabat, '[]'::jsonb) AS pejabat,
+          COALESCE(pejabat_st, '[]'::jsonb) AS pejabat_st,
+          COALESCE(pejabat_sk, '[]'::jsonb) AS pejabat_sk,
           ARRAY[
             lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
           ]::text[] AS sort_path
@@ -215,12 +215,12 @@ export async function GET(req: NextRequest) {
           c.unit_kerja,
           c.level,
           c.order_index,
-          c.bezetting,
           c.kebutuhan_pegawai,
           c.is_pusat,
           c.jenis_jabatan,
           c.jabatan_id,
-          COALESCE(c.pejabat, '[]'::jsonb),
+          COALESCE(c.pejabat_st, '[]'::jsonb),
+          COALESCE(c.pejabat_sk, '[]'::jsonb),
           t.sort_path || (
             lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
           )
@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
                 (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id, created_by, updated_by)
                 VALUES
                     ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid, $9, $9)
-                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, bezetting, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id
+                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id
                     )
                 SELECT *
                 FROM ins

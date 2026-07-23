@@ -99,6 +99,7 @@ export interface SyncResult {
     csv?: string;
   };
   syncedBy?: string;
+  syncType?: string;
 }
 
 export interface UnmatchedRecord {
@@ -139,10 +140,10 @@ async function saveDataErrorRecords(records: UnmatchedRecord[], syncedBy?: strin
     const incomingNips = Array.from(uniqueRecords.keys());
 
     if (incomingNips.length === 0) {
-      await client.query('DELETE FROM data_error');
+      await client.query("DELETE FROM data_error WHERE tipe_sync = 'ST'");
     } else {
       await client.query(
-        'DELETE FROM data_error WHERE NOT (nip = ANY($1::text[]))',
+        "DELETE FROM data_error WHERE tipe_sync = 'ST' AND NOT (nip = ANY($1::text[]))",
         [incomingNips]
       );
 
@@ -150,7 +151,7 @@ async function saveDataErrorRecords(records: UnmatchedRecord[], syncedBy?: strin
         nip: string;
         saran_perbaikan: string | null;
       }>(
-        'SELECT nip, saran_perbaikan FROM data_error WHERE nip = ANY($1::text[])',
+        "SELECT nip, saran_perbaikan FROM data_error WHERE tipe_sync = 'ST' AND nip = ANY($1::text[])",
         [incomingNips]
       );
 
@@ -168,7 +169,7 @@ async function saveDataErrorRecords(records: UnmatchedRecord[], syncedBy?: strin
                  status = $4,
                  synced_by = $5,
                  synced_at = CURRENT_TIMESTAMP
-             WHERE nip = $6`,
+             WHERE nip = $6 AND tipe_sync = 'ST'`,
             [
               rec.name || '',
               rec.jabatan_name || '',
@@ -187,8 +188,9 @@ async function saveDataErrorRecords(records: UnmatchedRecord[], syncedBy?: strin
               unit_organisasi,
               status,
               saran_perbaikan,
-              synced_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              synced_by,
+              tipe_sync
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ST')`,
             [
               rec.nip,
               rec.name || '',
@@ -231,7 +233,7 @@ export async function saveSyncHistory(result: SyncResult): Promise<number> {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id`,
       [
-        'pegawai',
+        result.syncType || 'pegawai',
         result.totalFetched,
         result.totalMatched,
         result.unmatchedRecords.length,
@@ -242,7 +244,7 @@ export async function saveSyncHistory(result: SyncResult): Promise<number> {
         result.syncedBy || null,
       ]
     );
-    
+
     return rows[0].id;
   } catch (error: any) {
     console.error('[SAVE_SYNC_HISTORY] Error:', error);
@@ -259,23 +261,24 @@ export async function fetchPegawaiData(
 ): Promise<PegawaiApiResponse> {
   const baseUrl = process.env.EXTERNAL_PEGAWAI_API_URL;
   const timeout = parseInt(process.env.EXTERNAL_API_TIMEOUT || '60000');
-  
+
   const url = `${baseUrl}?per_page=${perPage}&page=${page}`;
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
+      'Origin': 'https://simantap.dpd.go.id/',
     };
-    
+
     // Add API token if configured
     const apiToken = process.env.EXTERNAL_API_TOKEN;
     if (apiToken) {
       headers['x-api-token'] = apiToken;
     }
-    
+
     let data: PegawaiApiResponse;
     if (allowInsecureExternalApiTls) {
       data = await fetchJsonInsecureTls(url, headers, timeout);
@@ -314,7 +317,7 @@ export async function fetchPegawaiData(
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    
+
     console.error('[FETCH_PEGAWAI] Error details:', {
       name: error.name,
       message: error.message,
@@ -323,11 +326,11 @@ export async function fetchPegawaiData(
       url,
       page,
     });
-    
+
     if (error.name === 'AbortError') {
       throw new Error(`Request timeout - API took too long to respond (>${timeout}ms)`);
     }
-    
+
     // Enhance error message with context
     const enhancedError = new Error(
       `Failed to fetch pegawai data from ${url}: ${error.message}`
@@ -344,26 +347,26 @@ export async function fetchAllPegawaiData(
   onProgress?: (current: number, total: number) => void
 ): Promise<PegawaiData[]> {
   const perPage = parseInt(process.env.EXTERNAL_API_PER_PAGE || '100');
-  
+
   // Fetch first page to get total pages
   const firstPage = await fetchPegawaiData(1, perPage);
   const totalPages = firstPage.meta.last_page;
   const allData: PegawaiData[] = [...firstPage.data];
-  
+
   if (onProgress) {
     onProgress(1, totalPages);
   }
-  
+
   // Fetch remaining pages
   for (let page = 2; page <= totalPages; page++) {
     const pageData = await fetchPegawaiData(page, perPage);
     allData.push(...pageData.data);
-    
+
     if (onProgress) {
       onProgress(page, totalPages);
     }
   }
-  
+
   return allData;
 }
 
@@ -373,8 +376,7 @@ export async function fetchAllPegawaiData(
 export async function clearAllNamaPejabat(syncedBy?: string): Promise<void> {
   await pool.query(
     `UPDATE peta_jabatan 
-    SET pejabat = '[]'::jsonb,
-        bezetting = 0,
+    SET pejabat_st = '[]'::jsonb,
         updated_by = $1
     `,
     [syncedBy || null]
@@ -397,33 +399,33 @@ export async function syncPegawaiToPetaJabatan(
     errors: [],
     syncedBy: syncedBy,
   };
-  
+
   try {
     // Step 1: Clear existing nama_pejabat
     if (onProgress) onProgress(0, 100, 'Menghapus data pegawai lama...');
     await clearAllNamaPejabat(syncedBy);
     if (onProgress) onProgress(5, 100, 'Data lama berhasil dihapus');
-    
+
     // Step 2: Fetch all pegawai data
     if (onProgress) onProgress(5, 100, 'Mengambil data pegawai dari API eksternal...');
-    
+
     const allPegawai = await fetchAllPegawaiData((current, total) => {
       const progress = 5 + (current / total) * 30; // 5-35%
       if (onProgress) {
         onProgress(Math.round(progress), 100, `Mengambil data halaman ${current} dari ${total}...`);
       }
     });
-    
+
     result.totalFetched = allPegawai.length;
-    
+
     // Step 3: Filter ACTIVE and track INACTIVE pegawai
     if (onProgress) onProgress(38, 100, 'Memfilter pegawai aktif...');
-    
+
     const activePegawai = allPegawai.filter(p => p.status === 'ACTIVE');
     const inactivePegawai = allPegawai.filter(p => p.status !== 'ACTIVE');
-    
+
     result.totalInactive = inactivePegawai.length;
-    
+
     // Track inactive pegawai as records
     for (const pegawai of inactivePegawai) {
       result.inactiveRecords.push({
@@ -435,13 +437,13 @@ export async function syncPegawaiToPetaJabatan(
         reason: `Status pegawai: ${pegawai.status} (Tidak Aktif)`,
       });
     }
-    
-    
+
+
     // Step 4: Group pegawai by jabatan and unit kerja
     if (onProgress) onProgress(40, 100, 'Mengelompokkan data pegawai...');
-    
+
     const groupedPegawai = new Map<string, PegawaiData[]>();
-    
+
     for (const pegawai of activePegawai) {
       const key = `${pegawai.jabatan_name}|||${pegawai.unit_organisasi_name}`;
       if (!groupedPegawai.has(key)) {
@@ -449,20 +451,20 @@ export async function syncPegawaiToPetaJabatan(
       }
       groupedPegawai.get(key)!.push(pegawai);
     }
-    
+
     // Step 5: Match and update peta_jabatan
     if (onProgress) onProgress(45, 100, 'Mencocokkan dan update database...');
-    
+
     let processed = 0;
     const totalGroups = groupedPegawai.size;
-    
+
     for (const [key, pegawaiList] of groupedPegawai.entries()) {
       const [jabatan_name, unit_organisasi_name] = key.split('|||');
-      
+
       try {
         // Sort by NIP (ascending)
         pegawaiList.sort((a, b) => a.nip.localeCompare(b.nip));
-        
+
         // Find matching peta_jabatan
         const { rows } = await pool.query(
           `SELECT id, nama_jabatan, unit_kerja 
@@ -471,7 +473,7 @@ export async function syncPegawaiToPetaJabatan(
            AND LOWER(COALESCE(unit_kerja, '')) = LOWER($2)`,
           [jabatan_name, unit_organisasi_name]
         );
-        
+
         if (rows.length > 0) {
           // Match found - update each matching row
           // Store as JSONB array with structure: {name, nip, role}
@@ -483,19 +485,16 @@ export async function syncPegawaiToPetaJabatan(
               role: role
             };
           });
-          const bezetting = pegawaiList.length;
-          
           for (const row of rows) {
             await pool.query(
               `UPDATE peta_jabatan 
-               SET pejabat = $1::jsonb,
-                   bezetting = $2,
-                   updated_by = $4
-               WHERE id = $3`,
-              [JSON.stringify(namaPejabat), bezetting, row.id, syncedBy || null]
+               SET pejabat_st = $1::jsonb,
+                   updated_by = $3
+               WHERE id = $2`,
+              [JSON.stringify(namaPejabat), row.id, syncedBy || null]
             );
           }
-          
+
           result.totalMatched += pegawaiList.length;
         } else {
           // No match found - add to unmatched records
@@ -513,23 +512,23 @@ export async function syncPegawaiToPetaJabatan(
       } catch (error: any) {
         result.errors.push(`Error processing ${jabatan_name} - ${unit_organisasi_name}: ${error.message}`);
       }
-      
+
       processed++;
       const progress = 45 + (processed / totalGroups) * 45; // 45-90%
       if (onProgress) {
         onProgress(Math.round(progress), 100, `Update database: ${processed} dari ${totalGroups} grup jabatan...`);
       }
     }
-    
+
     // Step 5.5: Check and set default for Sekretaris Jenderal DPD RI if not matched
     if (onProgress) onProgress(91, 100, 'Memeriksa Sekretaris Jenderal...');
     try {
       const { rows: sekjenRows } = await pool.query(
-        `SELECT id, pejabat 
+        `SELECT id, pejabat_st as pejabat 
          FROM peta_jabatan 
          WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI')`
       );
-      
+
       if (sekjenRows.length > 0) {
         for (const sekjen of sekjenRows) {
           const pejabat = sekjen.pejabat;
@@ -543,16 +542,15 @@ export async function syncPegawaiToPetaJabatan(
                 "role": "PNS"
               }
             ];
-            
+
             await pool.query(
               `UPDATE peta_jabatan 
-               SET pejabat = $1::jsonb,
-                   bezetting = 1,
+               SET pejabat_st = $1::jsonb,
                    updated_by = $3
                WHERE id = $2`,
               [JSON.stringify(defaultSekjen), sekjen.id, syncedBy || null]
             );
-            
+
           }
         }
       }
@@ -560,7 +558,7 @@ export async function syncPegawaiToPetaJabatan(
       console.error('[SYNC] Error setting default Sekjen:', sekjenError);
       // Don't throw - continue with sync
     }
-    
+
     // Step 6: Write unmatched and inactive records to log file
     const combinedRecords = [...result.unmatchedRecords, ...result.inactiveRecords];
     if (onProgress) onProgress(92, 100, 'Menyimpan data error...');
@@ -576,7 +574,7 @@ export async function syncPegawaiToPetaJabatan(
       const logPaths = await writeUnmatchedLog(combinedRecords);
       result.logFilePaths = logPaths;
     }
-    
+
     // Step 7: Save to sync history database
     if (onProgress) onProgress(95, 100, 'Menyimpan riwayat sinkronisasi...');
     try {
@@ -585,13 +583,13 @@ export async function syncPegawaiToPetaJabatan(
       console.error('[SYNC] Failed to save sync history:', saveError);
       // Don't throw - sync was successful even if history save failed
     }
-    
+
     if (onProgress) onProgress(100, 100, 'Selesai!');
-    
+
   } catch (error: any) {
     result.errors.push(`Fatal error: ${error.message}`);
   }
-  
+
   return result;
 }
 
@@ -600,13 +598,13 @@ export async function syncPegawaiToPetaJabatan(
  */
 async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: string; csv?: string }> {
   const result: { json?: string; csv?: string } = {};
-  
+
   try {
     // Allow overriding storage directory via env var (absolute path recommended for AWS)
     const storageDir = process.env.SYNC_LOGS_DIR
       ? process.env.SYNC_LOGS_DIR
-      : join(process.cwd(), 'storage', 'sync-logs');
-    
+      : join(process.cwd(), 'storage', 'sync-logs', 'st');
+
     // Create directory if not exists
     try {
       await mkdir(storageDir, { recursive: true });
@@ -618,17 +616,17 @@ async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: s
       });
       throw new Error(`Cannot create log directory: ${mkdirError.message}`);
     }
-    
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `unmatched-pegawai-${timestamp}.json`;
     const filepath = join(storageDir, filename);
-    
+
     const logData = {
       timestamp: new Date().toISOString(),
       total_unmatched: records.length,
       records: records,
     };
-    
+
     // Write JSON file
     try {
       await writeFile(filepath, JSON.stringify(logData, null, 2), 'utf-8');
@@ -641,18 +639,18 @@ async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: s
       });
       throw new Error(`Cannot write JSON log: ${writeError.message}`);
     }
-    
+
     // Also create a CSV version for easier viewing
     const csvFilename = `unmatched-pegawai-${timestamp}.csv`;
     const csvFilepath = join(storageDir, csvFilename);
-    
+
     const csvLines = [
       'NIP,Nama,Jabatan,Unit Organisasi,Status,Alasan',
-      ...records.map(r => 
+      ...records.map(r =>
         `"${r.nip}","${r.name}","${r.jabatan_name}","${r.unit_organisasi_name}","${r.status || 'ACTIVE'}","${r.reason}"`
       ),
     ];
-    
+
     try {
       await writeFile(csvFilepath, csvLines.join('\n'), 'utf-8');
       result.csv = csvFilepath;
@@ -664,7 +662,7 @@ async function writeUnmatchedLog(records: UnmatchedRecord[]): Promise<{ json?: s
       });
       // CSV is optional, don't throw
     }
-    
+
     return result;
   } catch (error: any) {
     console.error('[SYNC_LOG] Fatal error in writeUnmatchedLog:', error);

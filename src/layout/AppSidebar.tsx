@@ -35,6 +35,8 @@ type APIRow = {
     jenis_jabatan?: string | null;
     jabatan_id?: string | null;
     pejabat?: PegawaiInfo[];
+    pejabat_st?: any[];
+    pejabat_sk?: any[];
 };
 
 type SubNavItem = {
@@ -105,7 +107,9 @@ const AppSidebar: React.FC = () => {
     const [editUnitKerja, setEditUnitKerja] = useState<string>("");
     const [editIsPusat, setEditIsPusat] = useState<string>("true");
     const [editJenisJabatan, setEditJenisJabatan] = useState<string>("");
-    const [editNamaPejabat, setEditNamaPejabat] = useState<string[]>([]);
+    const [editMode, setEditMode] = useState<"ST" | "SK">("ST");
+    const [editNamaPejabatST, setEditNamaPejabatST] = useState<string[]>([]);
+    const [editNamaPejabatSK, setEditNamaPejabatSK] = useState<string[]>([]);
     const [parentOptions, setParentOptions] = useState<Array<{ id: string | ""; label: string }>>([]);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -464,20 +468,26 @@ const AppSidebar: React.FC = () => {
                     if (res.ok) {
                         const data: APIRow[] = await res.json();
                         const currentNode = data.find((r: APIRow) => r.id === node.id);
-                        if (currentNode && Array.isArray(currentNode.pejabat)) {
-                            // Extract just the names from the new format [{name, nip, role}]
-                            const names = currentNode.pejabat
-                                .map((p: PegawaiInfo) => p.name)
-                                .filter((n: string) => n && n.trim());
-                            setEditNamaPejabat(names);
+                        if (currentNode) {
+                            const namesSt = Array.isArray(currentNode.pejabat_st)
+                                ? currentNode.pejabat_st.map((p: any) => p.name).filter(Boolean)
+                                : [];
+                            const namesSk = Array.isArray(currentNode.pejabat_sk)
+                                ? currentNode.pejabat_sk.map((p: any) => p.name).filter(Boolean)
+                                : [];
+                            setEditNamaPejabatST(namesSt);
+                            setEditNamaPejabatSK(namesSk);
                         } else {
-                            setEditNamaPejabat([]);
+                            setEditNamaPejabatST([]);
+                            setEditNamaPejabatSK([]);
                         }
                     } else {
-                        setEditNamaPejabat([]);
+                        setEditNamaPejabatST([]);
+                        setEditNamaPejabatSK([]);
                     }
                 } catch {
-                    setEditNamaPejabat([]);
+                    setEditNamaPejabatST([]);
+                    setEditNamaPejabatSK([]);
                 }
 
                 setShowEdit(true);
@@ -510,11 +520,14 @@ const AppSidebar: React.FC = () => {
         const jenis_jabatan = editJenisJabatan || null;
         
         // Filter dan trim pejabat, remove empty strings
-        const pejabat = editNamaPejabat
+        const pejabat_st = editNamaPejabatST
+            .map(n => n.trim())
+            .filter(n => n.length > 0);
+        const pejabat_sk = editNamaPejabatSK
             .map(n => n.trim())
             .filter(n => n.length > 0);
 
-        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, pejabat};
+        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, pejabat_st, pejabat_sk};
         if (editOrder.trim() !== "") {
             const parsed = Number(editOrder);
             if (!Number.isFinite(parsed)) {
@@ -589,7 +602,7 @@ const AppSidebar: React.FC = () => {
         } finally {
             setSaving(false);
         }
-    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, editNamaPejabat, loadData, anjabSubs]);
+    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, editNamaPejabatST, editNamaPejabatSK, loadData, anjabSubs]);
 
     const openAddModal = (parent: SubNavItem) => {
         setAddParentFor(parent);
@@ -1289,27 +1302,44 @@ const AppSidebar: React.FC = () => {
                                     <label className="text-sm font-medium text-gray-700 block mb-1.5">
                                         Nama Pejabat
                                         <span className="text-xs text-gray-500 ml-2 font-normal">
-                                            (Bezetting: {editNamaPejabat.filter(n => n.trim()).length})
+                                            (Bezetting: {(editMode === "ST" ? editNamaPejabatST : editNamaPejabatSK).filter(n => n.trim()).length})
                                         </span>
                                     </label>
+                                    
+                                    <div className="flex bg-gray-100 p-1 rounded-lg mb-3">
+                                        <button type="button" onClick={() => setEditMode("ST")} className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${editMode === "ST" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>Surat Tugas</button>
+                                        <button type="button" onClick={() => setEditMode("SK")} className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${editMode === "SK" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>Surat Keputusan</button>
+                                    </div>
+
                                     <div className="space-y-2">
-                                        {editNamaPejabat.map((nama, idx) => (
+                                        {(editMode === "ST" ? editNamaPejabatST : editNamaPejabatSK).map((nama, idx) => (
                                             <div key={idx} className="flex gap-2">
                                                 <input
                                                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                                     value={nama}
                                                     onChange={(e) => {
-                                                        const newNames = [...editNamaPejabat];
-                                                        newNames[idx] = e.target.value;
-                                                        setEditNamaPejabat(newNames);
+                                                        if (editMode === "ST") {
+                                                            const newNames = [...editNamaPejabatST];
+                                                            newNames[idx] = e.target.value;
+                                                            setEditNamaPejabatST(newNames);
+                                                        } else {
+                                                            const newNames = [...editNamaPejabatSK];
+                                                            newNames[idx] = e.target.value;
+                                                            setEditNamaPejabatSK(newNames);
+                                                        }
                                                     }}
                                                     placeholder={`Nama pejabat ${idx + 1}`}
                                                 />
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        const newNames = editNamaPejabat.filter((_, i) => i !== idx);
-                                                        setEditNamaPejabat(newNames);
+                                                        if (editMode === "ST") {
+                                                            const newNames = editNamaPejabatST.filter((_, i) => i !== idx);
+                                                            setEditNamaPejabatST(newNames);
+                                                        } else {
+                                                            const newNames = editNamaPejabatSK.filter((_, i) => i !== idx);
+                                                            setEditNamaPejabatSK(newNames);
+                                                        }
                                                     }}
                                                     className="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                                                 >
@@ -1319,7 +1349,13 @@ const AppSidebar: React.FC = () => {
                                         ))}
                                         <button
                                             type="button"
-                                            onClick={() => setEditNamaPejabat([...editNamaPejabat, ""])}
+                                            onClick={() => {
+                                                if (editMode === "ST") {
+                                                    setEditNamaPejabatST([...editNamaPejabatST, ""]);
+                                                } else {
+                                                    setEditNamaPejabatSK([...editNamaPejabatSK, ""]);
+                                                }
+                                            }}
                                             className="w-full px-3 py-2 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 transition-colors text-sm font-medium"
                                         >
                                             + Tambah Pejabat

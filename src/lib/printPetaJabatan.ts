@@ -8,12 +8,12 @@ export type PrintAPIRow = {
   nama_jabatan: string;
   slug: string;
   order_index: number | null;
-  bezetting?: number | null;
   kebutuhan_pegawai?: number | null;
   is_pusat?: boolean;
   jenis_jabatan: string | null;
   kelas_jabatan?: string | null;
-  pejabat?: Array<{ name: string; nip: string; role: string }>;
+  pejabat_st?: Array<{ name: string; nip: string; role: string }>;
+  pejabat_sk?: Array<{ name: string; nip: string; role: string }>;
 };
 
 export type PrintSyntheticFlags = {
@@ -60,6 +60,11 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function getBezetting(row: PrintAPIRow, displayMode: "ST" | "SK"): number {
+  const arr = displayMode === "ST" ? row.pejabat_st : row.pejabat_sk;
+  return Array.isArray(arr) ? arr.filter(n => n?.name?.trim()).length : 0;
+}
+
 function buildPrintTree(rows: PrintAPIRow[], flags: PrintSyntheticFlags): PrintNode[] {
   const byParent = new Map<string | null, PrintAPIRow[]>();
   for (const r of rows) {
@@ -103,11 +108,11 @@ function buildPrintTree(rows: PrintAPIRow[], flags: PrintSyntheticFlags): PrintN
           nama_jabatan: label,
           slug: 'kjf',
           order_index: 9999,
-          bezetting: 0,
           kebutuhan_pegawai: 0,
           jenis_jabatan: kjfJenis,
           kelas_jabatan: null,
-          pejabat: [],
+          pejabat_st: [],
+          pejabat_sk: [],
         },
         children: functionalChildren,
         isSynthetic: true,
@@ -126,11 +131,11 @@ function buildPrintTree(rows: PrintAPIRow[], flags: PrintSyntheticFlags): PrintN
           nama_jabatan: label,
           slug: 'kjf',
           order_index: 9999,
-          bezetting: 0,
           kebutuhan_pegawai: 0,
           jenis_jabatan: 'ESELON IV',
           kelas_jabatan: null,
-          pejabat: [],
+          pejabat_st: [],
+          pejabat_sk: [],
         },
         children: functionalChildren,
         isSynthetic: true,
@@ -149,8 +154,8 @@ function buildPrintTree(rows: PrintAPIRow[], flags: PrintSyntheticFlags): PrintN
 }
 
 // ── Render one pelaksana/fungsional table row (inline inside parent card) ──────
-function inlineTableRow(c: PrintNode, index: number): string {
-  const cb = c.row.bezetting ?? 0;
+function inlineTableRow(c: PrintNode, index: number, displayMode: "ST" | "SK"): string {
+  const cb = getBezetting(c.row, displayMode);
   const ck = c.row.kebutuhan_pegawai ?? 0;
   const cs = cb - ck;
   const csColor = '#111';
@@ -169,7 +174,8 @@ function inlineTableRow(c: PrintNode, index: number): string {
 //   Row 1: job title (colspan 4, colored bg via CSS class)
 //   Row 2: "Kelas Jabatan" | B | K | +/-
 //   Row 3: kelas value     | b | k | sel
-function renderCard(node: PrintNode): string {
+//   Row 3: kelas value     | b | k | sel
+function renderCard(node: PrintNode, displayMode: "ST" | "SK"): string {
   const r = node.row;
   const rank = rankJenis(r.jenis_jabatan);
 
@@ -179,9 +185,9 @@ function renderCard(node: PrintNode): string {
 
   // Structural cards always show their own bezetting/kebutuhan.
   // KJF synthetic cards (bezetting=0 by construction) show the sum of their functional children.
-  const childrenBez = inlineRows.reduce((s, c) => s + (c.row.bezetting ?? 0), 0);
+  const childrenBez = inlineRows.reduce((s, c) => s + getBezetting(c.row, displayMode), 0);
   const childrenKeb = inlineRows.reduce((s, c) => s + (c.row.kebutuhan_pegawai ?? 0), 0);
-  const totalBez = node.isSynthetic ? childrenBez : (r.bezetting ?? 0);
+  const totalBez = node.isSynthetic ? childrenBez : getBezetting(r, displayMode);
   const totalKeb = node.isSynthetic ? childrenKeb : (r.kebutuhan_pegawai ?? 0);
   const totalSel = totalBez - totalKeb;
   const totalSelColor = '#111';
@@ -191,7 +197,7 @@ function renderCard(node: PrintNode): string {
   if (node.isSynthetic) {
     let tableHtml = '';
     if (inlineRows.length > 0) {
-      const bodyRows = inlineRows.map((c, i) => inlineTableRow(c, i)).join('');
+      const bodyRows = inlineRows.map((c, i) => inlineTableRow(c, i, displayMode)).join('');
       tableHtml = `<table class="pos-tbl">
   <thead><tr>
     <th class="tc">No.</th><th class="tl">Nama Jabatan</th>
@@ -209,14 +215,15 @@ function renderCard(node: PrintNode): string {
   // ── Structural card (Eselon I–IV) ───────────────────────────────────────────
   const tc = titleClass(rank);
 
-  const pejabat = (r.pejabat || []).map(p => p.name).filter(Boolean);
+  const pejabatArr = displayMode === "ST" ? r.pejabat_st : r.pejabat_sk;
+  const pejabat = (pejabatArr || []).map(p => p.name).filter(Boolean);
   const pejabatRow = pejabat.length > 0
     ? `<tr><td colspan="4" class="str-pejabat">${pejabat.map(esc).join('<br>')}</td></tr>`
     : '';
 
   let inlineTableHtml = '';
   if (inlineRows.length > 0) {
-    const bodyRows = inlineRows.map((c, i) => inlineTableRow(c, i)).join('');
+    const bodyRows = inlineRows.map((c, i) => inlineTableRow(c, i, displayMode)).join('');
     inlineTableHtml = `<table class="pos-tbl">
   <thead><tr>
     <th class="tc">No.</th><th class="tl">Nama Jabatan</th>
@@ -249,14 +256,14 @@ function renderCard(node: PrintNode): string {
 }
 
 // ── Special layout: Pusat/Inspektorat (E2 with Subbag TU + KJF) ──────────────
-function renderPusatNode(node: PrintNode, treeChildren: PrintNode[]): string {
+function renderPusatNode(node: PrintNode, treeChildren: PrintNode[], displayMode: "ST" | "SK"): string {
   const e3Kids = treeChildren.filter(c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 3);
   const e4Kids = treeChildren.filter(c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 4);
   const kjfKids = treeChildren.filter(c => c.isSynthetic);
 
-  const headCardHtml = renderCard(node);
+  const headCardHtml = renderCard(node, displayMode);
 
-  const subbagHtml = e4Kids.map(c => renderNode(c)).join('');
+  const subbagHtml = e4Kids.map(c => renderNode(c, displayMode)).join('');
 
   // T-junction on the vertical connector: branch right to Subbag TU, continue down to bidangs/KJF.
   // When there is no Subbag TU, render a plain v-line instead.
@@ -271,16 +278,16 @@ function renderPusatNode(node: PrintNode, treeChildren: PrintNode[]): string {
     const rightKids = e3Kids.slice(mid);
 
     const leftCols = leftKids.map((c, i) =>
-      `<div class="pusat-bcol${i === 0 ? ' left-edge' : ''}">${renderNode(c)}</div>`
+      `<div class="pusat-bcol${i === 0 ? ' left-edge' : ''}">${renderNode(c, displayMode)}</div>`
     ).join('');
     const rightCols = rightKids.map((c, i) =>
-      `<div class="pusat-bcol${i === rightKids.length - 1 ? ' right-edge' : ''}">${renderNode(c)}</div>`
+      `<div class="pusat-bcol${i === rightKids.length - 1 ? ' right-edge' : ''}">${renderNode(c, displayMode)}</div>`
     ).join('');
 
     bidangSection = `<div class="pusat-bidang-row">${leftCols}<div class="pusat-vpass"></div>${rightCols}</div>`;
   }
 
-  const kjfCards = kjfKids.map(c => renderCard(c)).join('');
+  const kjfCards = kjfKids.map(c => renderCard(c, displayMode)).join('');
   // For Inspektorat (no bidangs), the tjunc v-line already connects HEAD→KJF.
   // For Pusat with bidangs, add an extra v-line between the bidang row bottom and KJF.
   const kjfSection = kjfCards
@@ -294,21 +301,21 @@ function renderPusatNode(node: PrintNode, treeChildren: PrintNode[]): string {
 </div>`;
 }
 
-// ── Render a tree node (card + connector + children) ─────────────────────────
-function renderNode(node: PrintNode): string {
+// ── Render a node and its descendants recursively ─────────────────────────────
+function renderNode(node: PrintNode, displayMode: "ST" | "SK"): string {
   const treeChildren = node.children.filter(
     c => c.isSynthetic || rankJenis(c.row.jenis_jabatan) < 5
   );
 
   const rank = rankJenis(node.row.jenis_jabatan);
-  const cardHtml = renderCard(node);
+  const cardHtml = renderCard(node, displayMode);
 
   // Special layout for Pusat/Inspektorat: E2 with direct E4 children (Subbag TU) + KJF synthetic
   if (rank === 2) {
     const hasE4 = treeChildren.some(c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 4);
     const hasKJF = treeChildren.some(c => c.isSynthetic);
     if (hasE4 && hasKJF) {
-      return renderPusatNode(node, treeChildren);
+      return renderPusatNode(node, treeChildren, displayMode);
     }
   }
 
@@ -316,16 +323,11 @@ function renderNode(node: PrintNode): string {
     return `<div class="node">${cardHtml}</div>`;
   }
 
-  // Biro (E2, no direct E4) / Kantor Provinsi (E3) layout:
-  // KJF is placed to the right of children-row at Bagian card level.
-  // L-connector: horizontal arm from v-line midpoint going right, then drops down to KJF card.
-  // Arm width is calculated from number of structural children so it always reaches the KJF.
-  // (Rank-2 Pusat with direct E4 is already handled above by renderPusatNode.)
   if (rank === 2 || rank === 3) {
     const kjfKids = treeChildren.filter(c => c.isSynthetic);
     const structKids = treeChildren.filter(c => !c.isSynthetic);
     if (kjfKids.length > 0 && structKids.length > 0) {
-      const kjfBranchHtml = kjfKids.map(c => renderCard(c)).join('');
+      const kjfBranchHtml = kjfKids.map(c => renderCard(c, displayMode)).join('');
       const structCols = structKids.map((c, i) => {
         const isOnly = structKids.length === 1;
         const isFirst = i === 0;
@@ -334,10 +336,8 @@ function renderNode(node: PrintNode): string {
           : isFirst ? 'child-col first'
             : isLast ? 'child-col last'
               : 'child-col';
-        return `<div class="${cls}">${renderNode(c)}</div>`;
+        return `<div class="${cls}">${renderNode(c, displayMode)}</div>`;
       }).join('');
-      // Each child-col: 170px card + 40px padding = 210px. Arm goes from center to right edge.
-      // v-line is 30px; midpoint at 15px. Drop from midpoint to Bagian card top = 15 + 16 = 31px.
       const armH = Math.ceil(structKids.length * 210 / 2);
       return `<div class="node">
   ${cardHtml}
@@ -353,7 +353,6 @@ function renderNode(node: PrintNode): string {
     }
   }
 
-  // Left-spine vertical layout for all-E4 children (Subbagian under Bagian)
   const allE4 = treeChildren.every(
     c => !c.isSynthetic && rankJenis(c.row.jenis_jabatan) === 4
   );
@@ -362,7 +361,7 @@ function renderNode(node: PrintNode): string {
     const branchItems = treeChildren
       .map((c) => `<div class="branch-item">
   <div class="h-conn"></div>
-  <div class="branch-card">${renderNode(c)}</div>
+  <div class="branch-card">${renderNode(c, displayMode)}</div>
 </div>`)
       .join('');
     return `<div class="e3-node">
@@ -373,7 +372,6 @@ function renderNode(node: PrintNode): string {
 </div>`;
   }
 
-  // Normal horizontal fan-out (Eselon II → Eselon III)
   const childCols = treeChildren.map((c, i) => {
     const isOnly = treeChildren.length === 1;
     const isFirst = i === 0;
@@ -382,7 +380,7 @@ function renderNode(node: PrintNode): string {
       : isFirst ? 'child-col first'
         : isLast ? 'child-col last'
           : 'child-col';
-    return `<div class="${cls}">${renderNode(c)}</div>`;
+    return `<div class="${cls}">${renderNode(c, displayMode)}</div>`;
   }).join('');
 
   return `<div class="node">
@@ -392,10 +390,9 @@ function renderNode(node: PrintNode): string {
 </div>`;
 }
 
-// ── Summary table ─────────────────────────────────────────────────────────────
-function buildSummary(rows: PrintAPIRow[]): string {
-  type G = { b: number; k: number };
-  const groups: Record<string, G> = {
+// ── Render the Summary Table (Rekapitulasi) ───────────────────────────────────
+function buildSummary(rows: PrintAPIRow[], displayMode: "ST" | "SK"): string {
+  const groups: Record<string, { b: number; k: number }> = {
     'ESELON II': { b: 0, k: 0 },
     'ESELON III': { b: 0, k: 0 },
     'ESELON IV': { b: 0, k: 0 },
@@ -405,7 +402,7 @@ function buildSummary(rows: PrintAPIRow[]): string {
   let totalB = 0, totalK = 0;
   for (const r of rows) {
     const rank = rankJenis(r.jenis_jabatan);
-    const b = r.bezetting ?? 0;
+    const b = getBezetting(r, displayMode);
     const k = r.kebutuhan_pegawai ?? 0;
     const key = rank === 2 ? 'ESELON II'
       : rank === 3 ? 'ESELON III'
@@ -423,21 +420,19 @@ function buildSummary(rows: PrintAPIRow[]): string {
     .filter(([, { b, k }]) => b !== 0 || k !== 0)
     .map(([jenis, { b, k }]) => {
       const s = b - k;
-      const sc = '';
       return `<tr>
       <td class="sl">${jenis}</td><td>${b}</td><td>${k}</td>
-      <td style="${sc}">${s >= 0 ? '' : ''}${s}</td>
+      <td>${s >= 0 ? '' : ''}${s}</td>
     </tr>`;
     }).join('');
   const ts = totalB - totalK;
-  const tsc = '';
   return `<table class="sum-tbl">
   <thead><tr><th class="sl">JENIS JABATAN</th><th>B</th><th>K</th><th>+/-</th></tr></thead>
   <tbody>
     ${rowsHtml}
     <tr class="sum-total">
       <td class="sl">JUMLAH TOTAL</td><td>${totalB}</td><td>${totalK}</td>
-      <td style="${tsc}">${ts >= 0 ? '' : ''}${ts}</td>
+      <td>${ts >= 0 ? '' : ''}${ts}</td>
     </tr>
   </tbody>
 </table>`;
@@ -448,10 +443,7 @@ const PRINT_CSS = `
 /* ─── Page setup ─────────────────────────────────────────────── */
 @page { size: landscape; margin: 6mm; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
-  width: 100%;
-  height: 100%;
-}
+html, body { width: 100%; height: 100%; }
 body {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 6.5pt;
@@ -467,555 +459,98 @@ body {
 }
 
 /* ─── Page header ─────────────────────────────────────────────── */
-.page-title {
-  text-align: center;
-  font-size: 9pt;
-  font-weight: bold;
-  letter-spacing: 0.5px;
-  margin-bottom: 0px;
-  margin-top: 14px;
-}
-.page-subtitle {
-  text-align: center;
-  font-size: 7pt;
-  color: #444;
-  margin-bottom: 1px;
-  text-transform: uppercase;
-}
+.page-title { text-align: center; font-size: 9pt; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 0px; margin-top: 14px; }
+.page-subtitle { text-align: center; font-size: 7pt; color: #444; margin-bottom: 1px; text-transform: uppercase; }
 
 /* ─── Summary table ───────────────────────────────────────────── */
-.sum-tbl {
-  border-collapse: collapse;
-  font-size: 6.5pt;
-  margin-bottom: 1px;
-}
-.sum-tbl th, .sum-tbl td {
-  border: 1px solid #aaa;
-  padding: 1px 5px;
-  text-align: center;
-  white-space: nowrap;
-}
+.sum-tbl { border-collapse: collapse; font-size: 6.5pt; margin-bottom: 1px; }
+.sum-tbl th, .sum-tbl td { border: 1px solid #aaa; padding: 1px 5px; text-align: center; white-space: nowrap; }
 .sum-tbl th { background: #30a2cf; font-weight: bold; }
 .sum-tbl td.sl { text-align: left; }
 .sum-tbl th.sl { text-align: left; }
 .sum-total td { font-weight: bold; background: #54b7de; }
 
 /* ─── Org tree wrapper ────────────────────────────────────────── */
-.org-wrap {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-.org-root {
-  position: relative;
-  margin-top: 16px;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-}
-.sum-abs {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 10;
-}
-.tree-center {
-  display: flex;
-  justify-content: center;
-}
-/* ─── Page header: summary pinned top-left, title centered ───────── */
-.page-header {
-  position: relative;
-  width: 100%;
-  margin-top: 1px;
-  text-align: center;
-}
+.org-wrap { width: 100%; display: flex; justify-content: center; }
+.org-root { position: relative; margin-top: 16px; display: inline-flex; flex-direction: column; align-items: center; }
+.sum-abs { position: absolute; top: 0; left: 0; z-index: 10; }
+.tree-center { display: flex; justify-content: center; }
+.page-header { position: relative; width: 100%; margin-top: 1px; text-align: center; }
 
 /* ─── Single node (card + connector + children) ───────────────── */
-.node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.node-tjunc {
-  position: relative;
-}
-
-.node-tjunc-line {
-  width: 1px;
-  height: 45px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Branch emerges from the right side of the vertical connector */
-.node-tjunc-branch {
-  position: absolute;
-  left: 1px;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-}
-
-/* ─── Vertical connector line (explicit element, always prints) ── */
-.v-line, .vert-conn {
-  width: 1px;
-  height: 30px;
-  background: #333;
-  flex-shrink: 0;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-
-/* ─── Horizontal fan-out row ─────────────────────────────────────── */
-.children-row {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  position: relative;
-  margin-top: 0;
-}
-/* Horizontal bar across the top of all children */
-.children-row::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-
-/* ─── Each child column in horizontal fan-out ─────────────────── */
-.child-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0 20px;
-  position: relative;
-}
-/* Vertical drop from horizontal bar to card top */
-.child-col::before {
-  content: '';
-  display: block;
-  width: 1px;
-  height: 16px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Mask left half of bar for first child — stop 1px before center so the drop-line isn't clipped */
-.child-col.first::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 0;
-  width: calc(50% - 1px);
-  height: 3px;
-  background: #fff;
-  z-index: 2;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Mask right half of bar for last child */
-.child-col.last::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  right: 0;
-  width: calc(50% - 1px);
-  height: 3px;
-  background: #fff;
-  z-index: 2;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
+.node { display: flex; flex-direction: column; align-items: center; }
+.v-line, .vert-conn { width: 1px; height: 30px; background: #333; flex-shrink: 0; }
+.children-row { display: flex; flex-direction: row; align-items: flex-start; position: relative; margin-top: 0; }
+.children-row::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: #333; }
+.child-col { display: flex; flex-direction: column; align-items: center; padding: 0 20px; position: relative; }
+.child-col::before { content: ''; display: block; width: 1px; height: 16px; background: #333; }
+.child-col.first::after { content: ''; position: absolute; top: -1px; left: 0; width: calc(50% - 1px); height: 3px; background: #fff; z-index: 2; }
+.child-col.last::after { content: ''; position: absolute; top: -1px; right: 0; width: calc(50% - 1px); height: 3px; background: #fff; z-index: 2; }
 .child-col.only::before { display: none; }
-.child-col.only::after  { display: none; }
+.child-col.only::after { display: none; }
 
 /* ─── Left-spine layout: Eselon IV (Subbagian) under Eselon III ── */
-.e3-node {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  width: 170px;
-  overflow: visible;
-}
-/* Vertical drop from bottom-center of parent card (170px wide → center at x=84) */
-.e3-vline {
-  width: 1px;
-  height: 10px;
-  background: #333;
-  margin-left: 84px;
-  flex-shrink: 0;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Horizontal bridge: goes left from vline (x=84) to spine (x=0) */
-.e3-hbridge {
-  width: 85px;
-  height: 1px;
-  background: #333;
-  flex-shrink: 0;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Vertical spine at left edge — no overflow into sibling columns */
-.branch-list {
-  border-left: 1px solid #333;
-  margin-left: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.branch-item {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  margin-top: 16px;
-  position: relative;
-}
-/* Cover spine below last connector so it ends cleanly at last Subbagian */
-.branch-item:last-child::after {
-  content: '';
-  position: absolute;
-  left: -2px;
-  top: 10px;
-  width: 4px;
-  bottom: 0;
-  background: #fff;
-  z-index: 1;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Horizontal connector from spine to card */
-.h-conn {
-  width: 12px;
-  height: 1px;
-  background: #333;
-  flex-shrink: 0;
-  margin-top: 8px;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.branch-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
+.e3-node { display: flex; flex-direction: column; align-items: flex-start; width: 170px; overflow: visible; }
+.e3-vline { width: 1px; height: 10px; background: #333; margin-left: 84px; flex-shrink: 0; }
+.e3-hbridge { width: 85px; height: 1px; background: #333; flex-shrink: 0; }
+.branch-list { border-left: 1px solid #333; margin-left: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.branch-item { display: flex; flex-direction: row; align-items: flex-start; margin-top: 16px; position: relative; }
+.branch-item:last-child::after { content: ''; position: absolute; left: -2px; top: 10px; width: 4px; bottom: 0; background: #fff; z-index: 1; }
+.h-conn { width: 12px; height: 1px; background: #333; flex-shrink: 0; margin-top: 8px; }
+.branch-card { display: flex; flex-direction: column; align-items: flex-start; }
 
 /* ─── Card shell ──────────────────────────────────────────────── */
-.card {
-  width: 170px;
-  border: 1px solid #333;
-  overflow: hidden;
-  background: #fff;
-  page-break-inside: avoid;
-  break-inside: avoid;
-}
-
-/* ─── Structural card table (Eselon I-IV): 3-row layout ──────── */
-.str-tbl {
-  width: 100%;
-  border-collapse: collapse;
-}
-.str-tbl th, .str-tbl td {
-  border: 1px solid #333;
-  padding: 1px 2px;
-  font-size: 6pt;
-}
-
-/* Title row: colored background by eselon level */
-.str-title {
-  text-align: center;
-  font-weight: bold;
-  font-size: 6.5pt;
-  line-height: 1.25;
-  padding: 3px 4px;
-  color: #fff;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
+.card { width: 170px; border: 1px solid #333; overflow: hidden; background: #fff; break-inside: avoid; }
+.str-tbl { width: 100%; border-collapse: collapse; }
+.str-tbl th, .str-tbl td { border: 1px solid #333; padding: 1px 2px; font-size: 6pt; }
+.str-title { text-align: center; font-weight: bold; font-size: 6.5pt; line-height: 1.25; padding: 3px 4px; color: #fff; }
 .hdr-e1 { background: #14532d; }
 .hdr-e2 { background: #166534; }
 .hdr-e3 { background: #15803d; }
 .hdr-e4 { background: #16a34a; }
-
-.str-pejabat {
-  text-align: center;
-  font-size: 5.5pt;
-  font-style: italic;
-  font-weight: bold;
-  padding: 1px 3px;
-  background: rgba(0,0,0,0.12);
-  color: #fff;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.str-kelas-hdr {
-  text-align: center;
-  font-weight: bold;
-  font-size: 5.5pt;
-  background: #e8f5e9;
-  width: 60%;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.str-num-hdr {
-  font-weight: bold;
-  font-size: 5.5pt;
-  background: #e8f5e9;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
+.str-kelas-hdr { text-align: center; font-weight: bold; font-size: 5.5pt; background: #e8f5e9; width: 60%; }
+.str-num-hdr { font-weight: bold; font-size: 5.5pt; background: #e8f5e9; }
 .str-kelas-val { text-align: center; font-size: 6pt; }
-.str-num-val   { text-align: center; font-size: 6pt; }
-
-/* ─── Inline pelaksana/fungsional table inside card ──────────── */
-.pos-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 5pt;
-}
-.pos-tbl th, .pos-tbl td {
-  border: 1px solid #ccc;
-  padding: 1px 2px;
-}
-.pos-tbl th {
-  background: #eeeeee;
-  font-weight: bold;
-  font-size: 5pt;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
+.str-num-val { text-align: center; font-size: 6pt; }
+.pos-tbl { width: 100%; border-collapse: collapse; font-size: 5pt; }
+.pos-tbl th, .pos-tbl td { border: 1px solid #ccc; padding: 1px 2px; }
+.pos-tbl th { background: #eeeeee; font-weight: bold; font-size: 5pt; }
 .tc { text-align: center; }
 .tl { text-align: left; }
-
-/* ─── Card footer — KJF cards only ───────────────────────────── */
-.card-foot {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  font-size: 6pt;
-  padding: 2px 3px;
-  border-top: 1px solid #ccc;
-  background: #f9f9f9;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-
-/* ─── KJF (Kelompok Jabatan Fungsional) card ─────────────────── */
-.kjf-card {
-  border: 1px solid #15803d;
-  width: 170px;
-  background-image: linear-gradient(to right, rgba(21,128,61,0.1) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(21,128,61,0.1) 1px, transparent 1px);
-  background-size: 8px 8px;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.kjf-hdr {
-  background: #dcfce7;
-  color: #14532d;
-  padding: 4px;
-  text-align: center;
-  font-size: 6pt;
-  font-weight: bold;
-  line-height: 1.3;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
+.kjf-card { border: 1px solid #15803d; width: 170px; background-image: linear-gradient(to right, rgba(21,128,61,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(21,128,61,0.1) 1px, transparent 1px); background-size: 8px 8px; }
+.kjf-hdr { background: #dcfce7; color: #14532d; padding: 4px; text-align: center; font-size: 6pt; font-weight: bold; line-height: 1.3; }
 
 /* ─── Pusat/Inspektorat special layout ───────────────────────── */
-/* HEAD [-- SUBBAG TU]  /  T-bar  /  [BIDANG1] (gap) [BIDANG2]  /  [KJF] */
-.pusat-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-/* HEAD card wrapper: width equals HEAD card width so pusat-node centers it correctly */
-.pusat-head-wrap {}
-/* T-junction: 1px-wide vertical segment; branch extends right to Subbag TU */
-.pusat-tjunc {
-  position: relative;
-}
-.pusat-tjunc-line {
-  width: 1px;
-  height: 45px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Branch emerges from the right side of the vertical connector */
-.pusat-tjunc-branch {
-  position: absolute;
-  left: 1px;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-}
-.pusat-h-conn {
-  width: 240px;
-  height: 1px;
-  background: #333;
-  flex-shrink: 0;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.pusat-bidang-row {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  position: relative;
-}
-.pusat-bidang-row::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.pusat-bcol {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0 16px;
-  position: relative;
-}
-.pusat-bcol::before {
-  content: '';
-  display: block;
-  width: 1px;
-  height: 25px;
-  background: #333;
-  flex-shrink: 0;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.pusat-bcol.left-edge::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 0;
-  width: calc(50% - 1px);
-  height: 3px;
-  background: #fff;
-  z-index: 2;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.pusat-bcol.right-edge::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  right: 0;
-  width: calc(50% - 1px);
-  height: 3px;
-  background: #fff;
-  z-index: 2;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-.pusat-vpass {
-  width: 72px;
-  flex-shrink: 0;
-  position: relative;
-  min-height: 16px;
-}
-.pusat-vpass::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  margin-left: -1px;
-  width: 1px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-
-/* ─── Biro/Kantor Provinsi: L-connector from v-line midpoint to KJF ── */
-/* The v-line doubles as the tjunc; biro-l-h and biro-l-v are the L arm (absolute) */
-.biro-vl-tjunc {
-  position: relative;
-  width: 1px;
-  height: 30px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Horizontal part of L: starts at v-line midpoint, goes right (width set inline) */
-.biro-l-h {
-  position: absolute;
-  top: 50%;
-  left: 1px;
-  height: 1px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Vertical part of L: drops from midpoint down to KJF card level (left/height set inline) */
-.biro-l-v {
-  position: absolute;
-  top: 50%;
-  width: 1px;
-  background: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-/* Row wrapper: children-row + KJF side by side */
-.biro-main-and-kjf {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-}
-/* KJF side: padding-top aligns KJF card with Bagian card tops (child-col drops 16px) */
-.biro-kjf-side {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 16px;
-  padding-left: 20px;
-}
+.pusat-node { display: flex; flex-direction: column; align-items: center; }
+.pusat-tjunc { position: relative; }
+.pusat-tjunc-line { width: 1px; height: 45px; background: #333; }
+.pusat-tjunc-branch { position: absolute; left: 1px; top: 0; bottom: 0; display: flex; flex-direction: row; align-items: center; }
+.pusat-h-conn { width: 240px; height: 1px; background: #333; flex-shrink: 0; }
+.pusat-bidang-row { display: flex; flex-direction: row; align-items: stretch; position: relative; }
+.pusat-bidang-row::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: #333; }
+.pusat-bcol { display: flex; flex-direction: column; align-items: center; padding: 0 16px; position: relative; }
+.pusat-bcol::before { content: ''; display: block; width: 1px; height: 25px; background: #333; flex-shrink: 0; }
+.pusat-bcol.left-edge::after { content: ''; position: absolute; top: -1px; left: 0; width: calc(50% - 1px); height: 3px; background: #fff; z-index: 2; }
+.pusat-bcol.right-edge::after { content: ''; position: absolute; top: -1px; right: 0; width: calc(50% - 1px); height: 3px; background: #fff; z-index: 2; }
+.pusat-vpass { width: 72px; flex-shrink: 0; position: relative; min-height: 16px; }
+.pusat-vpass::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; margin-left: -1px; width: 1px; background: #333; }
+.biro-vl-tjunc { position: relative; width: 1px; height: 30px; background: #333; }
+.biro-l-h { position: absolute; top: 50%; left: 1px; height: 1px; background: #333; }
+.biro-l-v { position: absolute; top: 50%; width: 1px; background: #333; }
+.biro-main-and-kjf { display: flex; flex-direction: row; align-items: flex-start; }
+.biro-kjf-side { display: flex; flex-direction: column; align-items: center; padding-top: 16px; padding-left: 20px; }
 `;
 
-// ── Main export ───────────────────────────────────────────────────────────────
 export function printPetaJabatan(
   rows: PrintAPIRow[],
   flags: PrintSyntheticFlags,
   unitName: string | null,
-  orgName: string
+  orgName: string,
+  displayMode: "ST" | "SK"
 ): void {
-  const trees = buildPrintTree(rows, flags);
-  const treeHtml = trees.map(renderNode).join('');
-  const summaryHtml = buildSummary(rows);
-
-  // Estimate summary height: each row ≈ 11px (6.5pt + padding + border);
-  // +2 for header & total rows; +10 for bottom margin.
-  const nonZeroJenisCount = (() => {
-    const totals: Record<number, number> = {};
-    for (const r of rows) {
-      const rank = rankJenis(r.jenis_jabatan);
-      if (rank >= 2 && rank <= 6)
-        totals[rank] = (totals[rank] ?? 0) + (r.bezetting ?? 0) + (r.kebutuhan_pegawai ?? 0);
-    }
-    return Object.values(totals).filter(v => v > 0).length;
-  })();
-  const summaryMinHeight = (nonZeroJenisCount + 2) * 11 + 10;
+  const tree = buildPrintTree(rows, flags);
+  const treeHtml = tree.map(n => renderNode(n, displayMode)).join('');
+  const summaryHtml = buildSummary(rows, displayMode);
 
   let rawName = (unitName || orgName).toUpperCase();
   let titleHtml = `ANALISIS BEBAN KERJA (ABK) — ${esc(rawName)}`;
@@ -1024,8 +559,6 @@ export function printPetaJabatan(
     const prov = kdMatch[1].trim();
     titleHtml = `ANALISIS BEBAN KERJA (ABK) — KANTOR DPD RI<br/>DI IBU KOTA PROVINSI ${esc(prov)}`;
   }
-
-  // Used as the PDF filename: browsers use document.title when saving print-to-PDF
   const fileTitle = `ANALISIS BEBAN KERJA (ABK) - ${rawName}`;
 
   const html = `<!DOCTYPE html>

@@ -197,7 +197,7 @@ export default function AnjabListPage() {
 
 
 
-    const handleBulkDownload = async (scope: string = "all", label: string = "Semua Anjab", format: "pdf" | "word" = "pdf") => {
+    const handleBulkDownload = async (scope: string = "all", label: string = "Semua Anjab", format: "pdf" | "word" = "pdf", noPage: boolean = false) => {
         try {
             const baseUrl = format === "word" ? "/api/anjab/download-bulk-docx" : "/api/anjab/download-bulk";
             const docTypeStr = format === "word" ? "Word" : "PDF";
@@ -223,7 +223,7 @@ export default function AnjabListPage() {
                 didOpen: () => { Swal.showLoading(); },
             });
 
-            const response = await apiFetch(`${baseUrl}?stream=1&scope=${encodeURIComponent(scope)}`, {
+            const response = await apiFetch(`${baseUrl}?stream=1&scope=${encodeURIComponent(scope)}${noPage ? '&no_page=1' : ''}`, {
                 method: "GET",
                 cache: "no-store",
             });
@@ -308,6 +308,7 @@ export default function AnjabListPage() {
 
     const handleDownloadAll = () => handleBulkDownload("all", "Semua Anjab", "pdf");
     const handleDownloadGrouped = () => handleBulkDownload("groups", "Gabungan Kelompok (ZIP - PDF)", "pdf");
+    const handleDownloadGroupedNoPage = () => handleBulkDownload("groups", "Per Kelompok Tanpa Halaman (ZIP - PDF)", "pdf", true);
     const handleDownloadWordGrouped = () => handleBulkDownload("groups", "Gabungan Kelompok (ZIP - Word)", "word");
 
     const handleViewJabatan = (id: string) => {
@@ -475,6 +476,22 @@ export default function AnjabListPage() {
                                                 <div className="text-left">
                                                     <div className="font-semibold text-gray-900 dark:text-white">Per Kelompok (ZIP - PDF)</div>
                                                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Halaman bersambung, file dipisah</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                        <div className="py-1">
+                                            <button
+                                                onClick={() => { setShowDownloadMenu(false); handleDownloadGroupedNoPage(); }}
+                                                className="group flex w-full items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                            >
+                                                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg group-hover:bg-orange-100 dark:group-hover:bg-orange-900/40">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="font-semibold text-gray-900 dark:text-white">Per Kelompok Tanpa Halaman (ZIP - PDF)</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Sama dengan Per Kelompok, tapi tanpa nomor halaman</div>
                                                 </div>
                                             </button>
                                         </div>

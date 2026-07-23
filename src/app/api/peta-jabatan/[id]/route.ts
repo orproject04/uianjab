@@ -86,49 +86,39 @@ export async function PATCH(
             );
         }
 
-        // ✅ NEW: pejabat (array of objects with {name, nip, role} | skip)
-        const hasPejabat = Object.prototype.hasOwnProperty.call(body, "pejabat");
-        let pejabat: any[] | undefined = undefined;
+        // ✅ NEW: pejabat_st and pejabat_sk
+        const hasPejabatSt = Object.prototype.hasOwnProperty.call(body, "pejabat_st");
+        const hasPejabatSk = Object.prototype.hasOwnProperty.call(body, "pejabat_sk");
+        
+        let pejabat_st: any[] | undefined = undefined;
+        let pejabat_sk: any[] | undefined = undefined;
         let bezetting: number | undefined = undefined;
         
-        if (hasPejabat) {
-            if (Array.isArray(body.pejabat)) {
-                // Support both old format (string[]) and new format ({name, nip, role}[])
-                pejabat = body.pejabat
-                    .filter((n: any) => {
-                        if (typeof n === "string") return n.trim().length > 0;
-                        if (typeof n === "object" && n !== null) return n.name && n.name.trim().length > 0;
-                        return false;
-                    })
-                    .map((n: any) => {
-                        if (typeof n === "string") {
-                            // Convert old format to new format
-                            return {
-                                name: n.trim(),
-                                nip: "",
-                                role: "PNS"
-                            };
-                        }
-                        // Already in new format
-                        return {
-                            name: String(n.name || "").trim(),
-                            nip: String(n.nip || "").trim(),
-                            role: String(n.role || "PNS").trim()
-                        };
-                    });
-                
-                // Auto-update bezetting berdasarkan jumlah nama
-                bezetting = pejabat.length;
-            } else if (body.pejabat === null) {
-                pejabat = [];
-                bezetting = 0;
-            } else {
-                return NextResponse.json(
-                    {error: "pejabat harus array atau null"},
-                    {status: 400}
-                );
+        const processPejabatArray = (arr: any) => {
+            if (Array.isArray(arr)) {
+                return arr.filter((n: any) => {
+                    if (typeof n === "string") return n.trim().length > 0;
+                    if (typeof n === "object" && n !== null) return n.name && n.name.trim().length > 0;
+                    return false;
+                }).map((n: any) => {
+                    if (typeof n === "string") return { name: n.trim(), nip: "", role: "PNS" };
+                    return { name: String(n.name || "").trim(), nip: String(n.nip || "").trim(), role: String(n.role || "PNS").trim() };
+                });
+            } else if (arr === null) {
+                return [];
             }
+            return undefined;
+        };
+
+        if (hasPejabatSt) pejabat_st = processPejabatArray(body.pejabat_st);
+        if (hasPejabatSk) pejabat_sk = processPejabatArray(body.pejabat_sk);
+        
+        // Backward compatibility for old "pejabat" body
+        const hasPejabat = Object.prototype.hasOwnProperty.call(body, "pejabat");
+        if (hasPejabat && !hasPejabatSt) {
+            pejabat_st = processPejabatArray(body.pejabat);
         }
+        
 
         await client.query("BEGIN");
 
@@ -281,10 +271,11 @@ export async function PATCH(
         setIf("jenis_jabatan", jenis_jabatan);
         
         // pejabat (admin and admin-akk)
-        if (hasPejabat) {
-            // Convert to JSON string for jsonb column
-            setIf("pejabat", pejabat ? JSON.stringify(pejabat) : '[]', false);
-            setIf("bezetting", bezetting, false);
+        if (pejabat_st !== undefined) {
+            setIf("pejabat_st", JSON.stringify(pejabat_st), false);
+        }
+        if (pejabat_sk !== undefined) {
+            setIf("pejabat_sk", JSON.stringify(pejabat_sk), false);
         }
 
         // Always update audit trail

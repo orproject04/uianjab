@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
         const jenisJabatanFilter = searchParams.get("jenis_jabatan");
         const lokasiFilter = searchParams.get("lokasi");
         const kelasJabatanFilter = searchParams.get("kelas_jabatan"); // Get kelas_jabatan filter
+        const modeParam = searchParams.get("mode") || "ST";
+        const pejabatColumn = modeParam === "SK" ? "pejabat_sk" : "pejabat_st";
 
         // Build WHERE clause against peta_jabatan (no deleted_at column)
         const whereConditions: string[] = [];
@@ -112,9 +114,9 @@ export async function GET(req: NextRequest) {
                         ELSE lower(trim(coalesce(nama_jabatan, '')))
                     END
                 , '')) as total_jabatan,
-                COALESCE(SUM(bezetting), 0) as total_bezetting,
+                COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb))), 0) as total_bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as total_kebutuhan,
-                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as total_selisih
+                COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) - kebutuhan_pegawai), 0) as total_selisih
             FROM peta_jabatan
             ${whereClause}
         `;
@@ -129,7 +131,7 @@ export async function GET(req: NextRequest) {
                 pegawai->>'role' as role,
                 COUNT(*) as count
             FROM peta_jabatan,
-                jsonb_array_elements(COALESCE(pejabat, '[]'::jsonb)) as pegawai
+                jsonb_array_elements(COALESCE(${pejabatColumn}, '[]'::jsonb)) as pegawai
             ${whereClause}
             GROUP BY pegawai->>'role'
         `;
@@ -167,9 +169,9 @@ export async function GET(req: NextRequest) {
                         ELSE lower(trim(coalesce(nama_jabatan, '')))
                     END
                 , '')) as jumlah_jabatan,
-                COALESCE(SUM(bezetting), 0) as bezetting,
+                COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb))), 0) as bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
+                COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
             ${whereClause}
             GROUP BY jenis_jabatan
@@ -188,9 +190,9 @@ export async function GET(req: NextRequest) {
                     ELSE 'Daerah'
                 END as lokasi,
                 COUNT(*) as jumlah_jabatan,
-                COALESCE(SUM(bezetting), 0) as bezetting,
+                COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb))), 0) as bezetting,
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(bezetting - kebutuhan_pegawai), 0) as selisih
+                COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
             ${whereClause}
             GROUP BY is_pusat
@@ -243,9 +245,9 @@ export async function GET(req: NextRequest) {
             SELECT
                 es.root_unit as unit_kerja,
                 COUNT(p.id) as jumlah_jabatan,
-                COALESCE(SUM(p.bezetting), 0) as bezetting,
+                COALESCE(SUM(jsonb_array_length(COALESCE(p.${pejabatColumn}, '[]'::jsonb))), 0) as bezetting,
                 COALESCE(SUM(p.kebutuhan_pegawai), 0) as kebutuhan,
-                COALESCE(SUM(p.bezetting - p.kebutuhan_pegawai), 0) as selisih
+                COALESCE(SUM(jsonb_array_length(COALESCE(p.${pejabatColumn}, '[]'::jsonb)) - p.kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan p
             LEFT JOIN eselon_selected es ON p.id = es.orig
             ${byBiroWhereClause}
@@ -294,9 +296,9 @@ export async function GET(req: NextRequest) {
                     unit_kerja,
                     jenis_jabatan,
                     jabatan_id,
-                    bezetting,
+                    jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) as bezetting,
                     kebutuhan_pegawai,
-                    pejabat,
+                    ${pejabatColumn} as pejabat,
                     is_pusat,
                     order_index,
                     ARRAY[
@@ -314,9 +316,9 @@ export async function GET(req: NextRequest) {
                     c.unit_kerja,
                     c.jenis_jabatan,
                     c.jabatan_id,
-                    c.bezetting,
+                    jsonb_array_length(COALESCE(c.${pejabatColumn}, '[]'::jsonb)) as bezetting,
                     c.kebutuhan_pegawai,
-                    c.pejabat,
+                    c.${pejabatColumn} as pejabat,
                     c.is_pusat,
                     c.order_index,
                     t.sort_path || (
@@ -404,10 +406,11 @@ export async function GET(req: NextRequest) {
                 saran_perbaikan,
                 synced_at
             FROM data_error
+            WHERE tipe_sync = $1
             ORDER BY synced_at DESC, id DESC
             LIMIT 5000
         `;
-        const dataErrorResult = await runQuery('dataErrorQuery', dataErrorQuery);
+        const dataErrorResult = await runQuery('dataErrorQuery', dataErrorQuery, [modeParam]);
         const dataError = dataErrorResult.rows;
 
         return NextResponse.json({

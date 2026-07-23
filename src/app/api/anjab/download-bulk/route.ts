@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
         const scope = url.searchParams.get("scope") || "all";
         const groupId = url.searchParams.get("group_id");
         const fileParam = url.searchParams.get("file");
+        const noPage = url.searchParams.get("no_page") === "1";
 
         // If `file` param is provided, serve an existing archive from tmp
         if (fileParam) {
@@ -326,18 +327,19 @@ export async function GET(req: NextRequest) {
                                         const pages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
 
                                         for (const pdfPage of pages) {
-                                            const { width } = pdfPage.getSize();
-                                            const text = `${pageCounter.current}`;
-                                            const fontSize = 11;
-                                            const textWidth = font.widthOfTextAtSize(text, fontSize);
-
-                                            pdfPage.drawText(text, {
-                                                x: width / 2 - textWidth / 2,
-                                                y: 15,
-                                                size: fontSize,
-                                                font: font,
-                                                color: rgb(0, 0, 0),
-                                            });
+                                            if (!noPage) {
+                                                const { width } = pdfPage.getSize();
+                                                const text = `${pageCounter.current}`;
+                                                const fontSize = 11;
+                                                const textWidth = font.widthOfTextAtSize(text, fontSize);
+                                                pdfPage.drawText(text, {
+                                                    x: width / 2 - textWidth / 2,
+                                                    y: 15,
+                                                    size: fontSize,
+                                                    font: font,
+                                                    color: rgb(0, 0, 0),
+                                                });
+                                            }
                                             pageCounter.current++;
                                             mergedPdf.addPage(pdfPage);
                                         }
