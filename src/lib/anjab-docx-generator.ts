@@ -135,6 +135,75 @@ function formatPendidikanDiutamakan(arr: any): any[] {
     return specialItems.map(item => ({ teks: item.trim() }));
 }
 
+function formatHasilKerjaSingle(arr: any): any[] {
+    if (!Array.isArray(arr)) {
+        if (typeof arr === 'string') arr = [arr];
+        else return [];
+    }
+    const valid = arr.filter(Boolean);
+    if (valid.length !== 1) return [];
+
+    let parsed = null;
+    try {
+        parsed = JSON.parse(valid[0]);
+    } catch {
+        parsed = { text: valid[0], children: [] };
+    }
+
+    if (typeof valid[0] === 'object') {
+        parsed = valid[0];
+    }
+
+    if (parsed) {
+        const sub = (parsed.children || []).map((child: any) => {
+            const childText = typeof child === 'string' ? child : (child.text || "");
+            return { teks_sub: `■\t${childText}` };
+        });
+        return [{ teks_utama: parsed.text || "-", sub }];
+    }
+    return [];
+}
+
+function formatHasilKerjaMulti(arr: any): any[] {
+    if (!Array.isArray(arr)) {
+        if (typeof arr === 'string') arr = [arr];
+        else return [];
+    }
+
+    const valid = arr.filter(Boolean);
+    if (valid.length <= 1) return [];
+
+    const result = [];
+    
+    for (let i = 0; i < valid.length; i++) {
+        let item = valid[i];
+        let parsed = null;
+
+        if (typeof item === 'string') {
+            try {
+                parsed = JSON.parse(item);
+            } catch {
+                parsed = { text: item, children: [] };
+            }
+        } else if (typeof item === 'object') {
+            parsed = item;
+        }
+
+        if (parsed) {
+            const letter = String.fromCharCode(97 + i); // a, b, c...
+            const teks_utama = `${letter}.\t${parsed.text || "-"}`;
+            
+            const sub = (parsed.children || []).map((child: any) => {
+                const childText = typeof child === 'string' ? child : (child.text || "");
+                return { teks_sub: `■\t${childText}` };
+            });
+            
+            result.push({ teks_utama, sub });
+        }
+    }
+    return result;
+}
+
 function formatKondisiFisik(sj: any): string {
     if (!sj) return "-";
     const parts = [
@@ -167,6 +236,14 @@ export function generateAnjabDocx(data: any): Buffer {
         ? data.tugas_pokok_abk 
         : (data.tugas_pokok || []);
 
+    let total_kebutuhan_pegawai = 0;
+
+    tugasPokokSrc.forEach((tp: any) => {
+        total_kebutuhan_pegawai += parseFloat(tp.kebutuhan_pegawai) || 0;
+    });
+
+    const formatNum = (n: number) => n === 0 ? "-" : n.toLocaleString('id-ID', { maximumFractionDigits: 4 });
+
     const renderData = {
         kode_jabatan: data.kode_jabatan || "-",
         nama_jabatan: data.nama_jabatan || "-",
@@ -195,10 +272,21 @@ export function generateAnjabDocx(data: any): Buffer {
         }],
 
         tugas_pokok: tugasPokokSrc.map((tp: any, i: number) => ({
-            no: i + 1,
+            no: `${i + 1}.`,
             uraian: tp.uraian_tugas || "-",
-            hasil: formatArray(tp.hasil_kerja),
-            waktu: tp.waktu_penyelesaian_jam || "-"
+            tahapan_header: (tp.detail_uraian_tugas && tp.detail_uraian_tugas.length > 0) ? [{ teks: "Tahapan :" }] : [],
+            tahapan_list: (tp.detail_uraian_tugas || []).map((tut: any, j: number) => ({
+                teks_tahapan: `${tut.nomor_tahapan || (j + 1)}.\t${tut.tahapan || "-"}`,
+                detail_list: (tut.detail_tahapan || []).map((det: string, k: number) => ({ 
+                    teks_detail: `${String.fromCharCode(97 + k)})\t${det}` 
+                }))
+            })),
+            hasil_single: formatHasilKerjaSingle(tp.hasil_kerja),
+            hasil: formatHasilKerjaMulti(tp.hasil_kerja),
+            jumlah_hasil: tp.jumlah_hasil ?? "-",
+            waktu: tp.waktu_penyelesaian_jam ?? "-",
+            waktu_efektif: tp.waktu_efektif ?? "-",
+            kebutuhan_pegawai: tp.kebutuhan_pegawai ?? "-"
         })),
 
         bahan_kerja: (data.bahan_kerja || []).map((b: any, i: number) => ({
@@ -250,7 +338,11 @@ export function generateAnjabDocx(data: any): Buffer {
             upaya_fisik: formatArray(data.syarat_jabatan.upaya_fisik),
             kondisi_fisik: formatKondisiFisik(data.syarat_jabatan),
             fungsi_pekerja: formatArray(data.syarat_jabatan.fungsi_pekerja)
-        }] : []
+        }] : [],
+
+        // Sums for Tugas Pokok
+        sum_kebutuhan_pegawai: formatNum(total_kebutuhan_pegawai),
+        bulat_kebutuhan_pegawai: Math.round(total_kebutuhan_pegawai),
     };
 
     doc.render(renderData);
