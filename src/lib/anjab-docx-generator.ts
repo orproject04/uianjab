@@ -35,6 +35,43 @@ function formatArrayMulti(arr: any): any[] {
             return valid.map((item, idx) => ({ teks: `${idx + 1}.\t${typeof item === 'string' ? item.trim() : item}` }));
         }
     }
+}
+
+function formatArrayLetterMulti(arr: any): any[] {
+    if (!arr || typeof arr === 'string') return [];
+    if (Array.isArray(arr)) {
+        const valid = arr.filter(Boolean);
+        if (valid.length > 1) {
+            return valid.map((item, idx) => {
+                const letter = String.fromCharCode(97 + idx);
+                return { teks: `${letter}.\t${typeof item === 'string' ? item.trim() : item}` };
+            });
+        }
+    }
+    return [];
+}
+
+function indexToAlpha(idx: number): string {
+    let result = '';
+    let curr = idx;
+    while (curr >= 0) {
+        result = String.fromCharCode(97 + (curr % 26)) + result;
+        curr = Math.floor(curr / 26) - 1;
+    }
+    return result;
+}
+
+function formatArrayAlphaParenthesisMulti(arr: any): any[] {
+    if (!arr || typeof arr === 'string') return [];
+    if (Array.isArray(arr)) {
+        const valid = arr.filter(Boolean);
+        if (valid.length > 1) {
+            return valid.map((item, idx) => {
+                const letter = indexToAlpha(idx);
+                return { teks: `${letter})\t${typeof item === 'string' ? item.trim() : item}` };
+            });
+        }
+    }
     return [];
 }
 
@@ -244,6 +281,23 @@ export function generateAnjabDocx(data: any): Buffer {
 
     const formatNum = (n: number) => n === 0 ? "-" : n.toLocaleString('id-ID', { maximumFractionDigits: 4 });
 
+    const hasilKerjaSrc = data.hasil_kerja || [];
+    const has_satuan_hasil_kerja = hasilKerjaSrc.some((h: any) => 
+        h.satuan_hasil && Array.isArray(h.satuan_hasil) && h.satuan_hasil.some((s: string) => s && s.trim() !== '')
+    );
+
+    const bahanKerjaSrc = data.bahan_kerja || [];
+    const has_penggunaan_bahan = bahanKerjaSrc.some((b: any) => {
+        const p = b.penggunaan_dalam_tugas || b.penggunaan_untuk_tugas;
+        return p && Array.isArray(p) && p.some((x: string) => x && x.trim() !== '');
+    });
+
+    const perangkatKerjaSrc = data.perangkat_kerja || [];
+    const has_penggunaan_perangkat = perangkatKerjaSrc.some((p: any) => {
+        const u = p.penggunaan_untuk_tugas;
+        return u && Array.isArray(u) && u.some((x: string) => x && x.trim() !== '');
+    });
+
     const renderData = {
         kode_jabatan: data.kode_jabatan || "-",
         nama_jabatan: data.nama_jabatan || "-",
@@ -289,16 +343,34 @@ export function generateAnjabDocx(data: any): Buffer {
             kebutuhan_pegawai: tp.kebutuhan_pegawai ?? "-"
         })),
 
-        bahan_kerja: (data.bahan_kerja || []).map((b: any, i: number) => ({
+        has_satuan_hasil_kerja,
+        hasil_kerja: hasilKerjaSrc.map((h: any, i: number) => ({
             no: i + 1,
-            bahan: formatArray(b.bahan_kerja),
-            penggunaan: formatArray(b.penggunaan_dalam_tugas || b.penggunaan_untuk_tugas)
+            hasil_single: formatHasilKerjaSingle(h.hasil_kerja),
+            hasil: formatHasilKerjaMulti(h.hasil_kerja),
+            satuan_single: formatArraySingle(h.satuan_hasil),
+            satuan: formatArrayLetterMulti(h.satuan_hasil)
         })),
 
-        perangkat_kerja: (data.perangkat_kerja || []).map((p: any, i: number) => ({
+        has_penggunaan_bahan,
+        bahan_kerja: bahanKerjaSrc.map((b: any, i: number) => {
+            const penggunaan = b.penggunaan_dalam_tugas || b.penggunaan_untuk_tugas;
+            return {
+                no: i + 1,
+                bahan_single: formatArraySingle(b.bahan_kerja),
+                bahan: formatArrayAlphaParenthesisMulti(b.bahan_kerja),
+                penggunaan_single: formatArraySingle(penggunaan),
+                penggunaan: formatArrayAlphaParenthesisMulti(penggunaan)
+            };
+        }),
+
+        has_penggunaan_perangkat,
+        perangkat_kerja: perangkatKerjaSrc.map((p: any, i: number) => ({
             no: i + 1,
-            perangkat: formatArray(p.perangkat_kerja),
-            penggunaan: formatArray(p.penggunaan_untuk_tugas)
+            perangkat_single: formatArraySingle(p.perangkat_kerja),
+            perangkat: formatArrayAlphaParenthesisMulti(p.perangkat_kerja),
+            penggunaan_single: formatArraySingle(p.penggunaan_untuk_tugas),
+            penggunaan: formatArrayAlphaParenthesisMulti(p.penggunaan_untuk_tugas)
         })),
 
         tanggung_jawab: (data.tanggung_jawab || []).map((t: any, i: number) => ({
