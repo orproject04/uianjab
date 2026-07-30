@@ -1,23 +1,35 @@
 // app/api/anjab/[id]/pdf/route.ts
 import {NextRequest, NextResponse} from "next/server";
 import {getAnjabByIdOrSlug} from "@/lib/anjab-queries";
-import {buildAnjabHtml} from "@/lib/anjab-pdf-template";
-import {getUserFromReq} from "@/lib/auth";
-import puppeteer, {Browser} from "puppeteer";
+import { generateAnjabDocx } from "@/lib/anjab-docx-generator";
+import { getUserFromReq } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
+import util from "util";
+import { exec } from "child_process";
 
-// Singleton browser (hemat waktu launch)
-let browserPromise: Promise<Browser> | null = null;
+const execAsync = util.promisify(exec);
 
-async function getBrowser(): Promise<Browser> {
-    if (!browserPromise) {
-        browserPromise = puppeteer.launch({
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
+// Global Mutex untuk mencegah konversi LibreOffice berjalan paralel
+// LibreOffice di Windows akan crash (Exit 1) jika dipanggil bersamaan
+let isConverting = false;
+const conversionQueue: (() => void)[] = [];
+
+async function acquireLock(): Promise<void> {
+    if (!isConverting) {
+        isConverting = true;
+        return;
     }
-    return browserPromise;
+    return new Promise(resolve => conversionQueue.push(resolve));
+}
+
+function releaseLock() {
+    if (conversionQueue.length > 0) {
+        const next = conversionQueue.shift();
+        if (next) next();
+    } else {
+        isConverting = false;
+    }
 }
 
 // Folder cache
@@ -86,39 +98,51 @@ export async function GET(
             // cache miss → lanjut generate
         }
 
-        // generate html → pdf
-        const html = buildAnjabHtml(data);
-        const browser = await getBrowser();
-        const page = await browser.newPage();
-
-        await page.setRequestInterception(true);
-        page.on("request", (r) => {
-            // boleh blok image saja kalau mau lebih cepat
-            if (r.resourceType() === "image") r.abort();
-            else r.continue();
-        });
-
-        await page.setContent(html, {waitUntil: "load"});
-        const pdfBuffer = await page.pdf({ 
-            format: "A4", 
-            printBackground: true,
-            displayHeaderFooter: true,
-            headerTemplate: "<span></span>",
-            footerTemplate: `
-                <div style="font-size: 11pt; font-family: Tahoma, Arial, sans-serif; width: 100%; text-align: center; padding-top: 40px;">
-                    <span class="pageNumber"></span>
-                </div>
-            `,
-            margin: {
-                top: "2cm",
-                bottom: "3.5cm",
-                left: "2.5cm",
-                right: "2.3cm"
-            }
-        });
-        await page.close();
-
-        // simpan ke cache
+        // generate docx → pdf
+        const docxBuffer = generateAnjabDocx(data);
+        
+        // Custom LibreOffice conversion (lebih stabil dari libreoffice-convert di Windows)
+        const timestamp = Date.now();
+        const tempDocxName = `temp-${data.id}-${timestamp}.docx`;
+        const tempPdfName = `temp-${data.id}-${timestamp}.pdf`;
+        const tempDocxPath = path.join(CACHE_DIR, tempDocxName);
+        const tempPdfPath = path.join(CACHE_DIR, tempPdfName);
+        
+        await fs.writeFile(tempDocxPath, docxBuffer);
+        
+        try {
+            // Gunakan Mutex Lock agar proses konversi berjalan antre (1 per 1)
+            await acquireLock();
+            
+            // Jalankan soffice (LibreOffice CLI) 
+            // Jangan gunakan -env:UserInstallation di Windows karena menyebabkan crash STATUS_STACK_BUFFER_OVERRUN
+            await execAsync(`soffice --headless --convert-to pdf "${tempDocxPath}" --outdir "${CACHE_DIR}"`);
+            
+        } catch (execErr) {
+            console.error("LibreOffice conversion failed:", execErr);
+            // Cleanup on error
+            await fs.unlink(tempDocxPath).catch(() => {});
+            releaseLock();
+            return NextResponse.json({error: "Gagal mengonversi dokumen ke PDF. Pastikan LibreOffice terinstal di server."}, {status: 500});
+        }
+        
+        releaseLock();
+        
+        // Baca file hasil konversi
+        let pdfBuffer: Buffer;
+        try {
+            pdfBuffer = await fs.readFile(tempPdfPath);
+        } catch (readErr) {
+            console.error("Failed to read generated PDF:", readErr);
+            await fs.unlink(tempDocxPath).catch(() => {});
+            return NextResponse.json({error: "Gagal membaca hasil PDF"}, {status: 500});
+        }
+        
+        // Cleanup temp files
+        await fs.unlink(tempDocxPath).catch(() => {});
+        await fs.unlink(tempPdfPath).catch(() => {});
+        
+        // simpan ke cache aslinya
         await fs.writeFile(cachePath, pdfBuffer);
 
         return new Response(pdfBuffer, {
