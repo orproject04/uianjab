@@ -27,6 +27,17 @@ function formatArraySingle(arr: any, emptyValue: string = ""): any[] {
     return emptyValue ? [{ teks: emptyValue }] : [];
 }
 
+function formatArrayRaw(arr: any, emptyValue: string = ""): any[] {
+    if (!arr) return emptyValue ? [{ teks: emptyValue }] : [];
+    if (typeof arr === 'string') return [{ teks: arr.trim() }];
+    if (Array.isArray(arr)) {
+        const valid = arr.filter(Boolean);
+        if (valid.length === 0) return emptyValue ? [{ teks: emptyValue }] : [];
+        return valid.map((item) => ({ teks: typeof item === 'string' ? item.trim() : item }));
+    }
+    return emptyValue ? [{ teks: emptyValue }] : [];
+}
+
 function formatArrayBlackCircle(arr: any): any[] {
     if (!arr) return [];
     if (typeof arr === 'string') return [{ teks: `●\t${arr.trim()}` }];
@@ -320,6 +331,8 @@ export function generateAnjabDocx(data: any): Buffer {
         pelaksana: data.pelaksana || "-",
         jabatan_fungsional: data.jabatan_fungsional || "-",
         ikhtisar_jabatan: data.ikhtisar_jabatan || "-",
+        kelas_jabatan: data.kelas_jabatan || "-",
+        prestasi_diharapkan: data.prestasi_diharapkan || "-",
         
         kualifikasi: [{
             pendidikan_single: formatPendidikanSingle(data.pendidikan_formal),
@@ -413,13 +426,19 @@ export function generateAnjabDocx(data: any): Buffer {
         })),
 
         syarat_jabatan: data.syarat_jabatan ? [{
-            keterampilan: formatArray(data.syarat_jabatan.keterampilan_kerja),
-            bakat: formatArray(data.syarat_jabatan.bakat_kerja),
-            temperamen: formatArray(data.syarat_jabatan.temperamen_kerja),
-            minat: formatArray(data.syarat_jabatan.minat_kerja),
-            upaya_fisik: formatArray(data.syarat_jabatan.upaya_fisik),
-            kondisi_fisik: formatKondisiFisik(data.syarat_jabatan),
-            fungsi_pekerja: formatArray(data.syarat_jabatan.fungsi_pekerja)
+            keterampilan: formatArrayRaw(data.syarat_jabatan.keterampilan_kerja),
+            bakat: formatArrayRaw(data.syarat_jabatan.bakat_kerja),
+            temperamen: formatArrayRaw(data.syarat_jabatan.temperamen_kerja),
+            minat: formatArrayRaw(data.syarat_jabatan.minat_kerja),
+            upaya_fisik: formatArrayRaw(data.syarat_jabatan.upaya_fisik),
+            kondisi_fisik_jenkel: data.syarat_jabatan.kondisi_fisik_jenkel || "-",
+            kondisi_fisik_umur: data.syarat_jabatan.kondisi_fisik_umur || "-",
+            kondisi_fisik_tb: data.syarat_jabatan.kondisi_fisik_tb || "-",
+            kondisi_fisik_bb: data.syarat_jabatan.kondisi_fisik_bb || "-",
+            kondisi_fisik_pb: data.syarat_jabatan.kondisi_fisik_pb || "-",
+            kondisi_fisik_tampilan: data.syarat_jabatan.kondisi_fisik_tampilan || "-",
+            kondisi_fisik_keadaan: data.syarat_jabatan.kondisi_fisik_keadaan || "-",
+            fungsi_pekerja: formatArrayRaw(data.syarat_jabatan.fungsi_pekerja)
         }] : [],
 
         // Sums for Tugas Pokok
