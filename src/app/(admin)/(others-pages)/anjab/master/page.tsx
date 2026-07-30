@@ -440,8 +440,8 @@ export default function AnjabListPage() {
 
                             {showDownloadMenu && (
                                 <>
-                                    <div 
-                                        className="fixed inset-0 z-10" 
+                                    <div
+                                        className="fixed inset-0 z-10"
                                         onClick={() => setShowDownloadMenu(false)}
                                     ></div>
                                     <div className="origin-top-right absolute right-0 mt-2 w-72 rounded-xl shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 dark:divide-gray-700 z-20">
@@ -457,7 +457,7 @@ export default function AnjabListPage() {
                                                 </div>
                                                 <div className="text-left">
                                                     <div className="font-semibold text-gray-900 dark:text-white">Per Biro (Word)</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Format Word dipisah per kelompok</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Format Word dipisah per biro</div>
                                                 </div>
                                             </button>
                                             <button
@@ -471,7 +471,7 @@ export default function AnjabListPage() {
                                                 </div>
                                                 <div className="text-left">
                                                     <div className="font-semibold text-gray-900 dark:text-white">Per Biro (PDF)</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Format PDF dipisah per kelompok</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Format PDF dipisah per biro</div>
                                                 </div>
                                             </button>
                                         </div>
