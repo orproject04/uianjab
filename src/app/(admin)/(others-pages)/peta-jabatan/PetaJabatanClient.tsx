@@ -864,11 +864,6 @@ export default function PetaJabatanClient() {
           }
         });
 
-        // Also check the OTHER pejabat list (cross-mode search)
-        // Fixes: when ST is selected but pejabat_st is empty, still find by pejabat_sk name
-        const altPejabat = displayMode === "SK" ? (row.pejabat_st || []) : (row.pejabat_sk || []);
-        const altNameMatch = altPejabat.some(p => (p.name || "").toLowerCase().includes(lcFilter));
-
         if (nameMatch || slugMatch || unitMatch) {
           // Jabatan name matched - highlight whole card
           matches.push({
@@ -881,13 +876,6 @@ export default function PetaJabatanClient() {
           matches.push({
             nodeId: row.id,
             matchedNameIndices,
-            matchType: 'pejabat'
-          });
-        } else if (altNameMatch) {
-          // Name found in the alternate pejabat list - highlight card (no specific index)
-          matches.push({
-            nodeId: row.id,
-            matchedNameIndices: [],
             matchType: 'pejabat'
           });
         }
