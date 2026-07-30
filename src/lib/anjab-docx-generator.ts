@@ -27,6 +27,16 @@ function formatArraySingle(arr: any, emptyValue: string = ""): any[] {
     return emptyValue ? [{ teks: emptyValue }] : [];
 }
 
+function formatArrayBlackCircle(arr: any): any[] {
+    if (!arr) return [];
+    if (typeof arr === 'string') return [{ teks: `●\t${arr.trim()}` }];
+    if (Array.isArray(arr)) {
+        const valid = arr.filter(Boolean);
+        return valid.map(item => ({ teks: `●\t${typeof item === 'string' ? item.trim() : item}` }));
+    }
+    return [];
+}
+
 function formatArrayMulti(arr: any): any[] {
     if (!arr || typeof arr === 'string') return [];
     if (Array.isArray(arr)) {
@@ -387,7 +397,7 @@ export function generateAnjabDocx(data: any): Buffer {
             no: i + 1,
             nama_jabatan: formatArray(k.jabatan_terkait),
             unit_kerja: formatArray(k.unit_kerja_instansi),
-            dalam_hal: formatArray(k.dalam_hal)
+            dalam_hal: formatArrayBlackCircle(k.dalam_hal)
         })),
 
         kondisi: (data.kondisi_lingkungan_kerja || []).map((k: any, i: number) => ({
