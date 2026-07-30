@@ -276,29 +276,20 @@ function formatKondisiFisik(sj: any): string {
     return parts.length > 0 ? parts.join('\n') : "-";
 }
 
-export function generateAnjabDocx(data: any): Buffer {
-    const templatePath = path.resolve(process.cwd(), "public", "templates", "anjab.docx");
-    
-    if (!fs.existsSync(templatePath)) {
-        throw new Error(`Template Word tidak ditemukan di: ${templatePath}`);
-    }
-
-    const content = fs.readFileSync(templatePath);
-    const zip = new PizZip(content);
-    const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-    });
-
+export function buildAnjabDocxData(data: any): any {
     const tugasPokokSrc = data.tugas_pokok_abk && data.tugas_pokok_abk.length > 0 
         ? data.tugas_pokok_abk 
         : (data.tugas_pokok || []);
 
     let total_kebutuhan_pegawai = 0;
-
-    tugasPokokSrc.forEach((tp: any) => {
-        total_kebutuhan_pegawai += parseFloat(tp.kebutuhan_pegawai) || 0;
-    });
+    
+    if (data.jenis_jabatan === 'JABATAN FUNGSIONAL') {
+        total_kebutuhan_pegawai = data.kebutuhan_pegawai || 0;
+    } else {
+        tugasPokokSrc.forEach((tp: any) => {
+            total_kebutuhan_pegawai += parseFloat(tp.kebutuhan_pegawai) || 0;
+        });
+    }
 
     const formatNum = (n: number) => n === 0 ? "-" : n.toLocaleString('id-ID', { maximumFractionDigits: 4 });
 
@@ -445,7 +436,18 @@ export function generateAnjabDocx(data: any): Buffer {
         sum_kebutuhan_pegawai: formatNum(total_kebutuhan_pegawai),
         bulat_kebutuhan_pegawai: Math.round(total_kebutuhan_pegawai),
     };
+    return renderData;
+}
 
+export function generateAnjabDocx(data: any): Buffer {
+    const renderData = buildAnjabDocxData(data);
+    const content = fs.readFileSync(path.resolve(process.cwd(), "public", "templates", "anjab.docx"), "binary");
+    const zip = new PizZip(content);
+    const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+    });
+    
     doc.render(renderData);
 
     return doc.getZip().generate({

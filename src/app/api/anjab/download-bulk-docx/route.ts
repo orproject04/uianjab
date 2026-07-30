@@ -3,11 +3,14 @@ import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
 import { getAnjabByIdOrSlug } from "@/lib/anjab-queries";
 import { buildAnjabHtml } from "@/lib/anjab-pdf-template";
+import { buildAnjabDocxData } from "@/lib/anjab-docx-generator";
 import { getDownloadGroups } from "@/lib/download-groups";
 import archiver from "archiver";
 import fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import PizZip from "pizzip";
+import Docxtemplater from "docxtemplater";
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -238,136 +241,122 @@ export async function GET(req: NextRequest) {
 
                         const wordMetaEnd = `</div></body></html>`;
 
+                        const archiveFileName = `Seluruh_Anjab_Word_${timestamp}.zip`;
+                        const archivePath = path.join(os.tmpdir(), archiveFileName);
+                        const output = fs.createWriteStream(archivePath);
+                        const archive = archiver('zip', { zlib: { level: 5 } });
+
+                        archive.on('error', (err: any) => { throw err; });
+                        archive.pipe(output);
+
                         if (isGroupMode) {
-                            const archiveFileName = `Seluruh_Anjab_Word_${timestamp}.zip`;
-                            const archivePath = path.join(os.tmpdir(), archiveFileName);
-                            const output = fs.createWriteStream(archivePath);
-                            const archive = archiver('zip', { zlib: { level: 5 } });
-
-                            archive.on('error', (err: any) => { throw err; });
-                            archive.pipe(output);
-
                             for (let gIdx = 0; gIdx < groups.length; gIdx++) {
                                 const group = groups[gIdx];
                                 if (group.nodes.length === 0) continue;
 
-                                let combinedHtml = "";
+                                const prefix = String(gIdx + 1).padStart(2, '0');
+                                const safeName = group.name.replace(/[^a-zA-Z0-9 -]/g, "").trim();
+                                const groupFileName = `${prefix} - ${safeName}.docx`;
+                                
+                                const anjabList: any[] = [];
+
                                 for (let i = 0; i < group.nodes.length; i++) {
                                     const item = group.nodes[i];
                                     try {
                                         const data = await getAnjabByIdOrSlug(item.peta_id);
                                         if (data) {
-                                            const bodyHtml = buildAnjabHtml(data, { isWord: true, bodyOnly: true });
-                                            if (combinedHtml !== "") {
-                                                combinedHtml += `\n<br clear="all" style="page-break-before:always; mso-break-type:section-break" />\n`;
-                                            }
-                                            combinedHtml += bodyHtml;
+                                            const renderedData = buildAnjabDocxData(data);
+                                            anjabList.push(renderedData);
                                         }
                                         successCount++;
                                     } catch (error) {
-                                        console.error(`Error building html for ${item.nama_jabatan}:`, error);
+                                        console.error(`Error building docx for ${item.nama_jabatan}:`, error);
                                     }
                                     const progress = { done: successCount, total };
                                     controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
                                 }
-
-                                const finalWordContent = wordMetaStart + combinedHtml + wordMetaEnd;
-                                const prefix = String(gIdx + 1).padStart(2, '0');
-                                const safeName = group.name.replace(/[^a-zA-Z0-9 -]/g, "").trim();
-                                archive.append(Buffer.from(finalWordContent, 'utf-8'), { name: `${prefix} - ${safeName}.doc` });
+                                
+                                if (anjabList.length > 0) {
+                                    const templatePath = path.resolve(process.cwd(), "public", "templates", "anjab.docx");
+                                    const content = fs.readFileSync(templatePath, "binary");
+                                    const zip = new PizZip(content);
+                                    
+                                    let xml = zip.file('word/document.xml').asText();
+                                    const startTag = '<w:p><w:r><w:t>{#anjabList}</w:t></w:r></w:p>';
+                                    const endTag = '<w:p><w:r><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:t>{/anjabList}</w:t></w:r></w:p>';
+                                    const bodyStart = xml.indexOf('<w:body>') + 8;
+                                    const sectPrIndex = xml.lastIndexOf('<w:sectPr');
+                                    
+                                    xml = xml.slice(0, bodyStart) + startTag + xml.slice(bodyStart, sectPrIndex) + endTag + xml.slice(sectPrIndex);
+                                    zip.file('word/document.xml', xml);
+                                    
+                                    const doc = new Docxtemplater(zip, {
+                                        paragraphLoop: true,
+                                        linebreaks: true,
+                                    });
+                                    
+                                    doc.render({ anjabList });
+                                    const mergedBuffer = doc.getZip().generate({
+                                        type: "nodebuffer",
+                                        compression: "DEFLATE",
+                                    });
+                                    
+                                    archive.append(mergedBuffer, { name: groupFileName });
+                                }
                             }
-
-                            await archive.finalize();
-
-                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
-                            controller.close();
-                            return;
                         } else {
-                            // Old combined logic
-                            let combinedHtml = "";
+                            const anjabList: any[] = [];
                             for (let i = 0; i < total; i++) {
                                 const item = dfsList[i];
                                 try {
                                     const data = await getAnjabByIdOrSlug(item.peta_id);
                                     if (data) {
-                                        const bodyHtml = buildAnjabHtml(data, { isWord: true, bodyOnly: true });
-
-                                        if (combinedHtml !== "") {
-                                            combinedHtml += `\n<br clear="all" style="page-break-before:always; mso-break-type:section-break" />\n`;
-                                        }
-                                        combinedHtml += bodyHtml;
+                                        const renderedData = buildAnjabDocxData(data);
+                                        anjabList.push(renderedData);
                                     }
                                     successCount++;
                                 } catch (error) {
-                                    console.error(`Error building html for ${item.nama_jabatan}:`, error);
+                                    console.error(`Error building docx for ${item.nama_jabatan}:`, error);
                                 }
                                 const progress = { done: successCount, total };
                                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
                             }
+                            
+                            if (anjabList.length > 0) {
+                                const templatePath = path.resolve(process.cwd(), "public", "templates", "anjab.docx");
+                                const content = fs.readFileSync(templatePath, "binary");
+                                const zip = new PizZip(content);
+                                
+                                let xml = zip.file('word/document.xml').asText();
+                                const startTag = '<w:p><w:r><w:t>{#anjabList}</w:t></w:r></w:p>';
+                                const endTag = '<w:p><w:r><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:t>{/anjabList}</w:t></w:r></w:p>';
+                                const bodyStart = xml.indexOf('<w:body>') + 8;
+                                const sectPrIndex = xml.lastIndexOf('<w:sectPr');
+                                
+                                xml = xml.slice(0, bodyStart) + startTag + xml.slice(bodyStart, sectPrIndex) + endTag + xml.slice(sectPrIndex);
+                                zip.file('word/document.xml', xml);
+                                
+                                const doc = new Docxtemplater(zip, {
+                                    paragraphLoop: true,
+                                    linebreaks: true,
+                                });
+                                
+                                doc.render({ anjabList });
+                                const mergedBuffer = doc.getZip().generate({
+                                    type: "nodebuffer",
+                                    compression: "DEFLATE",
+                                });
+                                
+                                archive.append(mergedBuffer, { name: "Semua_Anjab.docx" });
+                            }
+                        }
 
+                        // Wait for ZIP to finish generating
+                        await archive.finalize();
 
-                            const wordMeta = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head>
-<!--[if gte mso 9]>
-<xml>
-<w:WordDocument>
-<w:View>Print</w:View>
-<w:Zoom>100</w:Zoom>
-<w:DoNotOptimizeForBrowser/>
-</w:WordDocument>
-</xml>
-<![endif]-->
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<style>
-    @page Section1 { size: 595.3pt 841.9pt; margin: 2cm 2.5cm 2.38cm 2.3cm; mso-page-orientation: portrait; }
-    @page Section2 { size: 841.9pt 595.3pt; margin: 1.2cm 1.2cm 1.2cm 1.2cm; mso-page-orientation: landscape; }
-    div.Section1 { page: Section1; }
-    div.Section2 { page: Section2; }
-    table.word-table { page-break-inside: auto; width: 100%; border-collapse: collapse; mso-table-layout-alt: fixed; margin: 6px 0 30px 0; table-layout: auto; font-size: 11pt; border: .5pt solid windowtext; }
-    table.word-table th, table.word-table td { border: .5pt solid windowtext; padding: 6px; vertical-align: top; word-break: normal; white-space: normal; }
-    table.word-table th { font-weight: normal; vertical-align: middle; text-align: center; background: #C3C3C3; }
-    html, body { height: 100%; }
-    body { font-family: "Tahoma", Times, serif; font-size: 11pt; line-height: 1.35; color: #000; margin: 0; -webkit-font-smoothing: antialiased; }
-    .doc-title { text-align: center; margin-bottom: 19px; }
-    .table-section p { page-break-after: avoid; margin: 0; padding: 0; }
-    .table-section table { margin: 0; padding: 0; }
-    .word-table { page-break-inside: auto; border-collapse: collapse; }
-    .word-table thead { display: table-header-group; }
-    .word-table tbody { display: table-row-group; }
-    .word-table tr { page-break-inside: avoid; page-break-after: auto; }
-    .word-table td, .word-table th { page-break-inside: avoid; }
-    .section { margin-top: 5px; margin-bottom: 20px; }
-    .section .title { font-weight: bold; display: block; margin-bottom: 4px; }
-    p { margin: 4px 0; text-align: justify; }
-    .key-value { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
-    .key-value td { vertical-align: top; padding: 4px 6px; }
-    .key-value td.custom-padding { padding-top: 0; padding-bottom: 0; }
-    .kv-left { width: 33%; } .kv-sep { width: 7%; } .kv-right { width: 60%; }
-    ol.alpha { list-style-type: lower-alpha; margin: 0 0 0 1.2em; padding: 0; }
-    ol.num   { list-style-type: decimal;      margin: 0 0 0 1.2em; padding: 0; }
-    ul.simple{ margin: 0 0 0 1.2em; padding: 0; list-style-type: disc; }
-    .small { font-size: 10pt; }
-    .page-break { page-break-before: always; }
-    .center { text-align: center; }
-    .two-col { display: flex; gap: 12px; } .two-col > div { flex: 1; }
-    .custom-justify { text-align: justify; } .custom-justify:after { content: ""; width: 100%; }
-</style>
-</head>
-<body>
-`;
-                            const safeHtml = wordMeta + combinedHtml + "\n</body>\n</html>";
-                            const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5);
-                            const fileName = `Anjab_Gabungan_${timestamp}.doc`;
-
-                            const fs = require('fs');
-                            const path = require('path');
-                            const os = require('os');
-                            const filePath = path.join(os.tmpdir(), fileName);
-                            fs.writeFileSync(filePath, safeHtml);
-
-                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: fileName })}\n\n`));
-                            controller.close();
-                        } // Closing brace for the 'else' block
+                        // Send complete signal with the zip file name
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
+                        controller.close();
                     } catch (err: any) {
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: err.message || 'unknown' })}\n\n`));
                         controller.close();

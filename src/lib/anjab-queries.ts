@@ -91,7 +91,7 @@ const SELECT_ANJAB = (whereClause: string) => `
 
            -- NEW
            so.jenis_jabatan                             AS jenis_jabatan,
-           NULL                                          AS kebutuhan_pegawai,
+           so.kebutuhan_pegawai                         AS kebutuhan_pegawai,
 
            u.jpt_utama,
            u.jpt_madya,
