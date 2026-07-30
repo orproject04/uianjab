@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
 import { getAnjabByIdOrSlug } from "@/lib/anjab-queries";
-import { buildAnjabHtml } from "@/lib/anjab-pdf-template";
 import { buildAnjabDocxData } from "@/lib/anjab-docx-generator";
 import { getDownloadGroups } from "@/lib/download-groups";
 import archiver from "archiver";
@@ -191,55 +190,6 @@ export async function GET(req: NextRequest) {
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ total })}\n\n`));
 
                         let successCount = 0;
-                        const wordMetaStart = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head>
-<!--[if gte mso 9]>
-<xml>
-<w:WordDocument>
-<w:View>Print</w:View>
-<w:Zoom>100</w:Zoom>
-<w:DoNotOptimizeForBrowser/>
-</w:WordDocument>
-</xml>
-<![endif]-->
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<style>
-    @page Section1 { size: 595.3pt 841.9pt; margin: 2cm 2.5cm 2.38cm 2.3cm; mso-page-orientation: portrait; }
-    @page Section2 { size: 841.9pt 595.3pt; margin: 1.2cm 1.2cm 1.2cm 1.2cm; mso-page-orientation: landscape; }
-    div.Section1 { page: Section1; }
-    div.Section2 { page: Section2; }
-    table.word-table { page-break-inside: auto; width: 100%; border-collapse: collapse; mso-table-layout-alt: fixed; margin: 6px 0 30px 0; table-layout: auto; font-size: 11pt; border: .5pt solid windowtext; }
-    table.word-table th, table.word-table td { border: .5pt solid windowtext; padding: 6px; vertical-align: top; word-break: normal; white-space: normal; }
-    table.word-table th { font-weight: normal; vertical-align: middle; text-align: center; background: #C3C3C3; }
-    html, body { height: 100%; }
-    body { font-family: "Tahoma", Times, serif; font-size: 11pt; line-height: 1.35; color: #000; margin: 0; -webkit-font-smoothing: antialiased; }
-    .doc-title { text-align: center; margin-bottom: 19px; }
-    .table-section p { page-break-after: avoid; margin: 0; padding: 0; }
-    .table-section table { margin: 0; padding: 0; }
-    .word-table { page-break-inside: auto; border-collapse: collapse; }
-    .word-table thead { display: table-header-group; }
-    .word-table tbody { display: table-row-group; }
-    .word-table tr { page-break-inside: avoid; page-break-after: auto; }
-    .word-table td, .word-table th { page-break-inside: avoid; }
-    .section { margin-top: 5px; margin-bottom: 20px; }
-    .section .title { font-weight: bold; display: block; margin-bottom: 4px; }
-    p { margin: 4px 0; text-align: justify; }
-    .key-value { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
-    .key-value td { vertical-align: top; padding: 4px 6px; }
-    .key-value td.custom-padding { padding-top: 0; padding-bottom: 0; }
-    .kv-left { width: 33%; } .kv-sep { width: 7%; } .kv-right { width: 60%; }
-    ol.alpha { list-style-type: lower-alpha; margin: 0 0 0 1.2em; padding: 0; }
-    ol.num   { list-style-type: decimal;      margin: 0 0 0 1.2em; padding: 0; }
-    ul.simple{ margin: 0 0 0 1.2em; padding: 0; list-style-type: disc; }
-    .small { font-size: 10pt; }
-    .page-break { page-break-before: always; }
-    .keep-together { page-break-inside: avoid; }
-</style>
-</head>
-<body>
-<div class="Section1">`;
-
-                        const wordMetaEnd = `</div></body></html>`;
 
                         const archiveFileName = `Seluruh_Anjab_Word_${timestamp}.zip`;
                         const archivePath = path.join(os.tmpdir(), archiveFileName);
@@ -277,13 +227,18 @@ export async function GET(req: NextRequest) {
                                 }
                                 
                                 if (anjabList.length > 0) {
+                                    for (let i = 0; i < anjabList.length - 1; i++) {
+                                        anjabList[i].pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+                                    }
+                                    anjabList[anjabList.length - 1].pageBreak = '';
+
                                     const templatePath = path.resolve(process.cwd(), "public", "templates", "anjab.docx");
                                     const content = fs.readFileSync(templatePath, "binary");
                                     const zip = new PizZip(content);
                                     
                                     let xml = zip.file('word/document.xml').asText();
                                     const startTag = '<w:p><w:r><w:t>{#anjabList}</w:t></w:r></w:p>';
-                                    const endTag = '<w:p><w:r><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:t>{/anjabList}</w:t></w:r></w:p>';
+                                    const endTag = '<w:p><w:r><w:t>{@pageBreak}</w:t></w:r></w:p><w:p><w:r><w:t>{/anjabList}</w:t></w:r></w:p>';
                                     const bodyStart = xml.indexOf('<w:body>') + 8;
                                     const sectPrIndex = xml.lastIndexOf('<w:sectPr');
                                     
@@ -323,13 +278,18 @@ export async function GET(req: NextRequest) {
                             }
                             
                             if (anjabList.length > 0) {
+                                for (let i = 0; i < anjabList.length - 1; i++) {
+                                    anjabList[i].pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+                                }
+                                anjabList[anjabList.length - 1].pageBreak = '';
+
                                 const templatePath = path.resolve(process.cwd(), "public", "templates", "anjab.docx");
                                 const content = fs.readFileSync(templatePath, "binary");
                                 const zip = new PizZip(content);
                                 
                                 let xml = zip.file('word/document.xml').asText();
                                 const startTag = '<w:p><w:r><w:t>{#anjabList}</w:t></w:r></w:p>';
-                                const endTag = '<w:p><w:r><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:t>{/anjabList}</w:t></w:r></w:p>';
+                                const endTag = '<w:p><w:r><w:t>{@pageBreak}</w:t></w:r></w:p><w:p><w:r><w:t>{/anjabList}</w:t></w:r></w:p>';
                                 const bodyStart = xml.indexOf('<w:body>') + 8;
                                 const sectPrIndex = xml.lastIndexOf('<w:sectPr');
                                 

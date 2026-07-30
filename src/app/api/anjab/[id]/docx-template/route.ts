@@ -32,7 +32,7 @@ export async function GET(
             status: 200,
             headers: {
                 "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "Content-Disposition": `attachment; filename="Anjab Template - ${safeNama}.docx"`
+                "Content-Disposition": `attachment; filename="Anjab - ${safeNama}.docx"`
             }
         });
     } catch (err: any) {

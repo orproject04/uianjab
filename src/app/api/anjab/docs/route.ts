@@ -1,4 +1,4 @@
-// src/app/api/upload-anjab/route.ts
+// src/app/api/anjab/docs/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
