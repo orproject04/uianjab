@@ -109,7 +109,7 @@ export default function HomePage() {
               <p className="text-gray-600 leading-relaxed">
                 Silahkan pilih menu untuk memulai pengelolaan data.
               </p>
-              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+              <div className="hidden md:flex flex-col sm:flex-row gap-2.5 sm:gap-3">
                 {isAdmin && (
                   <button
                     onClick={() => handleNavigate("/dashboard")}
@@ -128,7 +128,7 @@ export default function HomePage() {
             </div>
             <div className="relative flex items-center justify-center">
               <div className="absolute -inset-1 md:-inset-2 bg-gradient-to-br from-brand-200/40 via-white to-blue-light-200/50 blur-3xl" />
-              <div className="relative">
+              <div className="relative flex flex-col items-center">
                 <Image
                   src="/images/logo/pandawa-icon.png"
                   alt="Logo PANDAWA"
@@ -137,7 +137,31 @@ export default function HomePage() {
                   height={224}
                   priority
                 />
+                <div className="mt-4 text-center md:hidden">
+                  <h2 className="text-xl font-bold text-gray-900">PANDAWA</h2>
+                  <p className="text-xs text-gray-600 mt-1 max-w-[250px]">
+                    Pengelolaan Analisis Jabatan dan Analisis Beban Kerja Berbasis Web Aparatur
+                  </p>
+                </div>
               </div>
+            </div>
+
+            {/* Mobile Buttons - Placed at bottom for better thumb reach */}
+            <div className="flex md:hidden flex-col gap-2.5 w-full mt-2">
+              {isAdmin && (
+                <button
+                  onClick={() => handleNavigate("/dashboard")}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-3.5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 whitespace-nowrap w-full"
+                >
+                  Buka Dashboard
+                </button>
+              )}
+              <button
+                onClick={() => handleNavigate("/peta-jabatan")}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:border-brand-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-200 whitespace-nowrap w-full"
+              >
+                Lihat Peta Jabatan
+              </button>
             </div>
           </div>
         </div>

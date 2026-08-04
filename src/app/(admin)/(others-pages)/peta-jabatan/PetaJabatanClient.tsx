@@ -817,13 +817,7 @@ export default function PetaJabatanClient() {
     if (unitFilteredRows.length === 0) return;
 
     if (!hasFocusedOnce.current) {
-      if (selectedUnit) {
-        // Auto-expand semua node saat unit dipilih
-        const map: Record<string, boolean> = {};
-        for (const r of unitFilteredRows) map[r.id] = false;
-        setCollapseMap(map);
-        hasFocusedOnce.current = true;
-      } else if (lastClickedPath) {
+      if (lastClickedPath) {
         const expandedMap = expandNodesAlongPath(lastClickedPath, unitFilteredRows);
         setCollapseMap(expandedMap);
         hasFocusedOnce.current = true;
