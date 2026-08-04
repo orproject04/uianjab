@@ -326,6 +326,7 @@ export function buildAnjabDocxData(data: any): any {
         prestasi_diharapkan: data.prestasi_diharapkan || "-",
         
         kualifikasi: [{
+            label_diklat_penjenjangan: (data.jenis_jabatan !== "JABATAN FUNGSIONAL" && data.jenis_jabatan !== "JABATAN PELAKSANA") ? "Diklat Manajerial" : "Diklat Penjenjangan",
             pendidikan_single: formatPendidikanSingle(data.pendidikan_formal),
             pendidikan: formatPendidikanList(data.pendidikan_formal),
             pendidikan_diutamakan: formatPendidikanDiutamakan(data.pendidikan_formal),
