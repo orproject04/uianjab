@@ -215,7 +215,7 @@ function formatHasilKerjaSingle(arr: any): any[] {
     if (parsed) {
         const sub = (parsed.children || []).map((child: any) => {
             const childText = typeof child === 'string' ? child : (child.text || "");
-            return { teks_sub: `▪\t${childText}` };
+            return { teks_sub: `•\t${childText}` };
         });
         return [{ teks_utama: parsed.text || "-", sub }];
     }
@@ -253,7 +253,7 @@ function formatHasilKerjaMulti(arr: any): any[] {
             
             const sub = (parsed.children || []).map((child: any) => {
                 const childText = typeof child === 'string' ? child : (child.text || "");
-                return { teks_sub: `▪\t${childText}` };
+                return { teks_sub: `•\t${childText}` };
             });
             
             result.push({ teks_utama, sub });
