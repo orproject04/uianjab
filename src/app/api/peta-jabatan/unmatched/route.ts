@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
                 nama_jabatan,
                 jabatan_id
             FROM peta_jabatan
-            WHERE jabatan_id IS NULL
+            WHERE jabatan_id IS NULL AND deleted_at IS NULL
             ORDER BY nama_jabatan`
         );
 

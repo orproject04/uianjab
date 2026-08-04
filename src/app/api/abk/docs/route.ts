@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
 
                 // Verifikasi peta_jabatan exists
                 const {rows: petaRows} = await client.query(
-                    "SELECT id FROM peta_jabatan WHERE id = $1::uuid AND jabatan_id = $2::uuid LIMIT 1",
+                    "SELECT id FROM peta_jabatan WHERE id = $1::uuid AND jabatan_id = $2::uuid AND deleted_at IS NULL LIMIT 1",
                     [peta_jabatan_id, id]
                 );
 

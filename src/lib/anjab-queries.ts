@@ -119,7 +119,7 @@ const SELECT_ANJAB = (whereClause: string) => `
            COALESCE(tp.tugas_pokok, '[]')               AS tugas_pokok
 
     FROM jabatan j
-             LEFT JOIN peta_jabatan so ON so.jabatan_id = j.id
+             LEFT JOIN peta_jabatan so ON so.jabatan_id = j.id AND so.deleted_at IS NULL
              LEFT JOIN unit_kerja u ON u.jabatan_id = j.id
              LEFT JOIN kualifikasi_jabatan k ON k.jabatan_id = j.id
 
@@ -324,7 +324,7 @@ const SELECT_ANJAB_WITH_ABK = (whereClause: string) => `
            COALESCE(tp.tugas_pokok, '[]')               AS tugas_pokok
 
     FROM jabatan j
-             LEFT JOIN peta_jabatan so ON so.jabatan_id = j.id
+             LEFT JOIN peta_jabatan so ON so.jabatan_id = j.id AND so.deleted_at IS NULL
              LEFT JOIN unit_kerja u ON u.jabatan_id = j.id
              LEFT JOIN kualifikasi_jabatan k ON k.jabatan_id = j.id
 
@@ -499,7 +499,7 @@ export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | n
         if (byId.rows[0]) return byId.rows[0];
 
         // Try by peta_jabatan.id (find jabatan via peta_jabatan.jabatan_id)
-        const petaQuery = await pool.query("SELECT id as peta_jabatan_id, jabatan_id FROM peta_jabatan WHERE id = $1::uuid LIMIT 1", [idOrSlug]);
+        const petaQuery = await pool.query("SELECT id as peta_jabatan_id, jabatan_id FROM peta_jabatan WHERE id = $1::uuid AND deleted_at IS NULL LIMIT 1", [idOrSlug]);
         if (petaQuery.rows[0]) {
             const anjab = await pool.query<AnjabRow>(
                 SELECT_ANJAB_WITH_ABK("j.id = $1::uuid AND so.id = $2::uuid"),
@@ -523,14 +523,14 @@ export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | n
             -- Base: find root with first segment
             SELECT id, jabatan_id, slug, parent_id, 1 as depth
             FROM peta_jabatan
-            WHERE parent_id IS NULL AND slug = $1
+            WHERE parent_id IS NULL AND slug = $1 AND deleted_at IS NULL
             
             UNION ALL
             
             -- Recursive: follow path by matching next segment
             SELECT p.id, p.jabatan_id, p.slug, p.parent_id, path_lookup.depth + 1
             FROM peta_jabatan p
-            INNER JOIN path_lookup ON p.parent_id = path_lookup.id
+            INNER JOIN path_lookup ON p.parent_id = path_lookup.id AND p.deleted_at IS NULL
             WHERE p.slug = CASE path_lookup.depth + 1
                 ${segments.map((_, i) => `WHEN ${i + 1} THEN $${i + 1}`).join('\n                ')}
                 ELSE NULL

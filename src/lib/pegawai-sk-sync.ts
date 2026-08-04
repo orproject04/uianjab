@@ -414,11 +414,11 @@ export async function runSkSync(
       await client.query("BEGIN");
 
       // Clear existing SK pejabat
-      await client.query("UPDATE peta_jabatan SET pejabat_sk = '[]'::jsonb");
+      await client.query("UPDATE peta_jabatan SET pejabat_sk = '[]'::jsonb WHERE deleted_at IS NULL");
 
       // We need to fetch peta_jabatan mapping
       const resPeta = await client.query(
-        "SELECT id, nama_jabatan, unit_kerja FROM peta_jabatan"
+        "SELECT id, nama_jabatan, unit_kerja FROM peta_jabatan WHERE deleted_at IS NULL"
       );
 
       // To optimize match, build a lookup table
@@ -471,7 +471,7 @@ export async function runSkSync(
         const resSekjen = await client.query(
           `SELECT id, pejabat_sk as pejabat 
            FROM peta_jabatan 
-           WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI')`
+           WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI') AND deleted_at IS NULL`
         );
 
         if (resSekjen.rows.length > 0) {
@@ -754,7 +754,7 @@ export async function retrySkErrors(
       await client.query("BEGIN");
 
       const resPeta = await client.query(
-        "SELECT id, nama_jabatan, unit_kerja, pejabat_sk FROM peta_jabatan"
+        "SELECT id, nama_jabatan, unit_kerja, pejabat_sk FROM peta_jabatan WHERE deleted_at IS NULL"
       );
 
       const pjRows = resPeta.rows;
@@ -811,7 +811,7 @@ export async function retrySkErrors(
       // but if Sekjen is in unmatchedRecords, they should be mapped if they retry.
       try {
         const resSekjen = await client.query(
-          `SELECT id, pejabat_sk FROM peta_jabatan WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI')`
+          `SELECT id, pejabat_sk FROM peta_jabatan WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI') AND deleted_at IS NULL`
         );
         if (resSekjen.rows.length > 0) {
           for (const sekjen of resSekjen.rows) {
@@ -960,7 +960,7 @@ export async function syncSingleNipSk(nip: string) {
     
     // Fetch peta_jabatan mapping to find a match
     const resPeta = await client.query(
-      "SELECT id, nama_jabatan, unit_kerja, pejabat_sk FROM peta_jabatan"
+      "SELECT id, nama_jabatan, unit_kerja, pejabat_sk FROM peta_jabatan WHERE deleted_at IS NULL"
     );
     const pjRows = resPeta.rows;
 

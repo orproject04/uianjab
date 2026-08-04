@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
                     COALESCE(pj.pejabat_sk, '[]'::jsonb) AS pejabat_sk
                  FROM peta_jabatan pj
                  LEFT JOIN jabatan j ON pj.jabatan_id = j.id
-                 WHERE pj.jabatan_id = $1::uuid
+                 WHERE pj.jabatan_id = $1::uuid AND pj.deleted_at IS NULL
                  ORDER BY pj.order_index`,
                 [jabatan_id]
             );
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
               lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
             ]::text[] AS sort_path
           FROM peta_jabatan
-          WHERE id = $1::uuid
+          WHERE id = $1::uuid AND deleted_at IS NULL
 
           UNION ALL
 
@@ -172,6 +172,7 @@ export async function GET(req: NextRequest) {
             )
           FROM peta_jabatan c
           JOIN tree t ON c.parent_id = t.id
+          WHERE c.deleted_at IS NULL
         )
         ${FINAL_SELECT}
         `,
@@ -203,7 +204,7 @@ export async function GET(req: NextRequest) {
             lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
           ]::text[] AS sort_path
         FROM peta_jabatan
-        WHERE parent_id IS NULL
+        WHERE parent_id IS NULL AND deleted_at IS NULL
 
         UNION ALL
 
@@ -226,6 +227,7 @@ export async function GET(req: NextRequest) {
           )
         FROM peta_jabatan c
         JOIN tree t ON c.parent_id = t.id
+        WHERE c.deleted_at IS NULL
       )
       ${FINAL_SELECT}
       `

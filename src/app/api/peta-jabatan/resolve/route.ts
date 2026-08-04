@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
                 -- Base: find root with first segment
                 SELECT id, jabatan_id, slug, parent_id, 1 as depth
                 FROM peta_jabatan
-                WHERE parent_id IS NULL AND slug = $1
+                WHERE parent_id IS NULL AND slug = $1 AND deleted_at IS NULL
                 
                 UNION ALL
                 
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
                 WHERE p.slug = CASE path_lookup.depth + 1
                     ${segments.map((_, i) => `WHEN ${i + 1} THEN $${i + 1}`).join('\n                    ')}
                     ELSE NULL
-                END
+                END AND p.deleted_at IS NULL
             )
             SELECT id, jabatan_id, slug
             FROM path_lookup 

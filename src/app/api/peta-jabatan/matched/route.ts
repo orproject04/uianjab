@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
                 j.nama_jabatan as matched_anjab
             FROM peta_jabatan pj
             LEFT JOIN jabatan j ON pj.jabatan_id = j.id
-            WHERE pj.jabatan_id IS NOT NULL
+            WHERE pj.jabatan_id IS NOT NULL AND pj.deleted_at IS NULL
             ORDER BY pj.nama_jabatan`
         );
 

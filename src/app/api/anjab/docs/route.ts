@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
 
                     // If ABK fields exist in payload and a peta_jabatan exists for this jabatan, upsert into tugas_pokok_abk
                     try {
-                        const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1 LIMIT 1`, [jabatanUUID]);
+                        const petaQ = await client.query(`SELECT id FROM peta_jabatan WHERE jabatan_id = $1 AND deleted_at IS NULL LIMIT 1`, [jabatanUUID]);
                         const petaId = petaQ.rows[0]?.id ?? null;
                         if (petaId) {
                             const jumlah = jumlah_hasil;

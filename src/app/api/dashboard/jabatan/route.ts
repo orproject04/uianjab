@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
                     SELECT id, parent_id, unit_kerja, nama_jabatan
                     FROM peta_jabatan
                     -- Use exact, case-insensitive match so "Persidangan I" does not also match "Persidangan II"
-                    WHERE lower(trim(unit_kerja)) = lower(trim($${paramIndex}))
+                    WHERE lower(trim(unit_kerja)) = lower(trim($${paramIndex})) AND deleted_at IS NULL
                     
                     UNION ALL
                     
@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
                     SELECT p.id, p.parent_id, p.unit_kerja, p.nama_jabatan
                     FROM peta_jabatan p
                     INNER JOIN unit_tree ut ON p.parent_id = ut.id
+                    WHERE p.deleted_at IS NULL
                 )
             `;
             // No wildcard to avoid pulling sibling units with similar names (e.g., I vs II)
@@ -118,7 +119,7 @@ export async function GET(req: NextRequest) {
                 COALESCE(SUM(kebutuhan_pegawai), 0) as total_kebutuhan,
                 COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) - kebutuhan_pegawai), 0) as total_selisih
             FROM peta_jabatan
-            ${whereClause}
+            ${whereClause ? whereClause + " AND deleted_at IS NULL" : "WHERE deleted_at IS NULL"}
         `;
 
         const summaryResult = await runQuery('summaryQuery', summaryQuery, params);
@@ -131,8 +132,10 @@ export async function GET(req: NextRequest) {
                 pegawai->>'role' as role,
                 COUNT(*) as count
             FROM peta_jabatan,
-                jsonb_array_elements(COALESCE(${pejabatColumn}, '[]'::jsonb)) as pegawai
-            ${whereClause}
+            LATERAL jsonb_array_elements(${pejabatColumn}) as pegawai
+            ${whereClause ? whereClause + " AND deleted_at IS NULL" : "WHERE deleted_at IS NULL"}
+            AND jsonb_typeof(${pejabatColumn}) = 'array'
+            AND jsonb_array_length(${pejabatColumn}) > 0
             GROUP BY pegawai->>'role'
         `;
 
@@ -173,7 +176,7 @@ export async function GET(req: NextRequest) {
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
                 COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
-            ${whereClause}
+            ${whereClause ? whereClause + " AND deleted_at IS NULL" : "WHERE deleted_at IS NULL"}
             GROUP BY jenis_jabatan
             ORDER BY kebutuhan DESC
         `;
@@ -194,7 +197,7 @@ export async function GET(req: NextRequest) {
                 COALESCE(SUM(kebutuhan_pegawai), 0) as kebutuhan,
                 COALESCE(SUM(jsonb_array_length(COALESCE(${pejabatColumn}, '[]'::jsonb)) - kebutuhan_pegawai), 0) as selisih
             FROM peta_jabatan
-            ${whereClause}
+            ${whereClause ? whereClause + " AND deleted_at IS NULL" : "WHERE deleted_at IS NULL"}
             GROUP BY is_pusat
             ORDER BY is_pusat DESC
         `;
@@ -221,10 +224,12 @@ export async function GET(req: NextRequest) {
             up AS (
                 SELECT id, parent_id, unit_kerja, jenis_jabatan, id AS orig, 0 AS depth
                 FROM peta_jabatan
+                WHERE deleted_at IS NULL
                 UNION ALL
                 SELECT p.id, p.parent_id, p.unit_kerja, p.jenis_jabatan, up.orig, up.depth + 1
                 FROM peta_jabatan p
                 JOIN up ON p.id = up.parent_id
+                WHERE p.deleted_at IS NULL
             ),
             eselon_match AS (
                 SELECT orig, unit_kerja, depth,
@@ -305,7 +310,7 @@ export async function GET(req: NextRequest) {
                         lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
                     ]::text[] AS sort_path
                 FROM peta_jabatan
-                WHERE parent_id IS NULL
+                WHERE parent_id IS NULL AND deleted_at IS NULL
                 
                 UNION ALL
                 
@@ -326,6 +331,7 @@ export async function GET(req: NextRequest) {
                     )
                 FROM peta_jabatan c
                 JOIN tree t ON c.parent_id = t.id
+                WHERE c.deleted_at IS NULL
             )
             SELECT 
                 COALESCE(t.nama_jabatan, 'Tidak Ada Nama') as nama_jabatan,

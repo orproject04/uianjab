@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
        FROM peta_jabatan
        WHERE LOWER(TRIM(nama_jabatan)) = LOWER(TRIM($1))
          AND LOWER(TRIM(unit_kerja)) = LOWER(TRIM($2))
+         AND deleted_at IS NULL
        LIMIT 1`,
       [nama_jabatan.trim(), unit_kerja.trim()]
     );

@@ -346,19 +346,21 @@ export async function DELETE(
             return NextResponse.json({error: "Node tidak ditemukan"}, {status: 404});
         }
 
-        // hapus node + seluruh subtree
+        // Cek apakah ada child node yang masih aktif (deleted_at IS NULL)
+        const hasActiveChildren = await pool.query<{ exists: boolean }>(
+            `SELECT EXISTS(SELECT 1 FROM peta_jabatan WHERE parent_id = $1::uuid AND deleted_at IS NULL) AS exists`,
+            [id]
+        );
+        if (hasActiveChildren.rows[0]?.exists) {
+            return NextResponse.json({error: "Tidak bisa menghapus jabatan ini karena masih memiliki jabatan bawahan. Silakan hapus atau pindahkan bawahannya terlebih dahulu."}, {status: 400});
+        }
+
+        // Hapus (soft delete) node
         const {rowCount} = await pool.query(
             `
-                WITH RECURSIVE subtree AS (SELECT id
-                                           FROM peta_jabatan
-                                           WHERE id = $1::uuid
-                UNION ALL
-                SELECT c.id
-                FROM peta_jabatan c
-                         JOIN subtree s ON c.parent_id = s.id )
-                DELETE
-                FROM peta_jabatan
-                WHERE id IN (SELECT id FROM subtree)
+                UPDATE peta_jabatan
+                SET deleted_at = NOW(), updated_at = NOW()
+                WHERE id = $1::uuid
             `,
             [id]
         );

@@ -470,7 +470,8 @@ export async function syncPegawaiToPetaJabatan(
           `SELECT id, nama_jabatan, unit_kerja 
            FROM peta_jabatan 
            WHERE LOWER(nama_jabatan) = LOWER($1) 
-           AND LOWER(COALESCE(unit_kerja, '')) = LOWER($2)`,
+           AND LOWER(COALESCE(unit_kerja, '')) = LOWER($2)
+           AND deleted_at IS NULL`,
           [jabatan_name, unit_organisasi_name]
         );
 
@@ -526,7 +527,8 @@ export async function syncPegawaiToPetaJabatan(
       const { rows: sekjenRows } = await pool.query(
         `SELECT id, pejabat_st as pejabat 
          FROM peta_jabatan 
-         WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI')`
+         WHERE LOWER(nama_jabatan) = LOWER('Sekretaris Jenderal DPD RI')
+         AND deleted_at IS NULL`
       );
 
       if (sekjenRows.length > 0) {
