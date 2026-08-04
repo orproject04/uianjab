@@ -40,10 +40,10 @@ function formatArrayRaw(arr: any, emptyValue: string = ""): any[] {
 
 function formatArrayBlackCircle(arr: any): any[] {
     if (!arr) return [];
-    if (typeof arr === 'string') return [{ teks: `●\t${arr.trim()}` }];
+    if (typeof arr === 'string') return [{ teks: `•\t${arr.trim()}` }];
     if (Array.isArray(arr)) {
         const valid = arr.filter(Boolean);
-        return valid.map(item => ({ teks: `●\t${typeof item === 'string' ? item.trim() : item}` }));
+        return valid.map(item => ({ teks: `•\t${typeof item === 'string' ? item.trim() : item}` }));
     }
     return [];
 }
@@ -215,7 +215,7 @@ function formatHasilKerjaSingle(arr: any): any[] {
     if (parsed) {
         const sub = (parsed.children || []).map((child: any) => {
             const childText = typeof child === 'string' ? child : (child.text || "");
-            return { teks_sub: `■\t${childText}` };
+            return { teks_sub: `▪\t${childText}` };
         });
         return [{ teks_utama: parsed.text || "-", sub }];
     }
@@ -253,7 +253,7 @@ function formatHasilKerjaMulti(arr: any): any[] {
             
             const sub = (parsed.children || []).map((child: any) => {
                 const childText = typeof child === 'string' ? child : (child.text || "");
-                return { teks_sub: `■\t${childText}` };
+                return { teks_sub: `▪\t${childText}` };
             });
             
             result.push({ teks_utama, sub });
