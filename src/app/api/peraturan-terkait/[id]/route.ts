@@ -23,7 +23,7 @@ export async function DELETE(
 
     // Get file path before deletion
     const existing = await pool.query(
-      "SELECT persesjen_path FROM persesjen WHERE id = $1",
+      "SELECT file_path FROM peraturan_terkait WHERE id = $1",
       [id]
     );
 
@@ -31,7 +31,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const { persesjen_path } = existing.rows[0];
+    const { file_path } = existing.rows[0];
 
     // Helper function to delete file from filesystem
     const deleteFile = async (filePath: string | null) => {
@@ -51,12 +51,12 @@ export async function DELETE(
     };
 
     // Delete file from filesystem
-    await deleteFile(persesjen_path);
+    await deleteFile(file_path);
 
     // Delete database record
-    await pool.query("DELETE FROM persesjen WHERE id = $1", [id]);
+    await pool.query("DELETE FROM peraturan_terkait WHERE id = $1", [id]);
 
-    return NextResponse.json({ message: "Dokumen Persesjen berhasil dihapus" });
+    return NextResponse.json({ message: "Dokumen Peraturan Terkait berhasil dihapus" });
   } catch (error: any) {
     console.error("Error deleting persesjen:", error);
     return NextResponse.json(

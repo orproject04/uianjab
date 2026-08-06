@@ -272,7 +272,7 @@ const AppSidebar: React.FC = () => {
             icon: <DocsIcon/>,
             subItems: [
                 { id: "rekom-jf", name: "Surat Rekomendasi JF", slug: "rekom-jf", path: "/rekom-jf" },
-                ...(isAdmin ? [{ id: "persesjen", name: "Persesjen", slug: "persesjen", path: "/persesjen" }] : [])
+                ...(isAdmin ? [{ id: "peraturan-terkait", name: "Peraturan Terkait", slug: "peraturan-terkait", path: "/peraturan-terkait" }] : [])
             ]
         }] : []),
         {name: "Usulan Perbaikan Anjab dan ABK", icon: <MailIcon/>, path: "/feedback", subItems: []}

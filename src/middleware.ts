@@ -7,7 +7,7 @@ const DEFAULT_ALLOWED_PATH_PREFIXES = [
   '/dashboard',
   '/peta-jabatan',
   '/feedback',
-  '/persesjen',
+  '/peraturan-terkait',
   '/rekom-jf',
   '/sync-pegawai',
   '/anjab',

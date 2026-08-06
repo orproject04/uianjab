@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await pool.query(
-      `SELECT id, nama, jenis_persesjen, persesjen_path, created_at, updated_at 
-       FROM persesjen 
+      `SELECT id, nama, jenis_peraturan, file_path, created_at, updated_at 
+       FROM peraturan_terkait 
        ORDER BY created_at DESC`
     );
 
@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const nama = formData.get("nama") as string;
-    const jenis_persesjen = formData.get("jenis_persesjen") as string;
-    const persejenFile = formData.get("persesjen") as File | null;
+    const jenis_peraturan = formData.get("jenis_peraturan") as string;
+    const persejenFile = formData.get("peraturan") as File | null;
 
     if (!nama || !nama.trim()) {
       return NextResponse.json(
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!jenis_persesjen || !jenis_persesjen.trim()) {
+    if (!jenis_peraturan || !jenis_peraturan.trim()) {
       return NextResponse.json(
         { error: "Jenis Persesjen is required" },
         { status: 400 }
@@ -77,8 +77,8 @@ export async function POST(req: NextRequest) {
 
     // Check if record with same name already exists (case-insensitive compare)
     const checkExisting = await pool.query(
-      "SELECT id, persesjen_path FROM persesjen WHERE LOWER(nama) = LOWER($1) AND LOWER(jenis_persesjen) = LOWER($2)",
-      [cleanNama, jenis_persesjen.trim()]
+      "SELECT id, file_path FROM peraturan_terkait WHERE LOWER(nama) = LOWER($1) AND LOWER(jenis_peraturan) = LOWER($2)",
+      [cleanNama, jenis_peraturan.trim()]
     );
 
     let persejenPath = null;
@@ -98,39 +98,39 @@ export async function POST(req: NextRequest) {
       const existing = checkExisting.rows[0];
       
       // Check if trying to upload a file that already exists
-      if (persejenPath && existing.persesjen_path) {
+      if (persejenPath && existing.file_path) {
         return NextResponse.json(
-          { error: "Dokumen Persesjen Sudah Ada" },
+          { error: "Dokumen Peraturan Terkait Sudah Ada" },
           { status: 400 }
         );
       }
 
       // Update the existing record with new file path
-      const updatedPersejenPath = persejenPath || existing.persesjen_path;
+      const updatedPersejenPath = persejenPath || existing.file_path;
 
       const result = await pool.query(
-        `UPDATE persesjen 
-         SET persesjen_path = $1, updated_at = NOW()
+        `UPDATE peraturan_terkait 
+         SET file_path = $1, updated_at = NOW()
          WHERE id = $2
          RETURNING *`,
         [updatedPersejenPath, existing.id]
       );
 
       return NextResponse.json({
-        message: "Dokumen Persesjen berhasil diunggah",
+        message: "Dokumen Peraturan Terkait berhasil diunggah",
         data: result.rows[0],
       });
     } else {
       // Record doesn't exist - INSERT new row
       const result = await pool.query(
-        `INSERT INTO persesjen (nama, jenis_persesjen, persesjen_path) 
+        `INSERT INTO peraturan_terkait (nama, jenis_peraturan, file_path) 
          VALUES ($1, $2, $3) 
          RETURNING *`,
-        [cleanNama, jenis_persesjen.trim(), persejenPath]
+        [cleanNama, jenis_peraturan.trim(), persejenPath]
       );
 
       return NextResponse.json({
-        message: "Dokumen Persesjen berhasil diunggah",
+        message: "Dokumen Peraturan Terkait berhasil diunggah",
         data: result.rows[0],
       });
     }

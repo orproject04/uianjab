@@ -299,22 +299,22 @@ export default function PetaJabatanClient() {
   useEffect(() => {
     const fetchPersesjen = async () => {
       try {
-        const res = await fetch("/api/persesjen");
+        const res = await fetch("/api/peraturan-terkait");
         if (!res.ok) return;
         const json = await res.json();
         const data = json?.data || [];
         
         // Get latest Peta Jabatan
         const petaJabatan = data
-          .filter((d: any) => d.jenis_persesjen === "Peta Jabatan" && d.persesjen_path)
+          .filter((d: any) => d.jenis_peraturan === "Peta Jabatan" && d.file_path)
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-        if (petaJabatan) setPetaJabatanDoc(petaJabatan.persesjen_path);
+        if (petaJabatan) setPetaJabatanDoc(petaJabatan.file_path);
 
         // Get latest Kelas Jabatan
         const kelasJabatan = data
-          .filter((d: any) => d.jenis_persesjen === "Kelas Jabatan" && d.persesjen_path)
+          .filter((d: any) => d.jenis_peraturan === "Kelas Jabatan" && d.file_path)
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-        if (kelasJabatan) setKelasJabatanDoc(kelasJabatan.persesjen_path);
+        if (kelasJabatan) setKelasJabatanDoc(kelasJabatan.file_path);
       } catch (error) {
         console.error("Error fetching persesjen:", error);
       }
@@ -2123,7 +2123,7 @@ export default function PetaJabatanClient() {
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span className="font-medium">Persesjen</span>
+                <span className="font-medium">Peraturan Terkait</span>
                 <svg className={`w-3.5 h-3.5 transition-transform ${refDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -2136,7 +2136,7 @@ export default function PetaJabatanClient() {
                       onClick={() => { window.open(petaJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors"
                     >
-                      Persesjen Peta Jabatan
+                      Peraturan Terkait Peta Jabatan
                     </button>
                   )}
                   {isAdmin && kelasJabatanDoc && (
@@ -2144,7 +2144,7 @@ export default function PetaJabatanClient() {
                       onClick={() => { window.open(kelasJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
                     >
-                      Persesjen Kelas Jabatan
+                      Peraturan Terkait Kelas Jabatan
                     </button>
                   )}
                 </div>

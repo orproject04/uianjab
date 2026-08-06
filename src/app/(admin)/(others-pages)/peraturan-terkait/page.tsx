@@ -7,11 +7,11 @@ import Swal from "sweetalert2";
 import { CustomSelect } from "@/components/form/CustomSelect";
 import { FileJson, Loader2 } from 'lucide-react';
 
-type Persesjen = {
+type Peraturan = {
   id: string;
   nama: string;
-  jenis_persesjen: string;
-  persesjen_path: string | null;
+  jenis_peraturan: string;
+  file_path: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -19,7 +19,7 @@ type Persesjen = {
 export default function PeresjenPage() {
   const router = useRouter();
   const { me, isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
-  const [data, setData] = useState<Persesjen[]>([]);
+  const [data, setData] = useState<Peraturan[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
@@ -30,14 +30,15 @@ export default function PeresjenPage() {
   const [itemsPerPage] = useState(12);
   const [formData, setFormData] = useState({
     nama: "",
-    jenis_persesjen: "",
-    persesjen: null as File | null,
+    jenis_peraturan: "",
+    peraturan: null as File | null,
   });
 
   const [jenisOptions] = useState([
     { value: "Peta Jabatan", label: "Peta Jabatan" },
     { value: "Kelas Jabatan", label: "Kelas Jabatan" },
     { value: "Uraian Tugas Jabatan", label: "Uraian Tugas Jabatan" },
+    { value: "Analisis Jabatan", label: "Analisis Jabatan" },
   ]);
 
   const persejenInputRef = useRef<HTMLInputElement | null>(null);
@@ -54,7 +55,7 @@ export default function PeresjenPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/persesjen");
+      const res = await fetch("/api/peraturan-terkait");
       if (res.status === 401) {
         // Unauthorized -> show message and treat as empty
         setData([]);
@@ -89,7 +90,7 @@ export default function PeresjenPage() {
 
   // Open add modal
   const handleAdd = () => {
-    setFormData({ nama: "", jenis_persesjen: "", persesjen: null });
+    setFormData({ nama: "", jenis_peraturan: "", peraturan: null });
     setShowModal(true);
   };
 
@@ -102,15 +103,15 @@ export default function PeresjenPage() {
       return;
     }
 
-    if (!formData.jenis_persesjen.trim()) {
-      Swal.fire("Error", "Jenis Persesjen harus dipilih", "error");
+    if (!formData.jenis_peraturan.trim()) {
+      Swal.fire("Error", "Jenis Peraturan Terkait harus dipilih", "error");
       return;
     }
 
     const form = new FormData();
     form.append("nama", formData.nama.trim());
-    form.append("jenis_persesjen", formData.jenis_persesjen.trim());
-    if (formData.persesjen) form.append("persesjen", formData.persesjen);
+    form.append("jenis_peraturan", formData.jenis_peraturan.trim());
+    if (formData.peraturan) form.append("peraturan", formData.peraturan);
 
     setUploadLoading(true);
     setShowModal(false);
@@ -125,7 +126,7 @@ export default function PeresjenPage() {
     });
 
     try {
-      const res = await fetch("/api/persesjen", { method: "POST", body: form });
+      const res = await fetch("/api/peraturan-terkait", { method: "POST", body: form });
       const json = await res.json();
 
       if (!res.ok) {
@@ -146,8 +147,8 @@ export default function PeresjenPage() {
   // Handle delete
   const handleDelete = async (id: string, nama: string) => {
     const result = await Swal.fire({
-      title: "Hapus Dokumen Persesjen?",
-      text: `Yakin ingin menghapus dokumen Persesjen untuk "${nama}"?`,
+      title: "Hapus dokumen Peraturan Terkait?",
+      text: `Yakin ingin menghapus dokumen Peraturan Terkait untuk "${nama}"?`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
@@ -169,7 +170,7 @@ export default function PeresjenPage() {
     });
 
     try {
-      const res = await fetch(`/api/persesjen/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/peraturan-terkait/${id}`, { method: "DELETE" });
       const json = await res.json();
 
       if (!res.ok) {
@@ -189,7 +190,7 @@ export default function PeresjenPage() {
 
   // Filter data by search
   const filteredData = data.filter((item) => {
-    const matchesPath = item.persesjen_path;
+    const matchesPath = item.file_path;
     const matchesSearch = item.nama.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesPath && matchesSearch;
   });
@@ -246,10 +247,10 @@ export default function PeresjenPage() {
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Persesjen
+            Peraturan Terkait
           </h1>
           <p className="text-base text-gray-600 dark:text-gray-400">
-            Kelola dokumen Persesjen (Peta Jabatan dan Kelas Jabatan)
+            Kelola dokumen Peraturan Terkait Jabatan
           </p>
         </div>
       </div>
@@ -265,7 +266,7 @@ export default function PeresjenPage() {
               </svg>
               <input
                 type="text"
-                placeholder="Cari dokumen Persesjen..."
+                placeholder="Cari dokumen Peraturan Terkait..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 sm:pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
@@ -322,12 +323,12 @@ export default function PeresjenPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            {searchQuery ? "Tidak ada hasil" : "Belum ada dokumen Persesjen"}
+            {searchQuery ? "Tidak ada hasil" : "Belum ada dokumen Peraturan Terkait"}
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
             {searchQuery
               ? "Coba ubah kata kunci pencarian Anda"
-              : "Belum ada dokumen Persesjen yang di-upload"}
+              : "Belum ada dokumen Peraturan Terkait yang di-upload"}
           </p>
         </div>
       ) : viewMode === "grid" ? (
@@ -335,7 +336,7 @@ export default function PeresjenPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {paginatedData.map((item) => {
-              const pdfPath = item.persesjen_path;
+              const pdfPath = item.file_path;
               const formatDate = (dateString: string) => {
                 if (!dateString) return '-';
                 const date = new Date(dateString);
@@ -360,7 +361,7 @@ export default function PeresjenPage() {
                         {item.nama}
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {item.jenis_persesjen}
+                        {item.jenis_peraturan}
                       </p>
                     </div>
                     <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-700">
@@ -394,7 +395,7 @@ export default function PeresjenPage() {
                       onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nama); }}
                       disabled={deleteLoading === item.id}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-red-600 to-red-500 dark:from-red-500 dark:to-red-600 rounded-lg hover:from-red-700 hover:to-red-600 dark:hover:from-red-600 dark:hover:to-red-700 shadow-sm hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Hapus Dokumen Persesjen"
+                      title="Hapus dokumen Peraturan Terkait"
                     >
                       {deleteLoading === item.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -476,7 +477,7 @@ export default function PeresjenPage() {
                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Nama Dokumen Persesjen
+                      Nama dokumen Peraturan Terkait
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Tanggal Upload
@@ -488,7 +489,7 @@ export default function PeresjenPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {paginatedData.map((item) => {
-                    const pdfPath = item.persesjen_path;
+                    const pdfPath = item.file_path;
                     const formatDate = (dateString: string) => {
                       if (!dateString) return '-';
                       const date = new Date(dateString);
@@ -630,7 +631,7 @@ export default function PeresjenPage() {
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Upload Dokumen Persesjen Baru
+                    Upload dokumen Peraturan Terkait Baru
                   </h2>
                 </div>
                 <button
@@ -646,33 +647,33 @@ export default function PeresjenPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Nama Persesjen <span className="text-red-500">*</span>
+                    Nama Peraturan Terkait <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.nama}
                     onChange={(e) => setFormData({ ...formData, nama: e.target.value })}
-                    placeholder="Masukkan Nama Dokumen Persesjen"
+                    placeholder="Masukkan Nama dokumen Peraturan Terkait"
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Jenis Persesjen <span className="text-red-500">*</span>
+                    Jenis Peraturan Terkait <span className="text-red-500">*</span>
                   </label>
                   <CustomSelect
-                    value={formData.jenis_persesjen}
-                    onChange={(val) => setFormData({ ...formData, jenis_persesjen: val })}
-                    options={[{ value: "", label: "(Pilih Jenis Dokumen Persesjen)" }, ...jenisOptions]}
-                    placeholder="-- Pilih Jenis Dokumen Persesjen --"
+                    value={formData.jenis_peraturan}
+                    onChange={(val) => setFormData({ ...formData, jenis_peraturan: val })}
+                    options={[{ value: "", label: "(Pilih Jenis dokumen Peraturan Terkait)" }, ...jenisOptions]}
+                    placeholder="-- Pilih Jenis dokumen Peraturan Terkait --"
                     searchable={false}
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Dokumen Persesjen (PDF) <span className="text-red-500">*</span>
+                    dokumen Peraturan Terkait (PDF) <span className="text-red-500">*</span>
                   </label>
                   <div
                     onDragOver={(e) => { e.preventDefault(); setDragPersesjen(true); }}
@@ -681,7 +682,7 @@ export default function PeresjenPage() {
                       e.preventDefault();
                       setDragPersesjen(false);
                       const f = e.dataTransfer.files?.[0];
-                      if (f) setFormData({ ...formData, persesjen: f });
+                      if (f) setFormData({ ...formData, peraturan: f });
                     }}
                     onClick={() => persejenInputRef.current?.click()}
                     className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${dragPersesjen ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-brand-400 dark:hover:border-brand-500'
@@ -691,14 +692,14 @@ export default function PeresjenPage() {
                       <FileJson className="w-10 h-10 text-brand-500" />
                     </div>
                     <p className="text-gray-700 dark:text-gray-200 font-medium text-center">
-                      {dragPersesjen ? 'Lepaskan file di sini' : (formData.persesjen ? formData.persesjen.name : 'Klik atau seret file PDF ke sini')}
+                      {dragPersesjen ? 'Lepaskan file di sini' : (formData.peraturan ? formData.peraturan.name : 'Klik atau seret file PDF ke sini')}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">Hanya PDF yang diperbolehkan</p>
                     <input
                       ref={persejenInputRef}
                       type="file"
                       accept=".pdf,application/pdf"
-                      onChange={(e) => setFormData({ ...formData, persesjen: e.target.files?.[0] || null })}
+                      onChange={(e) => setFormData({ ...formData, peraturan: e.target.files?.[0] || null })}
                       className="hidden"
                     />
                   </div>
