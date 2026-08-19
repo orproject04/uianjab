@@ -1867,7 +1867,7 @@ export default function PetaJabatanClient() {
                 y={centerY - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
                 textAnchor="middle"
                 alignmentBaseline="middle"
-                fill="#111827"
+                fill="#000000"
                 style={{
                   fontSize: bp.isMobile ? "10px" : bp.isTablet ? "11px" : "12px",
                   fontWeight: 700
@@ -2354,9 +2354,9 @@ export default function PetaJabatanClient() {
 
     const metricBox = (x: number, y: number, value: string, color = "#111827") => (
       <g>
-        <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#111827" strokeWidth={1} />
+        <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#babcbf" strokeWidth={1} />
         <text x={x + boxW / 2} y={y + boxH / 2} textAnchor="middle" alignmentBaseline="central"
-          fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 400 }}>
+          fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
           {value}
         </text>
       </g>
