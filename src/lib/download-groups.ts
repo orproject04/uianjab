@@ -72,33 +72,18 @@ export function getDownloadGroups(allPetaJabatan: any[]): DownloadGroup[] {
     );
     eselon2Roots.push(...otherSetjenChildren);
 
-    const provinsiNodes: any[] = [];
-
     // For each Eselon 2 root, form a group
     for (const e2 of eselon2Roots) {
         const nodesInGroup = [e2, ...getSubtree(e2.peta_id)];
         const filteredNodes = nodesInGroup.filter(p => !!p.jabatan_id && (p.jenis_jabatan === "JABATAN FUNGSIONAL" || p.has_abk));
         
         if (filteredNodes.length > 0) {
-            const isProvinsi = (e2.nama_jabatan || "").toLowerCase().includes("kepala kantor dpd ri di ibu kota provinsi");
-            if (isProvinsi) {
-                provinsiNodes.push(...filteredNodes);
-            } else {
-                groups.push({
-                    id: e2.peta_id,
-                    name: e2.unit_kerja || e2.nama_jabatan || "Tanpa Nama",
-                    nodes: filteredNodes
-                });
-            }
+            groups.push({
+                id: e2.peta_id,
+                name: e2.unit_kerja || e2.nama_jabatan || "Tanpa Nama",
+                nodes: filteredNodes
+            });
         }
-    }
-
-    if (provinsiNodes.length > 0) {
-        groups.push({
-            id: "provinsi-all",
-            name: "Kantor DPD RI di Ibu Kota Provinsi",
-            nodes: provinsiNodes
-        });
     }
 
     return groups;
