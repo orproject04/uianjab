@@ -54,7 +54,8 @@ export async function GET(
         const safeIso = updatedAt.toISOString().replace(/[:.]/g, "-");
         // Tambahkan prefix "master-" atau "slug-" untuk membedakan cache
         const cachePrefix = isMaster ? "master" : "slug";
-        const cacheFile = `${cachePrefix}-${data.id}-${safeIso}.pdf`;
+        const uniqueId = data.peta_jabatan_id || data.id;
+        const cacheFile = `${cachePrefix}-${uniqueId}-${safeIso}.pdf`;
         const cachePath = path.join(CACHE_DIR, cacheFile);
 
         // coba load dari cache

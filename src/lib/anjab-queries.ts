@@ -3,6 +3,7 @@ import pool from "@/lib/db";
 
 export type AnjabRow = {
     id: string; // j.id (UUID)
+    peta_jabatan_id?: string | null; // NEW: used to differentiate cache
     kode_jabatan: string | null;
     nama_jabatan: string;
     ikhtisar_jabatan: string | null;
@@ -81,8 +82,9 @@ const UUID_RE =
 
 const SELECT_ANJAB = (whereClause: string) => `
     SELECT j.id,
+           so.id AS peta_jabatan_id,
            j.kode_jabatan,
-           j.nama_jabatan,
+           COALESCE(so.nama_jabatan, j.nama_jabatan) AS nama_jabatan,
            j.ikhtisar_jabatan,
            j.kelas_jabatan,
            j.prestasi_diharapkan,
@@ -286,8 +288,9 @@ const SELECT_ANJAB = (whereClause: string) => `
 // Query untuk slug yang menggunakan data ABK dari tugas_pokok_abk
 const SELECT_ANJAB_WITH_ABK = (whereClause: string) => `
     SELECT j.id,
+           so.id AS peta_jabatan_id,
            j.kode_jabatan,
-           j.nama_jabatan,
+           COALESCE(so.nama_jabatan, j.nama_jabatan) AS nama_jabatan,
            j.ikhtisar_jabatan,
            j.kelas_jabatan,
            j.prestasi_diharapkan,
@@ -499,13 +502,14 @@ export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | n
         if (byId.rows[0]) return byId.rows[0];
 
         // Try by peta_jabatan.id (find jabatan via peta_jabatan.jabatan_id)
-        const petaQuery = await pool.query("SELECT id as peta_jabatan_id, jabatan_id FROM peta_jabatan WHERE id = $1::uuid AND deleted_at IS NULL LIMIT 1", [idOrSlug]);
+        const petaQuery = await pool.query("SELECT id as peta_jabatan_id, jabatan_id, slug FROM peta_jabatan WHERE id = $1::uuid AND deleted_at IS NULL LIMIT 1", [idOrSlug]);
         if (petaQuery.rows[0]) {
             const anjab = await pool.query<AnjabRow>(
                 SELECT_ANJAB_WITH_ABK("j.id = $1::uuid AND so.id = $2::uuid"),
                 [petaQuery.rows[0].jabatan_id, petaQuery.rows[0].peta_jabatan_id]
             );
-            return anjab.rows[0] ?? null;
+            const row = anjab.rows[0] ?? null;
+            return row;
         }
         return null;
     }
@@ -553,5 +557,7 @@ export async function getAnjabByIdOrSlug(idOrSlug: string): Promise<AnjabRow | n
         [result.rows[0].jabatan_id, result.rows[0].peta_jabatan_id]
     );
     
-    return anjab.rows[0] ?? null;
+    const row = anjab.rows[0] ?? null;
+
+    return row;
 }
