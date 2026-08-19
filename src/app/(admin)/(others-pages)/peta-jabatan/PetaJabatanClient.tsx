@@ -43,9 +43,24 @@ type SearchMatch = {
   nodeId: string;
   matchedNameIndices: number[]; // indices of matched pejabat names, empty if jabatan name matched
   matchType: 'jabatan' | 'pejabat'; // what was matched
+  // For matches inside a KJF box (fungsional):
+  fungsionalIdx?: number;            // section index within the KJF's sorted list
+  fungsionalNameIndices?: number[];  // pejabat name indices within that fungsional
+  realParentId?: string;             // real ancestor row id — used to expand the tree path
 };
 
 // ---- Node internal + ghost
+type FungsionalItem = {
+  id: string;
+  slug: string;
+  path: string[];
+  nama_jabatan: string;
+  kelas_jabatan: string | null;
+  bezetting: number;
+  kebutuhan_pegawai: number;
+  pejabat: PegawaiInfo[];
+};
+
 type D3Node = {
   _id: string;
   _slug: string;
@@ -64,7 +79,19 @@ type D3Node = {
   // sintetis sederhana (kotak ungu tanpa detail)
   _syntheticSimple?: boolean;
   _syntheticLabel?: string;
+  // daftar fungsional yang diletakkan di dalam kotak KJF
+  _fungsionalList?: FungsionalItem[];
 };
+
+// Sama seperti normalizeSearchStr di pegawai-sk-sync.ts — lowercase, buang non-alfanumerik, rapatkan spasi
+function normalizeUnitKey(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function wrapText(s: string, maxChars = 32): string[] {
   const words = (s || "").split(/\s+/);
@@ -115,16 +142,18 @@ type ScenarioSyntheticFlags = {
 type ScenarioResult = {
   rows: APIRow[];
   synthetic: ScenarioSyntheticFlags;
+  fungsionalRows: APIRow[];
 };
 
 /**
  * Skenario:
- * 1) pusat=true,  fungsional=false (DEFAULT)
- * 2) pusat=true,  fungsional=true
- * 3) pusat=false, fungsional=false
- * 4) pusat=false, fungsional=true
+ * 1) pusat=true  (DEFAULT) — struktural + pelaksana di kantor pusat; fungsional dipisah
+ * 2) pusat=false          — struktural + pelaksana di daerah (di bawah Setjen); fungsional dipisah
+ *
+ * Struktural/pelaksana keluar di `rows` (masuk ke pohon d3-tree).
+ * Fungsional keluar di `fungsionalRows` (dirender vertikal di dalam kotak KJF).
  */
-function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): ScenarioResult {
+function filterByScenario(all: APIRow[], pusat: boolean): ScenarioResult {
   const byId = new Map<string, APIRow>(all.map(r => [r.id, r]));
   const setjenNode = all.find(r => (r.slug || "").toLowerCase() === "setjen") || null;
   const setjenId = setjenNode?.id ?? null;
@@ -159,51 +188,30 @@ function filterByScenario(all: APIRow[], pusat: boolean, fungsional: boolean): S
     if (val.startsWith(target)) return true; // accept 'ESELON II / ...'
     return false;
   };
-  const jenisRankLE = (r: APIRow, n: number) => rankJenis(r.jenis_jabatan) <= n;
 
-  // 1) Pusat + Struktural
-  if (pusat && !fungsional) {
+  if (pusat) {
+    // Pohon struktural pusat (tanpa fungsional)
     for (const r of all) if (r.is_pusat === true && !jenisEq(r, "JABATAN FUNGSIONAL")) add(r.id);
     for (const id of Array.from(keep)) addWithAncestors(id);
+    const fungsionalRows = all.filter(r => r.is_pusat === true && jenisEq(r, "JABATAN FUNGSIONAL"));
     return {
       rows: all.filter(r => keep.has(r.id)),
       synthetic: { addKJFforEselonII: true, addSKDPforSetjen: true, addKJFforEselonIII: false, kjfForInspekturAsE4: true },
+      fungsionalRows,
     };
   }
 
-  // 2) Pusat + Fungsional
-  if (pusat && fungsional) {
-    for (const r of all) if (r.is_pusat === true && jenisRankLE(r, 2)) add(r.id);
-    for (const r of all) if (r.is_pusat === true && jenisEq(r, "JABATAN FUNGSIONAL")) add(r.id);
-    for (const id of Array.from(keep)) addWithAncestors(id);
-    return {
-      rows: all.filter(r => keep.has(r.id)),
-      synthetic: { addKJFforEselonII: false, addSKDPforSetjen: false, addKJFforEselonIII: false, kjfForInspekturAsE4: false },
-    };
-  }
-
-  // 3) Daerah + Struktural
-  if (!pusat && !fungsional) {
-    if (setjenId) add(setjenId);
-    for (const r of all) if (r.is_pusat === false && !jenisEq(r, "JABATAN FUNGSIONAL") && isUnderSetjen(r.id)) add(r.id);
-    for (const id of Array.from(keep)) addWithAncestors(id, setjenId);
-    return {
-      rows: all.filter(r => keep.has(r.id)),
-      synthetic: { addKJFforEselonII: false, addSKDPforSetjen: false, addKJFforEselonIII: true, kjfForInspekturAsE4: false },
-    };
-  }
-
-  // 4) Daerah + Fungsional
+  // Daerah
   if (setjenId) add(setjenId);
-  for (const r of all) {
-    const isE3 = jenisEq(r, "ESELON III");
-    const isJF = jenisEq(r, "JABATAN FUNGSIONAL");
-    if (r.is_pusat === false && (isE3 || isJF) && isUnderSetjen(r.id)) add(r.id);
-  }
+  for (const r of all) if (r.is_pusat === false && !jenisEq(r, "JABATAN FUNGSIONAL") && isUnderSetjen(r.id)) add(r.id);
   for (const id of Array.from(keep)) addWithAncestors(id, setjenId);
+  const fungsionalRows = all.filter(
+    r => r.is_pusat === false && jenisEq(r, "JABATAN FUNGSIONAL") && isUnderSetjen(r.id)
+  );
   return {
     rows: all.filter(r => keep.has(r.id)),
-    synthetic: { addKJFforEselonII: false, addSKDPforSetjen: false, addKJFforEselonIII: false, kjfForInspekturAsE4: false },
+    synthetic: { addKJFforEselonII: false, addSKDPforSetjen: false, addKJFforEselonIII: true, kjfForInspekturAsE4: false },
+    fungsionalRows,
   };
 }
 
@@ -239,7 +247,6 @@ function Segmented<T extends string>({
 
 // ====== ENUM pilihan filter ======
 type ScopeOpt = "PUSAT" | "DAERAH";
-type FungsionalOpt = "STRUKTURAL" | "FUNGSIONAL";
 
 export default function PetaJabatanClient() {
   const router = useRouter();
@@ -251,9 +258,8 @@ export default function PetaJabatanClient() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Filter UI (default: Pusat + Struktural)
+  // Filter UI (default: Pusat)
   const [scope, setScope] = useState<ScopeOpt>("PUSAT");
-  const [fungsionalMode, setFungsionalMode] = useState<FungsionalOpt>("STRUKTURAL");
   const [displayMode, setDisplayMode] = useState<"ST" | "SK">("SK");
   const [filterText, setFilterText] = useState("");
   const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([]); // Detailed match info
@@ -275,9 +281,24 @@ export default function PetaJabatanClient() {
   // Persesjen documents state
   const [petaJabatanDoc, setPetaJabatanDoc] = useState<string | null>(null);
   const [kelasJabatanDoc, setKelasJabatanDoc] = useState<string | null>(null);
+  const [uraianJabatanDoc, setUraianJabatanDoc] = useState<string | null>(null);
 
   // Copy to clipboard state - track which name was just copied
   const [copiedNameId, setCopiedNameId] = useState<string | null>(null);
+
+  // Which KJF (Kelompok Jabatan Fungsional) boxes have their inner list expanded.
+  // Default: empty set = every KJF is collapsed (compact green header only) so tall
+  // fungsional lists don't clip through neighboring subtrees.
+  const [expandedKjfIds, setExpandedKjfIds] = useState<Set<string>>(new Set());
+
+  const toggleKjfExpanded = useCallback((kjfId: string) => {
+    setExpandedKjfIds(prev => {
+      const next = new Set(prev);
+      if (next.has(kjfId)) next.delete(kjfId);
+      else next.add(kjfId);
+      return next;
+    });
+  }, []);
 
   // Unit / Biro filter
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
@@ -286,6 +307,48 @@ export default function PetaJabatanClient() {
   const unitDropdownRef = useRef<HTMLDivElement | null>(null);
   const [refDropdownOpen, setRefDropdownOpen] = useState(false);
   const refDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Fungsional report download (admin only): fetches raw ST fungsional list and streams as CSV/JSON
+  // const [fungsionalReportOpen, setFungsionalReportOpen] = useState(false);
+  // const fungsionalReportRef = useRef<HTMLDivElement | null>(null);
+  // const [downloadingFungsional, setDownloadingFungsional] = useState<null | 'csv' | 'json'>(null);
+
+  // const downloadFungsionalReport = useCallback(async (format: 'csv' | 'json') => {
+  //   setDownloadingFungsional(format);
+  //   try {
+  //     const res = await fetch(`/api/sync/fungsional-report?format=${format}`, { credentials: 'include' });
+  //     if (!res.ok) {
+  //       const detail = await res.text().catch(() => '');
+  //       throw new Error(`HTTP ${res.status}${detail ? ` — ${detail.slice(0, 200)}` : ''}`);
+  //     }
+  //     const blob = await res.blob();
+  //     const url = URL.createObjectURL(blob);
+  //     const a = document.createElement('a');
+  //     a.href = url;
+  //     const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  //     a.download = `fungsional-st-${ts}.${format}`;
+  //     document.body.appendChild(a);
+  //     a.click();
+  //     document.body.removeChild(a);
+  //     URL.revokeObjectURL(url);
+  //   } catch (e: any) {
+  //     alert(`Gagal mengunduh laporan fungsional: ${e.message}`);
+  //   } finally {
+  //     setDownloadingFungsional(null);
+  //     setFungsionalReportOpen(false);
+  //   }
+  // }, []);
+
+  // useEffect(() => {
+  //   if (!fungsionalReportOpen) return;
+  //   const handler = (e: MouseEvent) => {
+  //     if (fungsionalReportRef.current && !fungsionalReportRef.current.contains(e.target as Node)) {
+  //       setFungsionalReportOpen(false);
+  //     }
+  //   };
+  //   document.addEventListener('mousedown', handler);
+  //   return () => document.removeEventListener('mousedown', handler);
+  // }, [fungsionalReportOpen]);
 
 
   // Save state to sessionStorage whenever it changes
@@ -315,6 +378,11 @@ export default function PetaJabatanClient() {
           .filter((d: any) => d.jenis_peraturan === "Kelas Jabatan" && d.file_path)
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         if (kelasJabatan) setKelasJabatanDoc(kelasJabatan.file_path);
+
+        const uraianJabatan = data
+          .filter((d: any) => d.jenis_peraturan === "Uraian Tugas Jabatan" && d.file_path)
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        if (uraianJabatan) setUraianJabatanDoc(uraianJabatan.file_path);
       } catch (error) {
         console.error("Error fetching persesjen:", error);
       }
@@ -327,12 +395,12 @@ export default function PetaJabatanClient() {
   }, [scope]);
 
   useEffect(() => {
-    sessionStorage.setItem('petaJabatan_fungsionalMode', fungsionalMode);
-  }, [fungsionalMode]);
-
-  useEffect(() => {
     sessionStorage.setItem('petaJabatan_displayMode', displayMode);
   }, [displayMode]);
+
+  useEffect(() => {
+    sessionStorage.setItem('petaJabatan_expandedKjfIds', JSON.stringify(Array.from(expandedKjfIds)));
+  }, [expandedKjfIds]);
 
   useEffect(() => {
     if (selectedUnit !== null) {
@@ -423,10 +491,10 @@ export default function PetaJabatanClient() {
     sessionStorage.removeItem('petaJabatan_lastClickedPath');
     sessionStorage.removeItem('petaJabatan_collapseMap');
     sessionStorage.removeItem('petaJabatan_scope');
-    sessionStorage.removeItem('petaJabatan_fungsionalMode');
     sessionStorage.removeItem('petaJabatan_displayMode');
     sessionStorage.removeItem('petaJabatan_returnFromAnjab');
     sessionStorage.removeItem('petaJabatan_selectedUnit');
+    sessionStorage.removeItem('petaJabatan_expandedKjfIds');
 
     // Reset all state to defaults
     setFilterText("");
@@ -435,10 +503,10 @@ export default function PetaJabatanClient() {
     setCurrentMatchIndex(0);
     setCurrentZoom(null);
     setScope("PUSAT");
-    setFungsionalMode("STRUKTURAL");
     setDisplayMode("SK");
     setSelectedUnit(null);
     setUnitSearch("");
+    setExpandedKjfIds(new Set());
     hasFocusedOnce.current = false;
     
     // Collapse all nodes to initial state
@@ -462,7 +530,6 @@ export default function PetaJabatanClient() {
       // Restore state from sessionStorage after data loaded
       const savedCollapseMap = sessionStorage.getItem('petaJabatan_collapseMap');
       const savedScope = sessionStorage.getItem('petaJabatan_scope');
-      const savedFungsionalMode = sessionStorage.getItem('petaJabatan_fungsionalMode');
       const savedDisplayMode = sessionStorage.getItem('petaJabatan_displayMode');
       const savedFilterText = sessionStorage.getItem('petaJabatan_filterText');
       const savedLastPath = sessionStorage.getItem('petaJabatan_lastClickedPath');
@@ -470,10 +537,6 @@ export default function PetaJabatanClient() {
 
       if (savedScope && (savedScope === 'PUSAT' || savedScope === 'DAERAH')) {
         setScope(savedScope as ScopeOpt);
-      }
-
-      if (savedFungsionalMode && (savedFungsionalMode === 'STRUKTURAL' || savedFungsionalMode === 'FUNGSIONAL')) {
-        setFungsionalMode(savedFungsionalMode as FungsionalOpt);
       }
 
       if (savedDisplayMode && (savedDisplayMode === 'ST' || savedDisplayMode === 'SK')) {
@@ -486,6 +549,14 @@ export default function PetaJabatanClient() {
 
       const savedUnit = sessionStorage.getItem('petaJabatan_selectedUnit');
       if (savedUnit) setSelectedUnit(savedUnit);
+
+      const savedExpandedKjf = sessionStorage.getItem('petaJabatan_expandedKjfIds');
+      if (savedExpandedKjf) {
+        try {
+          const arr = JSON.parse(savedExpandedKjf);
+          if (Array.isArray(arr)) setExpandedKjfIds(new Set(arr));
+        } catch { /* ignore */ }
+      }
 
       // Only restore lastClickedPath if returning from anjab page
       if (returnFromAnjab === 'true' && savedLastPath) {
@@ -627,9 +698,8 @@ export default function PetaJabatanClient() {
   // Map enum → skenario boolean
   const scenario = useMemo(() => {
     const pusat = scope === "PUSAT";
-    const fungsional = fungsionalMode === "FUNGSIONAL";
-    return filterByScenario(allRows, pusat, fungsional);
-  }, [allRows, scope, fungsionalMode]);
+    return filterByScenario(allRows, pusat);
+  }, [allRows, scope]);
 
   const rows = useMemo(() => {
     return scenario.rows.map(r => {
@@ -642,6 +712,46 @@ export default function PetaJabatanClient() {
     });
   }, [scenario.rows, displayMode]);
   const syntheticFlags = scenario.synthetic;
+
+  // Group fungsional rows by normalized unit_kerja so we can render them
+  // inside the KJF box under each Eselon II (or Eselon III for daerah).
+  const fungsionalByUnit = useMemo<Map<string, FungsionalItem[]>>(() => {
+    const byId = new Map<string, APIRow>(allRows.map(r => [r.id, r]));
+    const buildSlugPath = (r: APIRow): string[] => {
+      const path: string[] = [];
+      let cur: APIRow | undefined = r;
+      while (cur) {
+        path.unshift(cur.slug);
+        cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+      }
+      return path;
+    };
+
+    const map = new Map<string, FungsionalItem[]>();
+    for (const r of scenario.fungsionalRows) {
+      const key = normalizeUnitKey(r.unit_kerja);
+      if (!key) continue;
+      const pejabat = (displayMode === "SK" ? r.pejabat_sk : r.pejabat_st) ?? [];
+      const item: FungsionalItem = {
+        id: r.id,
+        slug: r.slug,
+        path: buildSlugPath(r),
+        nama_jabatan: r.nama_jabatan,
+        kelas_jabatan: r.kelas_jabatan ?? null,
+        bezetting: pejabat.length,
+        kebutuhan_pegawai: r.kebutuhan_pegawai ?? 0,
+        pejabat,
+      };
+      const list = map.get(key);
+      if (list) list.push(item);
+      else map.set(key, [item]);
+    }
+    // Stable sort each bucket by nama_jabatan
+    for (const [, list] of map) {
+      list.sort((a, b) => a.nama_jabatan.localeCompare(b.nama_jabatan, "id"));
+    }
+    return map;
+  }, [scenario.fungsionalRows, allRows, displayMode]);
 
   // Map unit_kerja → scope yang dibutuhkan (untuk auto-switch saat pilih Provinsi)
   const unitScopeMap = useMemo(() => {
@@ -849,7 +959,7 @@ export default function PetaJabatanClient() {
         const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
         const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
         const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
-        
+
         // Check which pejabat names match in the ACTIVE pejabat list
         const matchedNameIndices: number[] = [];
         (row.pejabat || []).forEach((p, idx) => {
@@ -875,9 +985,57 @@ export default function PetaJabatanClient() {
         }
       }
 
+      // Fungsional matches — grouped inside KJF boxes
+      const targetRank = scope === "PUSAT" ? 2 : 3;
+      const isKJFe3 = scope !== "PUSAT";
+      const unitKeyToEselonId = new Map<string, string>();
+      for (const r of unitFilteredRows) {
+        if (rankJenis(r.jenis_jabatan) !== targetRank) continue;
+        const kBiro = normalizeUnitKey(r.unit_kerja);
+        const kName = normalizeUnitKey(r.nama_jabatan);
+        if (kBiro && !unitKeyToEselonId.has(kBiro)) unitKeyToEselonId.set(kBiro, r.id);
+        if (kName && !unitKeyToEselonId.has(kName)) unitKeyToEselonId.set(kName, r.id);
+      }
+      for (const f of scenario.fungsionalRows) {
+        const key = normalizeUnitKey(f.unit_kerja);
+        const eselonId = key ? unitKeyToEselonId.get(key) : undefined;
+        if (!eselonId) continue; // orphan fungsional (no matching eselon in this scope) — skip
+        const list = fungsionalByUnit.get(key) ?? [];
+        const idxInList = list.findIndex(x => x.id === f.id);
+        if (idxInList < 0) continue;
+
+        const fNameMatch = (f.nama_jabatan || "").toLowerCase().includes(lcFilter);
+        const fSlugMatch = (f.slug || "").toLowerCase().includes(lcFilter);
+        const activePejabat = (displayMode === "SK" ? f.pejabat_sk : f.pejabat_st) ?? [];
+        const fPejabatIndices: number[] = [];
+        activePejabat.forEach((p, idx) => {
+          if ((p.name || "").toLowerCase().includes(lcFilter)) fPejabatIndices.push(idx);
+        });
+
+        if (fNameMatch || fSlugMatch) {
+          matches.push({
+            nodeId: `${isKJFe3 ? 'synthetic-kjf-e3' : 'synthetic-kjf'}:${eselonId}`,
+            matchedNameIndices: [],
+            matchType: 'jabatan',
+            fungsionalIdx: idxInList,
+            fungsionalNameIndices: [],
+            realParentId: eselonId,
+          });
+        } else if (fPejabatIndices.length > 0) {
+          matches.push({
+            nodeId: `${isKJFe3 ? 'synthetic-kjf-e3' : 'synthetic-kjf'}:${eselonId}`,
+            matchedNameIndices: [],
+            matchType: 'pejabat',
+            fungsionalIdx: idxInList,
+            fungsionalNameIndices: fPejabatIndices,
+            realParentId: eselonId,
+          });
+        }
+      }
+
       setSearchMatches(matches);
       setCurrentMatchIndex(0);
-      
+
       // Reset centered ref when new search starts
       if (matches.length > 0) {
         lastCenteredIndexRef.current = -1;
@@ -885,7 +1043,7 @@ export default function PetaJabatanClient() {
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [filterText, unitFilteredRows, displayMode]);
+  }, [filterText, unitFilteredRows, displayMode, scope, scenario.fungsionalRows, fungsionalByUnit]);
 
   // ==== Show only current match (collapse all others) ====
   useEffect(() => {
@@ -899,8 +1057,10 @@ export default function PetaJabatanClient() {
     // Collapse everything first
     for (const r of unitFilteredRows) expandMap[r.id] = true;
 
-    // Find the current match row and expand only its path
-    const currentRow = unitFilteredRows.find(r => r.id === currentMatch.nodeId);
+    // Find the current match row and expand only its path.
+    // For fungsional matches (KJF box), realParentId points to the hosting Eselon II/III.
+    const targetRowId = currentMatch.realParentId ?? currentMatch.nodeId;
+    const currentRow = unitFilteredRows.find(r => r.id === targetRowId);
     if (currentRow) {
       let current: APIRow | undefined = currentRow;
       while (current) {
@@ -910,6 +1070,17 @@ export default function PetaJabatanClient() {
     }
 
     setCollapseMap(expandMap);
+
+    // If the current match is inside a KJF box, auto-expand it so the highlighted
+    // fungsional section is visible.
+    if (currentMatch.realParentId && currentMatch.nodeId.startsWith('synthetic-kjf')) {
+      setExpandedKjfIds(prev => {
+        if (prev.has(currentMatch.nodeId)) return prev;
+        const next = new Set(prev);
+        next.add(currentMatch.nodeId);
+        return next;
+      });
+    }
 
     // Reset centered ref when collapsemap changes for search
     lastCenteredIndexRef.current = -1;
@@ -993,8 +1164,48 @@ export default function PetaJabatanClient() {
           /(inspektur|inspektorat)/i.test(n.nama_jabatan || "") ||
           /(inspektur|inspektorat)/i.test(n.slug || "");
         const kjfLevel = (syntheticFlags.kjfForInspekturAsE4 && isInspektorat) ? "ESELON IV" : "ESELON III";
+        // Fungsional milik Eselon II ini: cocokkan lewat unit_kerja; fallback ke nama_jabatan bila unit_kerja kosong
+        const kjfList =
+          fungsionalByUnit.get(normalizeUnitKey(n.unit_kerja)) ??
+          fungsionalByUnit.get(normalizeUnitKey(n.nama_jabatan)) ??
+          [];
+          
+        const syntheticId = `synthetic-kjf:${n.id}`;
+        let kjfChildren: D3Node[] = [];
+        
+        if (expandedKjfIds.has(syntheticId)) {
+          const avgItemHeight = 160;
+          const kjfBaseHeight = 100;
+          const totalHeight = kjfBaseHeight + (kjfList.length * avgItemHeight);
+          const nodeY = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
+          const layersToAdd = Math.floor(totalHeight / nodeY);
+          
+          if (layersToAdd > 0) {
+            let lastGhost: D3Node | null = null;
+            for (let i = layersToAdd; i >= 1; i--) {
+              const newGhost: D3Node = {
+                _id: `ghost-kjf-pad:${syntheticId}:L${i}`,
+                _slug: "ghost",
+                _path: [...myPath, "kjf", `ghost${i}`],
+                nama_jabatan: "",
+                jenis_jabatan: null,
+                bezetting: null,
+                kebutuhan_pegawai: null,
+                kelas_jabatan: null,
+                pejabat: [], pejabat_st: [], pejabat_sk: [],
+                _ghost: true,
+                children: lastGhost ? [lastGhost] : [],
+              };
+              lastGhost = newGhost;
+            }
+            if (lastGhost) {
+              kjfChildren = [lastGhost];
+            }
+          }
+        }
+
         synthetic.push({
-          _id: `synthetic-kjf:${n.id}`,
+          _id: syntheticId,
           _slug: "kjf",
           _path: [...myPath, "kjf"],
           nama_jabatan: "Kelompok Jabatan Fungsional",
@@ -1005,9 +1216,10 @@ export default function PetaJabatanClient() {
           pejabat: [],
           pejabat_st: [],
           pejabat_sk: [],
-          children: [],
+          children: kjfChildren,
           _syntheticSimple: true,
           _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
+          _fungsionalList: kjfList,
         });
       }
 
@@ -1033,8 +1245,47 @@ export default function PetaJabatanClient() {
 
       // ESELON III → KJF (E4) untuk skenario daerah-struktural
       if (syntheticFlags.addKJFforEselonIII && rankJenis(n.jenis_jabatan) === 3) {
+        const kjfList =
+          fungsionalByUnit.get(normalizeUnitKey(n.unit_kerja)) ??
+          fungsionalByUnit.get(normalizeUnitKey(n.nama_jabatan)) ??
+          [];
+          
+        const syntheticId = `synthetic-kjf-e3:${n.id}`;
+        let kjfChildren: D3Node[] = [];
+        
+        if (expandedKjfIds.has(syntheticId)) {
+          const avgItemHeight = 160;
+          const kjfBaseHeight = 100;
+          const totalHeight = kjfBaseHeight + (kjfList.length * avgItemHeight);
+          const nodeY = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
+          const layersToAdd = Math.floor(totalHeight / nodeY);
+          
+          if (layersToAdd > 0) {
+            let lastGhost: D3Node | null = null;
+            for (let i = layersToAdd; i >= 1; i--) {
+              const newGhost: D3Node = {
+                _id: `ghost-kjf-pad:${syntheticId}:L${i}`,
+                _slug: "ghost",
+                _path: [...myPath, "kjf", `ghost${i}`],
+                nama_jabatan: "",
+                jenis_jabatan: null,
+                bezetting: null,
+                kebutuhan_pegawai: null,
+                kelas_jabatan: null,
+                pejabat: [], pejabat_st: [], pejabat_sk: [],
+                _ghost: true,
+                children: lastGhost ? [lastGhost] : [],
+              };
+              lastGhost = newGhost;
+            }
+            if (lastGhost) {
+              kjfChildren = [lastGhost];
+            }
+          }
+        }
+
         synthetic.push({
-          _id: `synthetic-kjf-e3:${n.id}`,
+          _id: syntheticId,
           _slug: "kjf",
           _path: [...myPath, "kjf"],
           nama_jabatan: "Kelompok Jabatan Fungsional",
@@ -1045,9 +1296,10 @@ export default function PetaJabatanClient() {
           pejabat: [],
           pejabat_st: [],
           pejabat_sk: [],
-          children: [],
+          children: kjfChildren,
           _syntheticSimple: true,
           _syntheticLabel: "KELOMPOK JABATAN FUNGSIONAL",
+          _fungsionalList: kjfList,
         });
       }
 
@@ -1068,7 +1320,7 @@ export default function PetaJabatanClient() {
     };
 
     return (byParent.get(null) || []).map(root => build(root, []));
-  }, [unitFilteredRows, syntheticFlags]);
+  }, [unitFilteredRows, syntheticFlags, fungsionalByUnit, expandedKjfIds, bp.isMobile, bp.isTablet]);
 
   // ==== Filter text ====
   const lcFilter = filterText.trim().toLowerCase();
@@ -1081,7 +1333,9 @@ export default function PetaJabatanClient() {
       
       // Build path set from root to current match (using unitFilteredRows for real nodes)
       const pathIds = new Set<string>();
-      const currentRow = unitFilteredRows.find(r => r.id === currentMatch.nodeId);
+      // For fungsional matches, walk from the real parent Eselon (realParentId).
+      const targetRowId = currentMatch.realParentId ?? currentMatch.nodeId;
+      const currentRow = unitFilteredRows.find(r => r.id === targetRowId);
       if (currentRow) {
         let current: APIRow | undefined = currentRow;
         while (current) {
@@ -1089,25 +1343,29 @@ export default function PetaJabatanClient() {
           current = current.parent_id ? unitFilteredRows.find(r => r.id === current!.parent_id) : undefined;
         }
       }
-      
+      // Also keep the KJF synthetic node itself when the match is inside it.
+      const keepSyntheticId = currentMatch.realParentId ? currentMatch.nodeId : null;
+
       // Walk tree and keep nodes that are in path OR are ghost/synthetic with children in path
       const walkPath = (n: D3Node): D3Node | null => {
         // Check children first
         const kids = n.children.map(walkPath).filter(Boolean) as D3Node[];
-        
+
         // Include node if:
         // 1. It's in the path (real node that matches)
-        // 2. It's a ghost/synthetic node AND has children in the path
+        // 2. It's the matched KJF synthetic itself
+        // 3. It's a ghost/synthetic node AND has children in the path
         const isInPath = pathIds.has(n._id);
+        const isMatchedSynthetic = keepSyntheticId !== null && n._id === keepSyntheticId;
         const isGhostWithKids = (n._ghost || n._syntheticSimple) && kids.length > 0;
-        
-        if (isInPath || isGhostWithKids) {
+
+        if (isInPath || isMatchedSynthetic || isGhostWithKids) {
           return { ...n, children: kids };
         }
-        
+
         return null;
       };
-      
+
       return roots.map(walkPath).filter(Boolean) as D3Node[];
     }
     
@@ -1165,7 +1423,7 @@ export default function PetaJabatanClient() {
   // Lower zoom for better overview on 14-inch laptops
   const initialZoom = bp.isMobile ? 0.45 : bp.isTablet ? 0.55 : 0.65;
   // Balanced separation - not too cramped, not too wide
-  const separation = { siblings: bp.isMobile ? 1.15 : 1.25, nonSiblings: bp.isMobile ? 1.25 : 1.35 };
+  const separation = { siblings: bp.isMobile ? 1.1 : 1.15, nonSiblings: bp.isMobile ? 1.15 : 1.2 };
 
   const toRD3 = (n: D3Node): RawNodeDatum => {
     const id = n._id;
@@ -1213,6 +1471,7 @@ export default function PetaJabatanClient() {
         pejabat: n.pejabat ?? [],
         syntheticSimple: n._syntheticSimple === true,
         syntheticLabel: n._syntheticLabel || null,
+        fungsionalList: n._fungsionalList ?? null,
         // sizing hints
         _titleLines: titleLines.length,
         baseCardH,
@@ -1377,14 +1636,17 @@ export default function PetaJabatanClient() {
         return;
       }
       
-      // Find the matching row to get path
-      const matchRow = unitFilteredRows.find(r => r.id === currentMatch.nodeId);
+      // Find the matching row to get path. Fungsional matches use the real parent
+      // Eselon II/III as the anchor; append "/kjf" so we scroll to the KJF box itself.
+      const anchorRowId = currentMatch.realParentId ?? currentMatch.nodeId;
+      const matchRow = unitFilteredRows.find(r => r.id === anchorRowId);
       if (!matchRow) {
         return;
       }
-     
-      const matchPath = buildPathForRow(matchRow, rows);
-      
+
+      const baseMatchPath = buildPathForRow(matchRow, rows);
+      const matchPath = currentMatch.realParentId ? `${baseMatchPath}/kjf` : baseMatchPath;
+
       // Find node position in tree coordinates (starting from x=0 center)
       const nodePos = findNodePosition(matchPath, rd3Data);
       
@@ -1555,53 +1817,477 @@ export default function PetaJabatanClient() {
     // NODE SINTETIS
     if (attrs.syntheticSimple) {
       const W = cardW; // Same width as regular nodes for consistency
-      const label: string = attrs.syntheticLabel || (nodeDatum.name || "");
+      const rawLabel: string = attrs.syntheticLabel || (nodeDatum.name || "");
       const isCollapsed = !!attrs.isCollapsed;
       const hasChildren = !!attrs.hasChildren;
+      const fungsionalList: FungsionalItem[] = Array.isArray(attrs.fungsionalList)
+        ? (attrs.fungsionalList as FungsionalItem[])
+        : [];
+      const hasFungsional = fungsionalList.length > 0;
+      const isKjfExpanded = hasFungsional && expandedKjfIds.has(attrs.id);
+      // Show the count next to the KJF header so the collapsed view still
+      // communicates "there are N jabatan hiding inside."
+      const label = hasFungsional
+        ? `${rawLabel}`
+        : rawLabel;
 
       // Wrap text for long labels
       const maxCharsPerLine = bp.isMobile ? 25 : bp.isTablet ? 35 : 45;
       const labelLines = wrapText(label, maxCharsPerLine);
       const lineHeight = bp.isMobile ? 18 : 20;
-      const H = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
+      const headerH = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
 
       const xLeft = -W / 2;
-      const yTop = -H / 2;
-      const centerY = 0;
 
+      // Compact path: no fungsional at all, OR fungsional exists but user hasn't expanded it.
+      // Renders only the green header — keeps the tree tidy so tall lists don't clip neighbors.
+      if (!hasFungsional || !isKjfExpanded) {
+        const siblingMaxBase = (attrs && attrs.siblingMaxBaseCardH) ? attrs.siblingMaxBaseCardH : headerH;
+        const yTop = -siblingMaxBase / 2;
+        const centerY = yTop + headerH / 2;
+        const toggleSize = bp.isMobile ? 20 : 22;
+        const toggleX = xLeft + W - toggleSize - 8;
+        const toggleY = yTop + 8;
+        // stroke="none" cancels react-d3-tree's inherited `.rd3t-node`/`.rd3t-leaf-node` black
+        // outline, which otherwise thickens every <text> character. Shapes that need a border
+        // (like the header rect) already set their own `stroke="..."` so they're unaffected.
+        return (
+          <g data-node-id={attrs.id} stroke="none">
+            {/* Mask incoming link that protrudes below the box */}
+            {yTop + headerH < 2 && (
+              <rect x={-4} y={yTop + headerH - 2} width={8} height={4 - (yTop + headerH)} fill="#fff" stroke="" strokeWidth={1} />
+            )}
+            <rect x={xLeft} y={yTop} width={W} height={headerH} rx={8} ry={8}
+              fill="#E8F5D9" stroke="#6DB980" strokeWidth={1}
+              style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
+            {labelLines.map((line, i) => (
+              <text
+                key={i}
+                x={0}
+                y={centerY - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
+                textAnchor="middle"
+                alignmentBaseline="middle"
+                fill="#000000"
+                style={{
+                  fontSize: bp.isMobile ? "10px" : bp.isTablet ? "11px" : "12px",
+                  fontWeight: 700
+                }}
+              >
+                {String(line).toUpperCase()}
+              </text>
+            ))}
+            {/* Expand chevron — only when there's a fungsional list to reveal */}
+            {hasFungsional && (
+              <g
+                transform={`translate(${toggleX}, ${toggleY})`}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleKjfExpanded(attrs.id); }}
+                style={{ cursor: 'pointer' }}
+              >
+                <title>Tampilkan daftar jabatan fungsional</title>
+                <rect width={toggleSize} height={toggleSize} rx={5} ry={5}
+                  fill="#ffffff" stroke="#6DB980" strokeWidth={1} />
+                {/* down chevron */}
+                <path d={`M6 ${toggleSize / 2 - 2} L${toggleSize / 2} ${toggleSize / 2 + 3} L${toggleSize - 6} ${toggleSize / 2 - 2}`}
+                  stroke="#4b5563" strokeWidth={2} fill="none"
+                  strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            )}
+            {/* Legacy tree-children chevron — never triggers for KJF (no d3 children) but kept for other synthetic simples */}
+            {hasChildren && !hasFungsional && (
+              <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
+                onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
+                <rect width={bp.isMobile ? 16 : 18} height={bp.isMobile ? 16 : 18} rx={5} ry={5}
+                  fill="#fff" stroke="#c4c4c4" strokeWidth={1} />
+                <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
+                  transform={isCollapsed ? "" : "rotate(90 9 9)"} />
+              </g>
+            )}
+          </g>
+        );
+      }
+
+      // ==== KJF variant with an inner fungsional stack ====
+      // Anchor the header's TOP EDGE to -siblingMaxBase/2 so it lines up with the
+      // struktural sibling cards' tops. The list body extends downward from there.
+      const siblingMaxBase = (attrs && attrs.siblingMaxBaseCardH) ? attrs.siblingMaxBaseCardH : headerH;
+      const yHeaderTop = -siblingMaxBase / 2;
+      const yHeaderCenter = yHeaderTop + headerH / 2;
+
+      // Search highlight state for sections inside this KJF
+      const kjfMatchesHere = searchMatches.filter(m => m.nodeId === attrs.id && m.fungsionalIdx !== undefined);
+      const currentKjfMatch = searchMatches[currentMatchIndex];
+      const isCurrentKjfMatchHere = !!currentKjfMatch && currentKjfMatch.nodeId === attrs.id && currentKjfMatch.fungsionalIdx !== undefined;
+
+      // Sizing tokens (KJF variant)
+      const innerPadX = bp.isMobile ? 12 : 16;
+      const innerPadY = bp.isMobile ? 14 : 16;
+      const sectionTopPad = bp.isMobile ? 10 : 12;
+      const sectionBottomPad = bp.isMobile ? 10 : 12;
+      // Extra vertical gap between adjacent sections; the divider line sits in the middle of it.
+      const interSectionGap = bp.isMobile ? 18 : 24;
+      const sepThickness = 2;
+      const titleFontKjf = bp.isMobile ? 12 : 13;
+      const titleLineHKjf = bp.isMobile ? 16 : 18;
+      const kelasFont = bp.isMobile ? 10 : 11;
+      const kelasLineH = bp.isMobile ? 14 : 15;
+      const nameFontPx = bp.isMobile ? 11 : 12;
+      const nameFieldH = bp.isMobile ? 24 : 28;
+      const nameGap = bp.isMobile ? 5 : 6;
+      const labelFontPx = bp.isMobile ? 10 : 11;
+      const labelH = bp.isMobile ? 12 : 13;
+      const labelToBoxGap = 3;
+      const headerRowToKelasGap = 6;
+      const kelasToNamesGap = bp.isMobile ? 8 : 10;
+      const metricsTotalW = boxW * 3 + boxGap * 2;
+      const metricsBlockH = labelH + labelToBoxGap + boxH;
+      const gutterBetweenTitleAndMetrics = 20;
+      const titleAreaW = W - innerPadX * 2 - metricsTotalW - gutterBetweenTitleAndMetrics;
+      // Assume ~8.6px per char for uppercase text at 13px — err on the safe side so long titles wrap before touching the metrics.
+      const titleCharsPerLine = Math.max(12, Math.floor(titleAreaW / 8.6));
+
+      // Pre-compute per-section geometry.
+      //   Row 1 (labels row): title line 1 (left)   + B / K / ± labels (right)
+      //   Row 2 (boxes row) : title line 2 or kelas + metric boxes (right)
+      //   Row 3+           : remaining title lines, then kelas (if not already placed in row 2)
+      const sections = fungsionalList.map((f) => {
+        const tLines = wrapText(String(f.nama_jabatan || "").toUpperCase(), titleCharsPerLine);
+        const namesArr = (f.pejabat || []).map(p => {
+          const role = p.role ? ` (${p.role})` : '';
+          return `${p.name}${role}`;
+        });
+        const titleRows = tLines.length;
+        const titleH = titleRows * titleLineHKjf;
+        // Header block height = height from top of row 1 to bottom of the taller of the
+        // metrics block or the title, plus kelas if it sits below the block.
+        const headerBlockH = titleRows === 1
+          ? metricsBlockH // 1-line title: kelas sits IN the boxes row (central-aligned)
+          : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH;
+        const namesBlockH = namesArr.length > 0
+          ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap
+          : nameFieldH; // reserve one pill's worth of space for the empty placeholder
+        const h =
+          sectionTopPad +
+          headerBlockH +
+          kelasToNamesGap +
+          namesBlockH +
+          sectionBottomPad;
+        return { f, tLines, namesArr, titleRows, titleH, headerBlockH, namesBlockH, h };
+      });
+
+      const listBodyH =
+        innerPadY * 2 +
+        sections.reduce((acc, s) => acc + s.h, 0) +
+        interSectionGap * Math.max(0, sections.length - 1);
+
+      const bodyGapFromHeader = 8;
+      const yBodyTop = yHeaderTop + headerH + bodyGapFromHeader;
+      const boxesLeftX = xLeft + W - innerPadX - metricsTotalW;
+
+      let cursorY = yBodyTop + innerPadY;
+
+      // stroke="none" cancels react-d3-tree's inherited `.rd3t-node` black outline, which
+      // otherwise thickens every <text> character inside. Rects that need a visible border
+      // set their own `stroke="..."` explicitly, so they're unaffected.
       return (
-        <g data-node-id={attrs.id}>
-          <rect x={xLeft} y={yTop} width={W} height={H} rx={8} ry={8}
+        <g data-node-id={attrs.id} stroke="none">
+          {/* Mask incoming link that protrudes below the box */}
+          {yBodyTop + listBodyH < 2 && (
+            <rect x={-4} y={yBodyTop + listBodyH - 2} width={8} height={4 - (yBodyTop + listBodyH)} fill="#fff" stroke="none" strokeWidth={0} />
+          )}
+          {/* GREEN HEADER */}
+          <rect x={xLeft} y={yHeaderTop} width={W} height={headerH} rx={8} ry={8}
             fill="#E8F5D9" stroke="#6DB980" strokeWidth={1}
             style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.08))" }} />
-
-          {/* Multi-line text for synthetic labels */}
           {labelLines.map((line, i) => (
             <text
               key={i}
               x={0}
-              y={centerY - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
+              y={yHeaderCenter - ((labelLines.length - 1) * lineHeight) / 2 + i * lineHeight}
               textAnchor="middle"
               alignmentBaseline="middle"
               fill="#111827"
               style={{
                 fontSize: bp.isMobile ? "10px" : bp.isTablet ? "11px" : "12px",
-                fontWeight: 600
+                fontWeight: 700
               }}
             >
               {String(line).toUpperCase()}
             </text>
           ))}
 
-          {hasChildren && (
-            <g transform={`translate(${xLeft + W - (bp.isMobile ? 24 : 26)}, ${yTop + 8})`}
-              onClick={(e) => toggleByDatum(nodeDatum, e)} style={{ cursor: "pointer" }}>
-              <rect width={bp.isMobile ? 16 : 18} height={bp.isMobile ? 16 : 18} rx={5} ry={5}
-                fill="#fff" stroke="#c4c4c4" strokeWidth={1} />
-              <path d="M6 5 L12 9 L6 13 Z" fill="#6b7280"
-                transform={isCollapsed ? "" : "rotate(90 9 9)"} />
-            </g>
-          )}
+          {/* Collapse chevron — hides the fungsional list */}
+          {(() => {
+            const toggleSize = bp.isMobile ? 20 : 22;
+            const toggleX = xLeft + W - toggleSize - 8;
+            const toggleY = yHeaderTop + 8;
+            return (
+              <g
+                transform={`translate(${toggleX}, ${toggleY})`}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleKjfExpanded(attrs.id); }}
+                style={{ cursor: 'pointer' }}
+              >
+                <title>Sembunyikan daftar jabatan fungsional</title>
+                <rect width={toggleSize} height={toggleSize} rx={5} ry={5}
+                  fill="#ffffff" stroke="#6DB980" strokeWidth={1} />
+                {/* up chevron */}
+                <path d={`M6 ${toggleSize / 2 + 2} L${toggleSize / 2} ${toggleSize / 2 - 3} L${toggleSize - 6} ${toggleSize / 2 + 2}`}
+                  stroke="#4b5563" strokeWidth={2} fill="none"
+                  strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            );
+          })()}
+
+          {/* OUTER LIST BOX */}
+          <rect x={xLeft} y={yBodyTop} width={W} height={listBodyH}
+            rx={8} ry={8}
+            fill="#ffffff" stroke="#6DB980" strokeWidth={1}
+            style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.06))" }} />
+
+          {sections.map((s, si) => {
+            const { f, tLines, namesArr, titleRows, titleH, h } = s;
+            const yStart = cursorY;
+            const yTitleTop = yStart + sectionTopPad;
+            const yLabels = yTitleTop;
+            const yBoxes = yLabels + labelH + labelToBoxGap;
+            // Kelas position:
+            //   1-line title → aligned with the box vertical center (drawn with alignmentBaseline="central")
+            //   multi-line  → sits below the taller of the title stack or the metric block
+            const yBoxCenter = yBoxes + boxH / 2;
+            const yKelas = titleRows === 1
+              ? yBoxCenter
+              : Math.max(yTitleTop + titleH, yBoxes + boxH) + headerRowToKelasGap;
+            const yNamesTop = titleRows === 1
+              ? yBoxes + boxH + kelasToNamesGap
+              : yKelas + kelasLineH + kelasToNamesGap;
+
+            const bez = f.bezetting ?? 0;
+            const keb = f.kebutuhan_pegawai ?? 0;
+            const sel = bez - keb;
+
+            const jabatanPath = f.path.join("/");
+            const jabatanHref = `/anjab/${jabatanPath}`;
+            const onSectionClick = async (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (isFullscreen || document.fullscreenElement || (document as any).webkitFullscreenElement) {
+                try {
+                  await exitFullscreen();
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                } catch {}
+              }
+              sessionStorage.setItem('petaJabatan_lastClickedPath', jabatanPath);
+              window.open(jabatanHref, '_blank', 'noopener,noreferrer');
+              setHighlightUpdate(prev => prev + 1);
+            };
+
+            // Advance cursor for the next iteration (the interSectionGap contains the divider)
+            cursorY = yStart + h + (si < sections.length - 1 ? interSectionGap : 0);
+
+            // Match highlight state for this specific section
+            const matchForThisSection = kjfMatchesHere.find(m => m.fungsionalIdx === si);
+            const isSectionMatched = !!matchForThisSection;
+            const isCurrentSectionMatched = isCurrentKjfMatchHere && currentKjfMatch.fungsionalIdx === si;
+            const sectionNameHits: number[] = matchForThisSection?.fungsionalNameIndices ?? [];
+
+            return (
+              <g key={f.id}>
+                {/* Search highlight background for this section */}
+                {isSectionMatched && (
+                  <rect
+                    x={xLeft + 4}
+                    y={yStart + 2}
+                    width={W - 8}
+                    height={h - 4}
+                    rx={6}
+                    ry={6}
+                    fill={isCurrentSectionMatched ? "#FEF3C7" : "none"}
+                    stroke={isCurrentSectionMatched ? "#F59E0B" : "#FBBF24"}
+                    strokeWidth={isCurrentSectionMatched ? 3.5 : 2.5}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )}
+
+                {/* Title (clickable) — always top-aligned with the B/K/± labels row.
+                    Multi-line titles cascade down through the boxes row and beyond. */}
+                {tLines.map((ln, i) => (
+                  <text
+                    key={i}
+                    x={xLeft + innerPadX}
+                    y={yTitleTop + i * titleLineHKjf}
+                    textAnchor="start"
+                    alignmentBaseline="hanging"
+                    fill="#374151"
+                    onClick={onSectionClick}
+                    style={{
+                      fontSize: `${titleFontKjf}px`,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      pointerEvents: 'auto',
+                    }}
+                  >
+                    {ln}
+                  </text>
+                ))}
+
+                {/* B / K / ± labels */}
+                {["B", "K", "±"].map((lbl, i) => (
+                  <text
+                    key={lbl}
+                    x={boxesLeftX + i * (boxW + boxGap) + boxW / 2}
+                    y={yLabels}
+                    textAnchor="middle"
+                    alignmentBaseline="hanging"
+                    fill="#000000"
+                    style={{ fontSize: `${labelFontPx}px`, fontWeight: 600, pointerEvents: 'none' }}
+                  >
+                    {lbl}
+                  </text>
+                ))}
+
+                {/* Metric boxes */}
+                {[bez, keb, sel].map((v, i) => (
+                  <g key={i}>
+                    <rect
+                      x={boxesLeftX + i * (boxW + boxGap)}
+                      y={yBoxes}
+                      width={boxW}
+                      height={boxH}
+                      rx={6}
+                      ry={6}
+                      fill="#ffffff"
+                      stroke="#d1d5db"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={boxesLeftX + i * (boxW + boxGap) + boxW / 2}
+                      y={yBoxes + boxH / 2 + 1}
+                      textAnchor="middle"
+                      alignmentBaseline="central"
+                      fill="#000000"
+                      style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 600, pointerEvents: 'none' }}
+                    >
+                      {String(v)}
+                    </text>
+                  </g>
+                ))}
+
+                {/* Kelas Jabatan — for 1-line titles, central-align with the box vertical center */}
+                <text
+                  x={xLeft + innerPadX}
+                  y={yKelas}
+                  textAnchor="start"
+                  alignmentBaseline={titleRows === 1 ? "central" : "hanging"}
+                  fill="#9ca3af"
+                  style={{ fontSize: `${kelasFont}px`, fontWeight: 600, pointerEvents: 'none' }}
+                >
+                  {`Kelas Jabatan : ${f.kelas_jabatan || "-"}`}
+                </text>
+
+                {/* Name pills OR empty placeholder */}
+                {namesArr.length > 0 ? (
+                  namesArr.map((nm, ni) => {
+                    const yPill = yNamesTop + ni * (nameFieldH + nameGap);
+                    const copyId = `${attrs.id}-fung-${si}-${ni}`;
+                    const isCopied = copiedNameId === copyId;
+                    const buttonSize = bp.isMobile ? 18 : 20;
+                    const buttonX = xLeft + W - innerPadX - buttonSize - 6;
+                    const buttonY = yPill + (nameFieldH - buttonSize) / 2;
+                    const isNameMatched = sectionNameHits.includes(ni);
+                    const isCurrentNameMatched = isCurrentSectionMatched && isNameMatched;
+                    const pillStroke = isCurrentNameMatched ? "#F59E0B" : isNameMatched ? "#FBBF24" : "#d1d5db";
+                    const pillWidth = isCurrentNameMatched ? 2 : isNameMatched ? 1.5 : 1;
+                    const pillFill = isCurrentNameMatched ? "#FEF3C7" : "#ffffff";
+                    return (
+                      <g key={ni}>
+                        <rect
+                          x={xLeft + innerPadX}
+                          y={yPill}
+                          width={W - innerPadX * 2}
+                          height={nameFieldH}
+                          rx={5}
+                          ry={5}
+                          fill={pillFill}
+                          stroke={pillStroke}
+                          strokeWidth={pillWidth}
+                          style={{ pointerEvents: 'none' }}
+                        />
+                        <text
+                          x={xLeft + innerPadX + 10}
+                          y={yPill + nameFieldH / 2 + 1}
+                          textAnchor="start"
+                          alignmentBaseline="central"
+                          fill="#111827"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            fontSize: `${nameFontPx}px`,
+                            fontWeight: 600,
+                            userSelect: 'text',
+                            WebkitUserSelect: 'text',
+                            cursor: 'text',
+                            pointerEvents: 'auto',
+                          }}
+                        >
+                          {nm}
+                        </text>
+                        <g
+                          transform={`translate(${buttonX}, ${buttonY})`}
+                          onClick={(e) => handleCopyName(nm, `${attrs.id}-fung-${si}`, ni, e)}
+                          style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                        >
+                          <rect
+                            width={buttonSize}
+                            height={buttonSize}
+                            rx={4}
+                            ry={4}
+                            fill={isCopied ? "#10B981" : "#f3f4f6"}
+                            stroke={isCopied ? "#059669" : "#d1d5db"}
+                            strokeWidth={1}
+                          />
+                          {isCopied ? (
+                            <path d="M5 10 L8 13 L14 6" stroke="#ffffff" strokeWidth={2}
+                              strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                          ) : (
+                            <g>
+                              <rect x={4} y={5} width={8} height={10} rx={1.5} ry={1.5}
+                                fill="none" stroke="#6b7280" strokeWidth={1.5} />
+                              <path d="M7 5 V4 Q7 3 8 3 H13 Q14 3 14 4 V12 Q14 13 13 13 H12"
+                                fill="none" stroke="#6b7280" strokeWidth={1.5} />
+                            </g>
+                          )}
+                        </g>
+                      </g>
+                    );
+                  })
+                ) : (
+                  <rect
+                    x={xLeft + innerPadX}
+                    y={yNamesTop}
+                    width={W - innerPadX * 2}
+                    height={nameFieldH}
+                    rx={5}
+                    ry={5}
+                    fill="#ffffff"
+                    stroke="#d1d5db"
+                    strokeWidth={1}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )}
+
+                {/* Separator line — sits in the middle of the interSectionGap */}
+                {si < sections.length - 1 && (
+                  <line
+                    x1={xLeft + innerPadX}
+                    x2={xLeft + W - innerPadX}
+                    y1={yStart + h + interSectionGap / 2}
+                    y2={yStart + h + interSectionGap / 2}
+                    stroke="#6DB980"
+                    strokeOpacity={0.75}
+                    strokeWidth={sepThickness}
+                  />
+                )}
+              </g>
+            );
+          })}
         </g>
       );
     }
@@ -1668,7 +2354,7 @@ export default function PetaJabatanClient() {
 
     const metricBox = (x: number, y: number, value: string, color = "#111827") => (
       <g>
-        <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#e5e7eb" strokeWidth={1} />
+        <rect x={x} y={y} width={boxW} height={boxH} rx={6} ry={6} fill="#ffffff" stroke="#babcbf" strokeWidth={1} />
         <text x={x + boxW / 2} y={y + boxH / 2} textAnchor="middle" alignmentBaseline="central"
           fill={color} strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200 }}>
           {value}
@@ -1743,6 +2429,10 @@ export default function PetaJabatanClient() {
 
     return (
       <g data-node-id={attrs.id}>
+        {/* Mask incoming link that protrudes below the box */}
+        {yTop + cardH < 2 && (
+          <rect x={-4} y={yTop + cardH - 2} width={8} height={4 - (yTop + cardH)} fill="#fff" stroke="none" strokeWidth={0} />
+        )}
         {/* KARTU - Clickable except toggle button */}
         <rect x={xLeft} y={yTop} width={cardW} height={cardH}
           rx={8} ry={8} fill="#ffffff"
@@ -1762,7 +2452,7 @@ export default function PetaJabatanClient() {
             <text key={i} x={centerX} y={yTitleStart + i * lineH}
               textAnchor="middle" alignmentBaseline="hanging"
               fill="#111827" strokeWidth={1}
-              style={{ fontSize: `${titleFontPx}px`, fontWeight: 500, opacity: 0.85, color: "#152E6D" }}>
+              style={{ fontSize: `${titleFontPx}px`, fontWeight: 400, opacity: 0.85, color: "#152E6D" }}>
               {line}
             </text>
           ))}
@@ -1932,7 +2622,7 @@ export default function PetaJabatanClient() {
         )}
       </g>
     );
-  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen, copiedNameId, handleCopyName]);
+  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen, copiedNameId, handleCopyName, expandedKjfIds, toggleKjfExpanded]);
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
@@ -2000,12 +2690,6 @@ export default function PetaJabatanClient() {
             value={scope}
             onChange={setScope}
             options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
-            size={bp.isMobile ? "sm" : "md"}
-          />
-          <Segmented
-            value={fungsionalMode}
-            onChange={setFungsionalMode}
-            options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
             size={bp.isMobile ? "sm" : "md"}
           />
           <Segmented
@@ -2114,7 +2798,7 @@ export default function PetaJabatanClient() {
             </div>
           )}
 
-          {(petaJabatanDoc || (isAdmin && kelasJabatanDoc)) && (
+          {(petaJabatanDoc || (isAdmin && kelasJabatanDoc) || uraianJabatanDoc) && (
             <div className="relative z-20" ref={refDropdownRef}>
               <button
                 onClick={() => setRefDropdownOpen(!refDropdownOpen)}
@@ -2147,10 +2831,61 @@ export default function PetaJabatanClient() {
                       Peraturan Terkait Kelas Jabatan
                     </button>
                   )}
+                  {uraianJabatanDoc && (
+                    <button
+                      onClick={() => { window.open(uraianJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
+                    >
+                      Peraturan Terkait Uraian Jabatan
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           )}
+
+          {/* {isAdmin && (
+            <div className="relative z-20" ref={fungsionalReportRef}>
+              <button
+                onClick={() => setFungsionalReportOpen(v => !v)}
+                disabled={downloadingFungsional !== null}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition-colors disabled:opacity-60 disabled:cursor-wait"
+                title="Unduh daftar pegawai fungsional dari SIMANTAP dengan unit organisasi asli"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M4 6h16M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6" />
+                </svg>
+                <span className="font-medium">
+                  {downloadingFungsional
+                    ? `Menyusun ${downloadingFungsional.toUpperCase()}...`
+                    : 'Laporan Fungsional (ST)'}
+                </span>
+                <svg className={`w-3.5 h-3.5 transition-transform ${fungsionalReportOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {fungsionalReportOpen && downloadingFungsional === null && (
+                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-50 w-64 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden py-1">
+                  <div className="px-4 pt-2 pb-1 text-[11px] text-gray-500 uppercase tracking-wide">
+                    Unduh (butuh ~1-2 menit)
+                  </div>
+                  <button
+                    onClick={() => downloadFungsionalReport('csv')}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                  >
+                    Unduh sebagai CSV (Excel)
+                  </button>
+                  <button
+                    onClick={() => downloadFungsionalReport('json')}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-t border-gray-100"
+                  >
+                    Unduh sebagai JSON
+                  </button>
+                </div>
+              )}
+            </div>
+          )} */}
           </div>
         </div>
       </div>
@@ -2227,12 +2962,6 @@ export default function PetaJabatanClient() {
                       value={scope}
                       onChange={setScope}
                       options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
-                      size="sm"
-                    />
-                    <Segmented
-                      value={fungsionalMode}
-                      onChange={setFungsionalMode}
-                      options={[{ label: "Struktural", value: "STRUKTURAL" }, { label: "Fungsional", value: "FUNGSIONAL" }]}
                       size="sm"
                     />
                     <Segmented
@@ -2339,6 +3068,10 @@ export default function PetaJabatanClient() {
               collapsible={false}
               zoom={currentZoom || initialZoom}
               pathFunc="step"
+              pathClassFunc={(link) => {
+                const targetId = String(link.target.data.attributes?.id);
+                return targetId.startsWith('ghost-sibling') || targetId.startsWith('ghost-kjf-pad') ? 'hide-ghost-link' : '';
+              }}
               nodeSize={nodeSize}
               separation={separation}
               transitionDuration={500}
