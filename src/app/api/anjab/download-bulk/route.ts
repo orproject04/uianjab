@@ -331,8 +331,12 @@ export async function GET(req: NextRequest) {
                             }
                         }
 
-                        // Wait for ZIP to finish generating
-                        await archive.finalize();
+                        // Wait for ZIP to finish generating and file to be completely written
+                        await new Promise<void>((resolve, reject) => {
+                            output.on('close', resolve);
+                            archive.on('error', reject);
+                            archive.finalize().catch(reject);
+                        });
 
                         // Send complete signal with the zip file name
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ complete: true, file: archiveFileName })}\n\n`));
