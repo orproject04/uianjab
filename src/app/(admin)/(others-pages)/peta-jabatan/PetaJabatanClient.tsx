@@ -58,6 +58,7 @@ type FungsionalItem = {
   kelas_jabatan: string | null;
   bezetting: number;
   kebutuhan_pegawai: number;
+  order_index: number | null;
   pejabat: PegawaiInfo[];
 };
 
@@ -740,15 +741,19 @@ export default function PetaJabatanClient() {
         kelas_jabatan: r.kelas_jabatan ?? null,
         bezetting: pejabat.length,
         kebutuhan_pegawai: r.kebutuhan_pegawai ?? 0,
+        order_index: r.order_index ?? null,
         pejabat,
       };
       const list = map.get(key);
       if (list) list.push(item);
       else map.set(key, [item]);
     }
-    // Stable sort each bucket by nama_jabatan
+    // Match the sidebar's ordering: order_index ascending, then nama_jabatan (Indonesian collation)
     for (const [, list] of map) {
-      list.sort((a, b) => a.nama_jabatan.localeCompare(b.nama_jabatan, "id"));
+      list.sort((a, b) =>
+        (a.order_index ?? 0) - (b.order_index ?? 0) ||
+        a.nama_jabatan.localeCompare(b.nama_jabatan, "id")
+      );
     }
     return map;
   }, [scenario.fungsionalRows, allRows, displayMode]);
@@ -2695,7 +2700,7 @@ export default function PetaJabatanClient() {
           <Segmented
             value={displayMode}
             onChange={setDisplayMode}
-            options={[{ label: "SK", value: "SK" }, { label: "ST", value: "ST" }]}
+            options={[{ label: "Surat Keputusan", value: "SK" }, { label: "Surat Tugas", value: "ST" }]}
             size={bp.isMobile ? "sm" : "md"}
           />
 
