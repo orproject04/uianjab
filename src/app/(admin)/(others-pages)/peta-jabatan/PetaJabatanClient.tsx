@@ -1649,7 +1649,7 @@ export default function PetaJabatanClient() {
         return;
       }
 
-      const baseMatchPath = buildPathForRow(matchRow, rows);
+const baseMatchPath = buildPathForRow(matchRow, rows);
       const matchPath = currentMatch.realParentId ? `${baseMatchPath}/kjf` : baseMatchPath;
 
       // Find node position in tree coordinates (starting from x=0 center)
@@ -1657,6 +1657,64 @@ export default function PetaJabatanClient() {
       
       if (nodePos) {
         
+        let targetY = nodePos.y;
+
+        // If the match is a functional role inside a KJF box, calculate its Y offset
+        if (currentMatch.fungsionalIdx !== undefined && currentMatch.realParentId) {
+          const kjfList = fungsionalByUnit.get(normalizeUnitKey(matchRow.unit_kerja)) ??
+                          fungsionalByUnit.get(normalizeUnitKey(matchRow.nama_jabatan)) ?? [];
+          
+          if (kjfList.length > 0) {
+              const maxCharsPerLine = bp.isMobile ? 25 : bp.isTablet ? 35 : 45;
+              const labelLines = wrapText("KELOMPOK JABATAN FUNGSIONAL", maxCharsPerLine);
+              const lineHeight = bp.isMobile ? 18 : 20;
+              const headerH = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
+              
+              const titleCharsPerLine = bp.isMobile ? 18 : bp.isTablet ? 25 : 30;
+              const titleLineHKjf = bp.isMobile ? 12 : 14;
+              const metricsBlockH = bp.isMobile ? 32 : 36;
+              const headerRowToKelasGap = 8;
+              const kelasLineH = 12;
+              const kelasToNamesGap = 6;
+              const nameFieldH = bp.isMobile ? 18 : 22;
+              const nameGap = 2;
+              const sectionTopPad = 12;
+              const sectionBottomPad = 12;
+              const innerPadY = 16;
+              const interSectionGap = 16;
+
+              const yHeaderTop = -headerH / 2; // approximation since we don't know siblingMaxBaseCardH here
+              const bodyGapFromHeader = 8;
+              const yBodyTop = yHeaderTop + headerH + bodyGapFromHeader;
+
+              let cumulativeY = yBodyTop + innerPadY;
+
+              for (let i = 0; i <= currentMatch.fungsionalIdx; i++) {
+                  const f = kjfList[i];
+                  const tLines = wrapText(String(f.nama_jabatan || "").toUpperCase(), titleCharsPerLine);
+                  const namesArr = (f.pejabat || []).map(p => p.name);
+                  
+                  const titleRows = tLines.length;
+                  const titleH = titleRows * titleLineHKjf;
+                  const headerBlockH = titleRows === 1
+                      ? metricsBlockH
+                      : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH;
+                  const namesBlockH = namesArr.length > 0
+                      ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap
+                      : nameFieldH;
+                  
+                  const h = sectionTopPad + headerBlockH + kelasToNamesGap + namesBlockH + sectionBottomPad;
+
+                  if (i === currentMatch.fungsionalIdx) {
+                      cumulativeY += h / 2; // Center on this specific item
+                  } else {
+                      cumulativeY += h + interSectionGap;
+                  }
+              }
+              targetY += cumulativeY;
+          }
+        }
+
         // Calculate distance from center to determine if we need to adjust zoom
         const distanceFromCenter = Math.abs(nodePos.x);
         const containerHalfWidth = containerSize.w / 2;
@@ -1679,7 +1737,7 @@ export default function PetaJabatanClient() {
         
         const newTranslate = {
           x: centerX - (nodePos.x * zoom),
-          y: centerY - (nodePos.y * zoom)
+          y: centerY - (targetY * zoom)
         };
         
         
