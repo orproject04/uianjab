@@ -39,6 +39,7 @@ export default function PeresjenPage() {
     { value: "Kelas Jabatan", label: "Kelas Jabatan" },
     { value: "Uraian Tugas Jabatan", label: "Uraian Tugas Jabatan" },
     { value: "Analisis Jabatan", label: "Analisis Jabatan" },
+    { value: "Standar Kompetensi Jabatan", label: "Standar Kompetensi Jabatan" },
   ]);
 
   const persejenInputRef = useRef<HTMLInputElement | null>(null);
