@@ -271,7 +271,7 @@ export default function SyncPegawaiPage() {
       showConfirmButton: false,
       didOpen: () => {
         const source = new EventSource('/api/sync/sk-pegawai/retry');
-        
+
         source.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -284,11 +284,11 @@ export default function SyncPegawaiPage() {
               });
               return;
             }
-            
+
             const progressBar = document.getElementById('swal-progress-bar');
             const progressMessage = document.getElementById('swal-progress-message');
             const progressPercent = document.getElementById('swal-progress-percent');
-            
+
             if (progressBar && progressMessage && progressPercent) {
               progressBar.style.width = `${data.progress}%`;
               progressMessage.textContent = data.message;
@@ -331,26 +331,104 @@ export default function SyncPegawaiPage() {
 
     setSyncingManual(true);
     try {
-      const res = await fetch('/api/sync/sk-pegawai/manual', {
+      // TAHAP 1: Preview Data
+      const previewRes = await fetch('/api/sync/sk-pegawai/manual', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nip: nipManual.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nip: nipManual.trim(), preview: true }),
       });
 
-      const data = await res.json();
+      const previewData = await previewRes.json();
+      if (!previewRes.ok) {
+        throw new Error(previewData.error || 'Terjadi kesalahan saat memeriksa data profil');
+      }
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Terjadi kesalahan sinkronisasi');
+      // TAHAP 2: Konfirmasi Pop-up
+      const isSamePosition = previewData.oldJabatan === previewData.newJabatan && previewData.oldUnit === previewData.newUnit;
+
+      let htmlMessage = `
+        <div class="text-left text-sm mt-2">
+          <p class="font-semibold text-gray-800">Nama: ${previewData.name || 'Tidak diketahui'}</p>
+      `;
+
+      if (isSamePosition) {
+        htmlMessage += `
+          <div class="mt-3 p-3 bg-gray-50 border rounded-lg text-center">
+            <p class="text-gray-700 font-medium">${previewData.newJabatan}</p>
+            <p class="text-gray-600 text-xs">${previewData.newUnit}</p>
+          </div>
+        `;
+      } else {
+        htmlMessage += `
+          <div class="mt-3 p-3 bg-gray-50 border rounded-lg">
+            <p class="text-xs text-gray-500 uppercase tracking-wider font-bold mb-1">Posisi Saat Ini (Lama)</p>
+            <p class="text-red-700 font-medium">${previewData.oldJabatan}</p>
+            <p class="text-gray-600 text-xs">${previewData.oldUnit}</p>
+          </div>
+          <div class="flex justify-center my-2">
+            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+          </div>
+          <div class="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+            <p class="text-xs text-blue-500 uppercase tracking-wider font-bold mb-1">Posisi Baru (Dari API)</p>
+            <p class="text-blue-700 font-medium">${previewData.newJabatan}</p>
+            <p class="text-gray-600 text-xs">${previewData.newUnit}</p>
+          </div>
+        `;
+      }
+
+      if (previewData.willFail) {
+        htmlMessage += `
+          <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p class="text-yellow-800 font-semibold text-sm">Peringatan: Posisi Baru Tidak Ditemukan</p>
+            <p class="text-yellow-700 text-xs mt-1">Jabatan baru ini tidak ditemukan di Peta Jabatan saat ini. Jika Anda melanjutkan, data akan masuk ke daftar Error (Tidak Sesuai).</p>
+          </div>
+        `;
+      }
+
+      htmlMessage += `</div>`;
+
+      const confirm = await Swal.fire({
+        title: `<span style="font-variant-ligatures: none;">${isSamePosition ? 'Posisi Tidak Berubah' : 'Konfirmasi'}</span>`,
+        html: htmlMessage,
+        icon: previewData.willFail ? 'warning' : (isSamePosition ? 'info' : 'question'),
+        showCancelButton: true,
+        confirmButtonText: isSamePosition ? 'Sinkronisasi' : 'Ya, Sinkronkan & Pindah',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: isSamePosition ? '#16a34a' : '#2563eb', // Green if same position, Blue otherwise
+        cancelButtonColor: '#6b7280',
+      });
+
+      if (!confirm.isConfirmed) {
+        setSyncingManual(false);
+        return;
+      }
+
+      // TAHAP 3: Eksekusi Update
+      Swal.fire({
+        title: 'Memproses...',
+        text: 'Sedang menyimpan data mutasi ke database',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+
+      const execRes = await fetch('/api/sync/sk-pegawai/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nip: nipManual.trim(), preview: false }),
+      });
+
+      const execData = await execRes.json();
+      if (!execRes.ok) {
+        throw new Error(execData.error || 'Gagal menyimpan sinkronisasi');
       }
 
       Swal.fire({
         icon: 'success',
         title: 'Berhasil',
-        text: data.message,
+        text: execData.message || 'NIP berhasil disinkronkan',
       });
       setNipManual('');
+
     } catch (err: any) {
       Swal.fire({
         icon: 'error',
@@ -538,21 +616,21 @@ export default function SyncPegawaiPage() {
 
         {/* Sync Button */}
         <div className="mb-6">
-          <Button 
+          <Button
             onClick={startSync}
             className="w-full sm:w-auto"
           >
             <ArrowRightIcon className="mr-2 h-4 w-4" />
             Mulai Sinkronisasi
           </Button>
-          
+
           {lastSync && lastSync.sync_type === 'SK_PEGAWAI' && lastSync.errors && lastSync.errors.length > 0 && (
-             <Button 
-               onClick={startRetry}
-               className="w-full sm:w-auto mt-2 sm:mt-0 sm:ml-2 bg-orange-600 hover:bg-orange-700 text-white"
-             >
-               Coba Lagi yang Error
-             </Button>
+            <Button
+              onClick={startRetry}
+              className="w-full sm:w-auto mt-2 sm:mt-0 sm:ml-2 bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              Coba Lagi yang Error
+            </Button>
           )}
         </div>
 

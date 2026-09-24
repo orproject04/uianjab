@@ -10,13 +10,17 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { nip } = body;
+    const { nip, preview } = body;
 
     if (!nip || typeof nip !== 'string') {
       return NextResponse.json({ error: 'NIP diperlukan' }, { status: 400 });
     }
 
-    const result = await syncSingleNipSk(nip);
+    const result = await syncSingleNipSk(nip, !!preview);
+
+    if (result && result.isPreview) {
+      return NextResponse.json(result);
+    }
 
     return NextResponse.json({ success: true, message: result.message });
   } catch (error: any) {

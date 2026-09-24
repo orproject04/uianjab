@@ -371,7 +371,15 @@ export async function runSkSync(
             _raw: { listData: t, profileData: pData.data }
           };
         } else {
-          return null; // failed to get valid profile
+          // Track the failure so it isn't silently dropped from the total count
+          const code = pData?.code;
+          const msg = pData?.message || pData?.data?.message || "Data profil tidak valid atau tidak ditemukan";
+          result.errors.push({
+            nip: t.NIP,
+            name: t.nama_gelar || t.nama || "",
+            reason: `Gagal fetch Profil (Code: ${code}): ${msg}`
+          });
+          return null;
         }
       } catch (err: any) {
         result.errors.push({
@@ -879,7 +887,7 @@ export async function retrySkErrors(
   }
 }
 
-export async function syncSingleNipSk(nip: string) {
+export async function syncSingleNipSk(nip: string, preview: boolean = false) {
   const externalApiToken = process.env.EXTERNAL_SK_API_TOKEN;
   if (!externalApiToken) {
     throw new Error('EXTERNAL_SK_API_TOKEN is not configured in .env.local');
@@ -923,8 +931,20 @@ export async function syncSingleNipSk(nip: string) {
   }
 
   const profileObj = pData.data.data || pData.data;
-  
+
   if (profileObj.kedudukanPnsNama && profileObj.kedudukanPnsNama.toLowerCase().includes('pensiun')) {
+    if (preview) {
+      return {
+        isPreview: true,
+        oldJabatan: "-",
+        oldUnit: "-",
+        newJabatan: "Pensiun (Inaktif)",
+        newUnit: "-",
+        willFail: true,
+        failReason: `Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif)`
+      };
+    }
+
     const pName = profileObj.nama_gelar || profileObj.nama || "";
     const client = await pool.connect();
     try {
@@ -956,36 +976,72 @@ export async function syncSingleNipSk(nip: string) {
 
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    
-    // Fetch peta_jabatan mapping to find a match
     const resPeta = await client.query(
       "SELECT id, nama_jabatan, unit_kerja, pejabat_sk FROM peta_jabatan WHERE deleted_at IS NULL"
     );
     const pjRows = resPeta.rows;
 
-    const jNameNorm = normalizeSearchStr(p.jabatanNama);
-    const uNameNorm = normalizeSearchStr(p.unorNama);
-    
-    let matchedPjId = null;
-    let matchedPejabatSk = null;
-    
-    // Exact match logic just like bulk sync
+    // Check where they are currently
+    let oldJabatan = "Tidak Ditemukan / Belum Ada";
+    let oldUnit = "-";
     for (const pj of pjRows) {
-      const pjJNameNorm = normalizeSearchStr(pj.nama_jabatan);
-      const pjUNameNorm = normalizeSearchStr(pj.unit_kerja);
-      
-      if (pjJNameNorm === jNameNorm && pjUNameNorm === uNameNorm) {
-        matchedPjId = pj.id;
-        matchedPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
+      const currentPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
+      if (currentPejabatSk.some((existing: any) => existing.nip === nip)) {
+        oldJabatan = pj.nama_jabatan;
+        oldUnit = pj.unit_kerja;
         break;
       }
     }
-    
+
+    const jNameNorm = normalizeSearchStr(p.jabatanNama);
+    const uNameNorm = normalizeSearchStr(p.unorNama);
+
+    let matchedPjId = null;
+    let matchedPejabatSk = null;
+    let willFail = true;
+
+    for (const pj of pjRows) {
+      const pjJNameNorm = normalizeSearchStr(pj.nama_jabatan);
+      const pjUNameNorm = normalizeSearchStr(pj.unit_kerja);
+
+      if (pjJNameNorm === jNameNorm && pjUNameNorm === uNameNorm) {
+        matchedPjId = pj.id;
+        matchedPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
+        willFail = false;
+        break;
+      }
+    }
+
+    if (preview) {
+      return {
+        isPreview: true,
+        oldJabatan,
+        oldUnit,
+        newJabatan: p.jabatanNama || "Tidak Ditemukan",
+        newUnit: p.unorNama || "-",
+        willFail,
+        failReason: willFail ? "Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)" : null,
+        name: p.name
+      };
+    }
+
+    await client.query("BEGIN");
+
+    // Remove this NIP from ALL existing nodes first (to prevent duplicates when they move)
+    for (const pj of pjRows) {
+      let currentPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
+      const originalLength = currentPejabatSk.length;
+      currentPejabatSk = currentPejabatSk.filter((existing: any) => existing.nip !== nip);
+      if (currentPejabatSk.length !== originalLength) {
+        await client.query("UPDATE peta_jabatan SET pejabat_sk = $1::jsonb WHERE id = $2::uuid", [JSON.stringify(currentPejabatSk), pj.id]);
+      }
+    }
+
     if (matchedPjId) {
-      // Remove existing entry for this NIP from the array just in case
+      // Filter out the existing NIP from the in-memory array first
+      // (Because this array was loaded BEFORE the global deletion step above)
       matchedPejabatSk = matchedPejabatSk.filter((existing: any) => existing.nip !== nip);
-      
+
       // Add the updated info
       matchedPejabatSk.push({
         name: p.name,
@@ -994,22 +1050,22 @@ export async function syncSingleNipSk(nip: string) {
         jabatanNama: p.jabatanNama,
         unorNama: p.unorNama,
       });
-      
+
       // Sort by NIP
       matchedPejabatSk.sort((a: any, b: any) => (a.nip || '').localeCompare(b.nip || ''));
-      
+
       // Update peta_jabatan
       await client.query(
         "UPDATE peta_jabatan SET pejabat_sk = $1::jsonb WHERE id = $2::uuid",
         [JSON.stringify(matchedPejabatSk), matchedPjId]
       );
-      
+
       // Since it successfully mapped, remove from data_error if exists
       await client.query(
         "DELETE FROM data_error WHERE nip = $1 AND tipe_sync = 'SK'",
         [nip]
       );
-      
+
       await client.query("COMMIT");
       return { success: true, message: `Berhasil sinkronisasi NIP ${nip} ke peta jabatan.` };
     } else {
@@ -1026,7 +1082,7 @@ export async function syncSingleNipSk(nip: string) {
           [nip, p.name, p.jabatanNama, p.unorNama, p.statusPegawai, 'Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)']
         );
       }
-      
+
       await client.query("COMMIT");
       throw new Error(`Data ditarik tapi gagal dipetakan (Unit/Jabatan tidak cocok). Masuk ke Data Error.`);
     }
