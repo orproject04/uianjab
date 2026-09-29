@@ -15,19 +15,25 @@ import { sanitizeInternalNext } from "@/lib/redirect";
 type NoticeType = "success" | "info" | "error";
 type Notice = { type: NoticeType; text: string };
 
-export default function SignInForm() {
+export default function SignInForm({ manual = false }: { manual?: boolean }) {
     const router = useRouter();
     const [next, setNext] = useState<string>("/");
+    const [isAutoRedirecting, setIsAutoRedirecting] = useState(true);
 
     // Read search params only on client to avoid serializing raw `next` into RSC payload
     useEffect(() => {
         try {
             const params = new URLSearchParams(window.location.search);
             setNext(sanitizeInternalNext(params.get("next")));
+
+            if (manual || params.get("error") || params.get("loggedout") || params.get("verified") || params.get("manual")) {
+                setIsAutoRedirecting(false);
+            }
         } catch (err) {
             setNext("/");
+            setIsAutoRedirecting(false);
         }
-    }, []);
+    }, [manual]);
 
     const {refresh, me, loading: meLoading} = useMe();
 
@@ -37,6 +43,20 @@ export default function SignInForm() {
             router.replace(next || "/");
         }
     }, [me, meLoading, next, router]);
+
+    // Auto-redirect ke SSO jika tidak ada pengecualian
+    useEffect(() => {
+        if (!isAutoRedirecting) return;
+        if (!meLoading && !me) {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const nextUrl = sanitizeInternalNext(params.get("next"));
+                window.location.href = `/api/auth/keycloak/login?next=${encodeURIComponent(nextUrl)}`;
+            } catch (e) {
+                window.location.href = `/api/auth/keycloak/login`;
+            }
+        }
+    }, [isAutoRedirecting, meLoading, me]);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -59,6 +79,8 @@ export default function SignInForm() {
                 showNotice({type: "success", text: "Email berhasil diverifikasi. Silakan login."});
             } else if (params.get("loggedout") === "1") {
                 showNotice({type: "info", text: "Anda telah keluar."});
+            } else if (params.get("error")) {
+                showNotice({type: "error", text: "Autentikasi gagal: " + params.get("error")});
             }
         } catch (err) {
             // ignore
@@ -111,6 +133,17 @@ export default function SignInForm() {
             : notice?.type === "info"
                 ? "text-blue-light-700 bg-blue-light-50 border border-blue-light-200"
                 : "text-red-700 bg-red-50 border border-red-200";
+
+    if (isAutoRedirecting || (meLoading && !me)) {
+        return (
+            <div className="flex flex-col flex-1 lg:w-1/2 w-full">
+                <div className="flex flex-col items-center justify-center flex-1 w-full max-w-md mx-auto py-2">
+                    <div className="text-gray-500 mb-4 font-medium text-sm">Mengarahkan ke Single Sign-On...</div>
+                    <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col flex-1 lg:w-1/2 w-full">
