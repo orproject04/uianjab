@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
 import { useMe } from "@/context/MeContext";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import {
     BarChart,
     Bar,
@@ -129,6 +129,7 @@ export default function DashboardPage() {
     const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
     const [expandedSubJenis, setExpandedSubJenis] = useState<string | null>(null);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [exportErrorMenuOpen, setExportErrorMenuOpen] = useState(false);
     const [displayMode, setDisplayMode] = useState<'ST' | 'SK'>('SK');
 
     // Responsive YAxis width: mobile -> 150, desktop -> 220
@@ -1072,9 +1073,141 @@ export default function DashboardPage() {
         }
     }
 
+    function handleExportErrorCSV() {
+        let lastSyncStr = "Tidak diketahui";
+        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
+
+        let csvContent = `"Terakhir Sinkronisasi:","${lastSyncStr}"\n\n`;
+        csvContent += "NIP,Nama,Jabatan,Unit Organisasi,Status,Saran Perbaikan\n";
+        filteredDataError.forEach(row => {
+            const nip = String(row.nip || '').replace(/"/g, '""');
+            const nama = String(row.nama || '').replace(/"/g, '""');
+            const jabatan = String(row.jabatan || '').replace(/"/g, '""');
+            const unit = String(row.unit_organisasi || '').replace(/"/g, '""');
+            const status = String(row.status || '').replace(/"/g, '""');
+            const saran = String(getDisplayedSaran(row) || '').replace(/"/g, '""');
+            csvContent += `"${nip}","${nama}","${jabatan}","${unit}","${status}","${saran}"\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const filename = `data_perlu_disesuaikan_${yyyy}-${mm}-${dd}.csv`;
+
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setExportErrorMenuOpen(false);
+    }
+
+    function handleExportErrorExcel() {
+        let lastSyncStr = "Tidak diketahui";
+        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
+
+        const aoaData = [
+            ["Data Perlu Disesuaikan (Tidak match dengan Peta Jabatan)"],
+            [`Terakhir Sinkronisasi: ${lastSyncStr}`],
+            [],
+            ["NIP", "Nama", "Jabatan", "Unit Organisasi", "Status", "Saran / Keterangan"]
+        ];
+
+        const colWidths = [20, 30, 40, 40, 15, 50];
+
+        filteredDataError.forEach(row => {
+            const nip = row.nip || '';
+            const nama = row.nama || '';
+            const jabatan = row.jabatan || '';
+            const unit = row.unit_organisasi || '';
+            const status = row.status || '';
+            const saran = getDisplayedSaran(row) || '';
+
+            aoaData.push([nip, nama, jabatan, unit, status, saran]);
+
+            if (nip.length > colWidths[0]) colWidths[0] = Math.min(nip.length, 30);
+            if (nama.length > colWidths[1]) colWidths[1] = Math.min(nama.length, 40);
+            if (jabatan.length > colWidths[2]) colWidths[2] = Math.min(jabatan.length, 60);
+            if (unit.length > colWidths[3]) colWidths[3] = Math.min(unit.length, 60);
+            if (saran.length > colWidths[5]) colWidths[5] = Math.min(saran.length, 80);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(aoaData);
+        ws['!cols'] = colWidths.map(w => ({ wch: w + 2 }));
+
+        // --- STYLING MENGGUNAKAN xlsx-js-style ---
+        
+        // 1. Style Judul (A1) & Subjudul (A2)
+        if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
+        if (ws['A2']) ws['A2'].s = { font: { bold: true, sz: 11, italic: true } };
+
+        const borderAll = {
+            top: { style: 'thin', color: { rgb: "000000" } },
+            bottom: { style: 'thin', color: { rgb: "000000" } },
+            left: { style: 'thin', color: { rgb: "000000" } },
+            right: { style: 'thin', color: { rgb: "000000" } }
+        };
+
+        const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+        // 2. Style Header Tabel (Baris ke-4)
+        cols.forEach(c => {
+            const cell = ws[`${c}4`];
+            if (cell) {
+                cell.s = {
+                    fill: { fgColor: { rgb: "1E40AF" } }, // Biru gelap
+                    font: { color: { rgb: "FFFFFF" }, bold: true, sz: 11 },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                    border: borderAll
+                };
+            }
+        });
+
+        // 3. Style Baris Data (Baris ke-5 dst)
+        for (let R = 4; R < aoaData.length; R++) {
+            cols.forEach(C => {
+                const cell = ws[`${C}${R + 1}`];
+                if (cell) {
+                    cell.s = {
+                        border: borderAll,
+                        alignment: { vertical: 'top', wrapText: true }
+                    };
+                    if (C === 'E') cell.s.alignment.horizontal = 'center';
+                    // NIP format text
+                    if (C === 'A') cell.z = '@'; 
+                }
+            });
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Data Error");
+
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const filename = `data_perlu_disesuaikan_${yyyy}-${mm}-${dd}.xlsx`;
+
+        XLSX.writeFile(wb, filename);
+        setExportErrorMenuOpen(false);
+    }
+
     function handlePrintDataError() {
         try {
             const rows = filteredDataError;
+
+            let lastSyncStr = "Tidak diketahui";
+            if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+                lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+            }
 
             let html = `<!DOCTYPE html>
 <html>
@@ -1097,8 +1230,8 @@ export default function DashboardPage() {
     </style>
 </head>
 <body>
-    <h2>Total Jabatan Error Sinkronisasi</h2>
-    <p><strong>Urutan status:</strong> PNS, PPPK, INACTIVE</p>
+    <h2>Data yang Perlu Disesuaikan</h2>
+    <p><strong>Terakhir Sinkronisasi:</strong> ${lastSyncStr}</p>
     <table>
         <thead>
             <tr>
@@ -2535,13 +2668,42 @@ export default function DashboardPage() {
                                     placeholder="Cari NIP/Nama/Jabatan..."
                                     className="flex-1 sm:w-96 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                                 />
-                                <button
-                                    onClick={() => { if (unsavedErrorSuggestions) handleSaveDataErrorSuggestions(); else handlePrintDataError(); }}
-                                    className={`px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 ${unsavedErrorSuggestions ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
-                                    title={unsavedErrorSuggestions ? 'Simpan saran perbaikan' : 'Print tabel Total Jabatan Error Sinkronisasi'}
-                                >
-                                    {unsavedErrorSuggestions ? 'Simpan' : 'Print'}
-                                </button>
+                                {unsavedErrorSuggestions ? (
+                                    <button
+                                        onClick={handleSaveDataErrorSuggestions}
+                                        className="px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 bg-emerald-600 text-white hover:bg-emerald-700"
+                                        title="Simpan saran perbaikan"
+                                    >
+                                        Simpan
+                                    </button>
+                                ) : (
+                                    <div className="relative flex-shrink-0">
+                                        <button
+                                            onClick={() => setExportErrorMenuOpen(!exportErrorMenuOpen)}
+                                            className="px-3 py-2 rounded-lg text-sm transition-colors bg-brand-600 text-white hover:bg-brand-700 inline-flex items-center gap-1"
+                                            title="Export Data Error"
+                                        >
+                                            Export
+                                            <svg className={`w-4 h-4 transition-transform ${exportErrorMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                        {exportErrorMenuOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setExportErrorMenuOpen(false)} />
+                                                <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                                                    <button onClick={handlePrintDataError} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                        PDF (Cetak)
+                                                    </button>
+                                                    <button onClick={handleExportErrorExcel} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                        Excel (.xlsx)
+                                                    </button>
+                                                    <button onClick={handleExportErrorCSV} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                        CSV
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
