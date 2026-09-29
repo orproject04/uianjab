@@ -645,7 +645,13 @@ export default function DashboardPage() {
     function handleExportCSV() {
         if (!data || !data.byNamaJabatan) return;
 
-        let csvContent = "nama_unit,nama_jabatan,abk,cpns,pns,pppk\n";
+        let lastSyncStr = "Tidak diketahui";
+        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
+
+        let csvContent = `"Terakhir Sinkronisasi Per:","${lastSyncStr}"\n\n`;
+        csvContent += "nama_unit,nama_jabatan,abk,cpns,pns,pppk\n";
 
         const rowsToExport = data.byNamaJabatan;
 
@@ -683,17 +689,65 @@ export default function DashboardPage() {
 
     function handleExportExcel() {
         if (!data || !data.byNamaJabatan) return;
-        const rowsToExport = data.byNamaJabatan;
-        const normalizedData = rowsToExport.map(row => ({
-            nama_unit: row.unit_kerja || '',
-            nama_jabatan: row.nama_jabatan || '',
-            abk: Number(row.kebutuhan ?? 0),
-            cpns: 0,
-            pns: Number(row.bezetting_pns ?? 0),
-            pppk: Number(row.bezetting_pppk ?? 0)
-        }));
+        let lastSyncStr = "Tidak diketahui";
+        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
 
-        const ws = XLSX.utils.json_to_sheet(normalizedData);
+        const aoaData = [
+            ["Total Jabatan"],
+            [`Terakhir Sinkronisasi Per: ${lastSyncStr}`],
+            [],
+            ["Nama Unit", "Nama Jabatan", "Kebutuhan", "CPNS", "PNS", "PPPK"]
+        ];
+
+        const rowsToExport = data.byNamaJabatan;
+        rowsToExport.forEach(row => {
+            aoaData.push([
+                row.unit_kerja || '',
+                row.nama_jabatan || '',
+                Number(row.kebutuhan ?? 0),
+                0,
+                Number(row.bezetting_pns ?? 0),
+                Number(row.bezetting_pppk ?? 0)
+            ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(aoaData);
+        ws['!cols'] = [{wch: 40}, {wch: 40}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 15}];
+        
+        if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
+        if (ws['A2']) ws['A2'].s = { font: { bold: true, sz: 11, italic: true } };
+        
+        const borderAll = {
+            top: { style: 'thin', color: { rgb: "000000" } },
+            bottom: { style: 'thin', color: { rgb: "000000" } },
+            left: { style: 'thin', color: { rgb: "000000" } },
+            right: { style: 'thin', color: { rgb: "000000" } }
+        };
+        const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
+        cols.forEach(c => {
+            const cell = ws[`${c}4`];
+            if (cell) {
+                cell.s = {
+                    fill: { fgColor: { rgb: "1E40AF" } },
+                    font: { color: { rgb: "FFFFFF" }, bold: true, sz: 11 },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                    border: borderAll
+                };
+            }
+        });
+        for (let R = 4; R < aoaData.length; R++) {
+            cols.forEach(C => {
+                const cell = ws[`${C}${R + 1}`];
+                if (cell) {
+                    cell.s = {
+                        border: borderAll,
+                        alignment: { vertical: 'top', wrapText: true }
+                    };
+                }
+            });
+        }
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Jabatan");
 
@@ -750,6 +804,12 @@ export default function DashboardPage() {
 </head>
 <body>
     <h2>Total Jabatan</h2>`;
+
+            let lastSyncStr = "Tidak diketahui";
+            if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+                lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+            }
+            html += `    <p><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>`;
 
             if (filterLines.length > 0) {
                 html += `    <p><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
@@ -881,7 +941,13 @@ export default function DashboardPage() {
 </head>
 <body>
     <h2>Rekap Persediaan Pegawai Berdasarkan Kelas Jabatan</h2>
-    <p class="sub">Data Bezetting per Kelas Jabatan</p>
+    <p class="sub" style="margin-bottom: 4px;">Data Bezetting per Kelas Jabatan</p>`;
+
+        let lastSyncStr = "Tidak diketahui";
+        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
+        html += `    <p class="sub"><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>
     <table>
         <thead>
             <tr>
@@ -964,6 +1030,12 @@ export default function DashboardPage() {
 </head>
 <body>
     <h2>Total Per Jenis Jabatan</h2>`;
+
+            let lastSyncStr = "Tidak diketahui";
+            if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
+                lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+            }
+            html += `    <p><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>`;
 
             if (filterLines.length > 0) {
                 html += `    <p><strong>Filter aktif:</strong> ${filterLines.join(' | ')}</p>`;
@@ -1079,16 +1151,16 @@ export default function DashboardPage() {
             lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
         }
 
-        let csvContent = `"Terakhir Sinkronisasi:","${lastSyncStr}"\n\n`;
-        csvContent += "NIP,Nama,Jabatan,Unit Organisasi,Status,Saran Perbaikan\n";
-        filteredDataError.forEach(row => {
+        let csvContent = `"Terakhir Sinkronisasi Per:","${lastSyncStr}"\n\n`;
+        csvContent += "No,NIP,Nama,Jabatan,Unit Organisasi,Status,Saran Perbaikan\n";
+        filteredDataError.forEach((row, index) => {
             const nip = String(row.nip || '').replace(/"/g, '""');
             const nama = String(row.nama || '').replace(/"/g, '""');
             const jabatan = String(row.jabatan || '').replace(/"/g, '""');
             const unit = String(row.unit_organisasi || '').replace(/"/g, '""');
             const status = String(row.status || '').replace(/"/g, '""');
             const saran = String(getDisplayedSaran(row) || '').replace(/"/g, '""');
-            csvContent += `"${nip}","${nama}","${jabatan}","${unit}","${status}","${saran}"\n`;
+            csvContent += `"${index + 1}","${nip}","${nama}","${jabatan}","${unit}","${status}","${saran}"\n`;
         });
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1116,14 +1188,14 @@ export default function DashboardPage() {
 
         const aoaData = [
             ["Data Perlu Disesuaikan (Tidak match dengan Peta Jabatan)"],
-            [`Terakhir Sinkronisasi: ${lastSyncStr}`],
+            [`Terakhir Sinkronisasi Per: ${lastSyncStr}`],
             [],
-            ["NIP", "Nama", "Jabatan", "Unit Organisasi", "Status", "Saran / Keterangan"]
+            ["No", "NIP", "Nama", "Jabatan", "Unit Organisasi", "Status", "Saran / Keterangan"]
         ];
 
-        const colWidths = [20, 30, 40, 40, 15, 50];
+        const colWidths = [5, 20, 30, 40, 40, 15, 50];
 
-        filteredDataError.forEach(row => {
+        filteredDataError.forEach((row, index) => {
             const nip = row.nip || '';
             const nama = row.nama || '';
             const jabatan = row.jabatan || '';
@@ -1131,20 +1203,20 @@ export default function DashboardPage() {
             const status = row.status || '';
             const saran = getDisplayedSaran(row) || '';
 
-            aoaData.push([nip, nama, jabatan, unit, status, saran]);
+            aoaData.push([index + 1, nip, nama, jabatan, unit, status, saran]);
 
-            if (nip.length > colWidths[0]) colWidths[0] = Math.min(nip.length, 30);
-            if (nama.length > colWidths[1]) colWidths[1] = Math.min(nama.length, 40);
-            if (jabatan.length > colWidths[2]) colWidths[2] = Math.min(jabatan.length, 60);
-            if (unit.length > colWidths[3]) colWidths[3] = Math.min(unit.length, 60);
-            if (saran.length > colWidths[5]) colWidths[5] = Math.min(saran.length, 80);
+            if (nip.length > colWidths[1]) colWidths[1] = Math.min(nip.length, 30);
+            if (nama.length > colWidths[2]) colWidths[2] = Math.min(nama.length, 40);
+            if (jabatan.length > colWidths[3]) colWidths[3] = Math.min(jabatan.length, 60);
+            if (unit.length > colWidths[4]) colWidths[4] = Math.min(unit.length, 60);
+            if (saran.length > colWidths[6]) colWidths[6] = Math.min(saran.length, 80);
         });
 
         const ws = XLSX.utils.aoa_to_sheet(aoaData);
         ws['!cols'] = colWidths.map(w => ({ wch: w + 2 }));
 
         // --- STYLING MENGGUNAKAN xlsx-js-style ---
-        
+
         // 1. Style Judul (A1) & Subjudul (A2)
         if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
         if (ws['A2']) ws['A2'].s = { font: { bold: true, sz: 11, italic: true } };
@@ -1156,7 +1228,7 @@ export default function DashboardPage() {
             right: { style: 'thin', color: { rgb: "000000" } }
         };
 
-        const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
+        const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
         // 2. Style Header Tabel (Baris ke-4)
         cols.forEach(c => {
@@ -1180,9 +1252,9 @@ export default function DashboardPage() {
                         border: borderAll,
                         alignment: { vertical: 'top', wrapText: true }
                     };
-                    if (C === 'E') cell.s.alignment.horizontal = 'center';
-                    // NIP format text
-                    if (C === 'A') cell.z = '@'; 
+                    if (C === 'A' || C === 'F') cell.s.alignment.horizontal = 'center';
+                    // NIP format text (sekarang di kolom B)
+                    if (C === 'B') cell.z = '@';
                 }
             });
         }
@@ -1231,7 +1303,7 @@ export default function DashboardPage() {
 </head>
 <body>
     <h2>Data yang Perlu Disesuaikan</h2>
-    <p><strong>Terakhir Sinkronisasi:</strong> ${lastSyncStr}</p>
+    <p><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>
     <table>
         <thead>
             <tr>
