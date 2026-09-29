@@ -29,7 +29,14 @@ export default function SignInForm() {
         }
     }, []);
 
-    const {refresh} = useMe();
+    const {refresh, me, loading: meLoading} = useMe();
+
+    // Jika user sudah login (memiliki session cookie valid), langsung redirect ke tujuan
+    useEffect(() => {
+        if (!meLoading && me) {
+            router.replace(next || "/");
+        }
+    }, [me, meLoading, next, router]);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
