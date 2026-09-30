@@ -69,6 +69,7 @@ type DataErrorItem = {
 };
 
 type DashboardData = {
+    last_sync_date: string | null;
     summary: SummaryData;
     byJenis: BreakdownItem[];
     byLokasi: BreakdownItem[];
@@ -646,8 +647,8 @@ export default function DashboardPage() {
         if (!data || !data.byNamaJabatan) return;
 
         let lastSyncStr = "Tidak diketahui";
-        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
         }
 
         let csvContent = `"Terakhir Sinkronisasi Per:","${lastSyncStr}"\n\n`;
@@ -690,11 +691,11 @@ export default function DashboardPage() {
     function handleExportExcel() {
         if (!data || !data.byNamaJabatan) return;
         let lastSyncStr = "Tidak diketahui";
-        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
         }
 
-        const aoaData = [
+        const aoaData: any[][] = [
             ["Total Jabatan"],
             [`Terakhir Sinkronisasi Per: ${lastSyncStr}`],
             [],
@@ -806,9 +807,9 @@ export default function DashboardPage() {
     <h2>Total Jabatan</h2>`;
 
             let lastSyncStr = "Tidak diketahui";
-            if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-                lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
-            }
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
             html += `    <p><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>`;
 
             if (filterLines.length > 0) {
@@ -944,8 +945,8 @@ export default function DashboardPage() {
     <p class="sub" style="margin-bottom: 4px;">Data Bezetting per Kelas Jabatan</p>`;
 
         let lastSyncStr = "Tidak diketahui";
-        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
         }
         html += `    <p class="sub"><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>
     <table>
@@ -1032,9 +1033,9 @@ export default function DashboardPage() {
     <h2>Total Per Jenis Jabatan</h2>`;
 
             let lastSyncStr = "Tidak diketahui";
-            if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-                lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
-            }
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
             html += `    <p><strong>Terakhir Sinkronisasi Per:</strong> ${lastSyncStr}</p>`;
 
             if (filterLines.length > 0) {
@@ -1147,8 +1148,8 @@ export default function DashboardPage() {
 
     function handleExportErrorCSV() {
         let lastSyncStr = "Tidak diketahui";
-        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
         }
 
         let csvContent = `"Terakhir Sinkronisasi Per:","${lastSyncStr}"\n\n`;
@@ -1182,11 +1183,11 @@ export default function DashboardPage() {
 
     function handleExportErrorExcel() {
         let lastSyncStr = "Tidak diketahui";
-        if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-            lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
         }
 
-        const aoaData = [
+        const aoaData: any[][] = [
             ["Data Perlu Disesuaikan (Tidak match dengan Peta Jabatan)"],
             [`Terakhir Sinkronisasi Per: ${lastSyncStr}`],
             [],
@@ -1277,9 +1278,9 @@ export default function DashboardPage() {
             const rows = filteredDataError;
 
             let lastSyncStr = "Tidak diketahui";
-            if (filteredDataError.length > 0 && filteredDataError[0].synced_at) {
-                lastSyncStr = new Date(filteredDataError[0].synced_at).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
-            }
+        if (data?.last_sync_date) {
+            lastSyncStr = new Date(data.last_sync_date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        }
 
             let html = `<!DOCTYPE html>
 <html>

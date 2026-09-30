@@ -419,7 +419,20 @@ export async function GET(req: NextRequest) {
         const dataErrorResult = await runQuery('dataErrorQuery', dataErrorQuery, [modeParam]);
         const dataError = dataErrorResult.rows;
 
+        // Get last sync date from sync_history
+        const syncType = modeParam === 'struktural' ? 'pegawai' : 'SK_PEGAWAI';
+        const lastSyncQuery = `
+            SELECT synced_at
+            FROM sync_history
+            WHERE sync_type = $1
+            ORDER BY synced_at DESC
+            LIMIT 1
+        `;
+        const lastSyncResult = await runQuery('lastSyncQuery', lastSyncQuery, [syncType]);
+        const lastSyncDate = lastSyncResult.rows[0]?.synced_at || null;
+
         return NextResponse.json({
+            last_sync_date: lastSyncDate,
             summary: {
                 total_jabatan: Number(summary.total_jabatan ?? 0),
                 total_bezetting: Number(summary.total_bezetting ?? 0),
