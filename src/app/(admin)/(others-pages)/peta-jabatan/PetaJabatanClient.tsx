@@ -251,7 +251,8 @@ type ScopeOpt = "PUSAT" | "DAERAH";
 
 export default function PetaJabatanClient() {
   const router = useRouter();
-  const { isAdmin } = useMe();
+  const { isAdmin: isSuperAdmin, isAdminJf, isAdminAKK } = useMe();
+  const isAdmin = isSuperAdmin || isAdminJf || isAdminAKK;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
@@ -967,11 +968,13 @@ export default function PetaJabatanClient() {
 
         // Check which pejabat names match in the ACTIVE pejabat list
         const matchedNameIndices: number[] = [];
-        (row.pejabat || []).forEach((p, idx) => {
-          if ((p.name || "").toLowerCase().includes(lcFilter)) {
-            matchedNameIndices.push(idx);
-          }
-        });
+        if (isAdmin) {
+          (row.pejabat || []).forEach((p, idx) => {
+            if ((p.name || "").toLowerCase().includes(lcFilter)) {
+              matchedNameIndices.push(idx);
+            }
+          });
+        }
 
         if (nameMatch || slugMatch || unitMatch) {
           // Jabatan name matched - highlight whole card
@@ -1013,9 +1016,11 @@ export default function PetaJabatanClient() {
         const fSlugMatch = (f.slug || "").toLowerCase().includes(lcFilter);
         const activePejabat = (displayMode === "SK" ? f.pejabat_sk : f.pejabat_st) ?? [];
         const fPejabatIndices: number[] = [];
-        activePejabat.forEach((p, idx) => {
-          if ((p.name || "").toLowerCase().includes(lcFilter)) fPejabatIndices.push(idx);
-        });
+        if (isAdmin) {
+          activePejabat.forEach((p, idx) => {
+            if ((p.name || "").toLowerCase().includes(lcFilter)) fPejabatIndices.push(idx);
+          });
+        }
 
         if (fNameMatch || fSlugMatch) {
           matches.push({
@@ -1379,9 +1384,11 @@ export default function PetaJabatanClient() {
     const match = (n: D3Node) =>
       (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
       (n._slug || "").toLowerCase().includes(lcFilter) ||
-      (n.pejabat || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
-      (n.pejabat_st || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
-      (n.pejabat_sk || []).some(p => (p.name || "").toLowerCase().includes(lcFilter));
+      (isAdmin && (
+        (n.pejabat || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
+        (n.pejabat_st || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
+        (n.pejabat_sk || []).some(p => (p.name || "").toLowerCase().includes(lcFilter))
+      ));
     const walk = (n: D3Node): D3Node | null => {
       const kids = n.children.map(walk).filter(Boolean) as D3Node[];
       if (match(n) || kids.length) return { ...n, children: kids };
@@ -1458,7 +1465,7 @@ export default function PetaJabatanClient() {
       ? (textFieldH * namesCountLocal) + (boxGapVerticalLocal * (namesCountLocal - 1))
       : textFieldH;
 
-    const baseCardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
+    const baseCardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY) : (headerH + padY);
 
     return {
       name: n.nama_jabatan,
@@ -2022,16 +2029,16 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
         const titleH = titleRows * titleLineHKjf;
         // Header block height = height from top of row 1 to bottom of the taller of the
         // metrics block or the title, plus kelas if it sits below the block.
-        const headerBlockH = titleRows === 1
-          ? metricsBlockH // 1-line title: kelas sits IN the boxes row (central-aligned)
-          : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH;
-        const namesBlockH = namesArr.length > 0
-          ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap
-          : nameFieldH; // reserve one pill's worth of space for the empty placeholder
+        const headerBlockH = isAdmin 
+          ? (titleRows === 1 ? metricsBlockH : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH)
+          : (titleH + headerRowToKelasGap + kelasLineH);
+        const namesBlockH = isAdmin 
+          ? (namesArr.length > 0 ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap : nameFieldH)
+          : 0;
         const h =
           sectionTopPad +
           headerBlockH +
-          kelasToNamesGap +
+          (isAdmin ? kelasToNamesGap : 0) +
           namesBlockH +
           sectionBottomPad;
         return { f, tLines, namesArr, titleRows, titleH, headerBlockH, namesBlockH, h };
@@ -2116,9 +2123,9 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             //   1-line title → aligned with the box vertical center (drawn with alignmentBaseline="central")
             //   multi-line  → sits below the taller of the title stack or the metric block
             const yBoxCenter = yBoxes + boxH / 2;
-            const yKelas = titleRows === 1
-              ? yBoxCenter
-              : Math.max(yTitleTop + titleH, yBoxes + boxH) + headerRowToKelasGap;
+            const yKelas = isAdmin 
+              ? (titleRows === 1 ? yBoxCenter : Math.max(yTitleTop + titleH, yBoxes + boxH) + headerRowToKelasGap)
+              : (yTitleTop + titleH + headerRowToKelasGap);
             const yNamesTop = titleRows === 1
               ? yBoxes + boxH + kelasToNamesGap
               : yKelas + kelasLineH + kelasToNamesGap;
@@ -2193,7 +2200,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                 ))}
 
                 {/* B / K / ± labels */}
-                {["B", "K", "±"].map((lbl, i) => (
+                {isAdmin && ["B", "K", "±"].map((lbl, i) => (
                   <text
                     key={lbl}
                     x={boxesLeftX + i * (boxW + boxGap) + boxW / 2}
@@ -2208,7 +2215,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                 ))}
 
                 {/* Metric boxes */}
-                {[bez, keb, sel].map((v, i) => (
+                {isAdmin && [bez, keb, sel].map((v, i) => (
                   <g key={i}>
                     <rect
                       x={boxesLeftX + i * (boxW + boxGap)}
@@ -2247,7 +2254,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                 </text>
 
                 {/* Name pills OR empty placeholder */}
-                {namesArr.length > 0 ? (
+                {isAdmin && (namesArr.length > 0 ? (
                   namesArr.map((nm, ni) => {
                     const yPill = yNamesTop + ni * (nameFieldH + nameGap);
                     const copyId = `${attrs.id}-fung-${si}-${ni}`;
@@ -2334,7 +2341,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                     strokeWidth={1}
                     style={{ pointerEvents: 'none' }}
                   />
-                )}
+                ))}
 
                 {/* Separator line — sits in the middle of the interSectionGap */}
                 {si < sections.length - 1 && (
@@ -2394,10 +2401,10 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
       : textFieldH;
 
     // Hitung tinggi base card (dengan 1 nama field)
-    const baseCardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY;
+    const baseCardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY) : (headerH + padY);
 
     // Hitung tinggi card sebenarnya dengan semua nama
-    const cardH = padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY;
+    const cardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY) : (headerH + padY);
 
     const xLeft = -cardW / 2;
     // Use sibling max baseCardH (if available) so sibling top edges align. Fallback to local baseCardH.
@@ -2498,16 +2505,16 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
         )}
         {/* KARTU - Clickable except toggle button */}
         <rect x={xLeft} y={yTop} width={cardW} height={cardH}
-          rx={8} ry={8} fill="#ffffff"
+          rx={8} ry={8} fill={isAdmin ? "#ffffff" : "#E8F5D9"}
           stroke={borderColor}
           strokeWidth={borderWidth}
           style={{ filter: shadowFilter, cursor: 'pointer' }}
           onClick={handleJabatanClick} />
 
         {/* HEADER*/}
-        <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
+        {isAdmin && <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
           rx={10} ry={10} fill="#E8F5D9" strokeOpacity={0.15} strokeWidth={1}
-          style={{ cursor: 'pointer', pointerEvents: 'none' }} />
+          style={{ cursor: 'pointer', pointerEvents: 'none' }} />}
 
         {/* JUDUL */}
         <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
@@ -2529,6 +2536,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
         </text>
 
         {/* LABEL B K ± */}
+        {isAdmin && (<>
         <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
           fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>B</text>
         <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
@@ -2672,6 +2680,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
               rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
           )}
         </g>
+        </>)}
 
         {/* Tombol panah/play */}
         {hasChildren && (
@@ -2696,7 +2705,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <input
-            placeholder="Cari Jabatan atau Nama Pejabat..."
+            placeholder={isAdmin ? "Cari Jabatan atau Nama Pejabat..." : "Cari Jabatan..."}
             value={filterText}
             onChange={(e) => {
               const newValue = e.target.value;
@@ -2712,7 +2721,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             Reset
           </button>
           
-          {selectedUnit !== null && (
+          {selectedUnit !== null && isAdmin && (
             <button
               onClick={handlePrint}
               title="Cetak peta jabatan sesuai filter aktif"
@@ -2755,12 +2764,12 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
             size={bp.isMobile ? "sm" : "md"}
           />
-          <Segmented
+          {isAdmin && <Segmented
             value={displayMode}
             onChange={setDisplayMode}
             options={[{ label: "Surat Keputusan", value: "SK" }, { label: "Surat Tugas", value: "ST" }]}
             size={bp.isMobile ? "sm" : "md"}
-          />
+          />}
 
           {/* Unit / Biro Filter Dropdown */}
           <div className="relative z-30" ref={unitDropdownRef}>
@@ -3027,12 +3036,12 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                       options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
                       size="sm"
                     />
-                    <Segmented
+                    {isAdmin && <Segmented
                       value={displayMode}
                       onChange={setDisplayMode}
                       options={[{ label: "Surat Keputusan", value: "SK" }, { label: "Surat Tugas", value: "ST" }]}
                       size="sm"
-                    />
+                    />}
                   </div>
 
                   {/* Row 1b: Unit / Biro Filter */}
