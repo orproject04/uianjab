@@ -46,17 +46,20 @@ export default function SignInForm({ manual = false }: { manual?: boolean }) {
 
     // Auto-redirect ke SSO jika tidak ada pengecualian
     useEffect(() => {
-        if (!isAutoRedirecting) return;
+        if (!isAutoRedirecting || manual) return;
         if (!meLoading && !me) {
             try {
                 const params = new URLSearchParams(window.location.search);
+                if (params.get("error") || params.get("loggedout") || params.get("verified") || params.get("manual")) {
+                    return;
+                }
                 const nextUrl = sanitizeInternalNext(params.get("next"));
                 window.location.href = `/api/auth/keycloak/login?next=${encodeURIComponent(nextUrl)}`;
             } catch (e) {
-                window.location.href = `/api/auth/keycloak/login`;
+                // Ignore
             }
         }
-    }, [isAutoRedirecting, meLoading, me]);
+    }, [isAutoRedirecting, meLoading, me, manual]);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
