@@ -10,6 +10,7 @@ import { generateUserAgentHash } from '@/lib/fingerprint';
 
 export async function GET(req: NextRequest) {
     try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin;
         const searchParams = req.nextUrl.searchParams;
         const code = searchParams.get('code');
         const state = searchParams.get('state');
@@ -20,13 +21,13 @@ export async function GET(req: NextRequest) {
         if (error) {
             console.error('Keycloak OAuth error:', error, errorDescription);
             return NextResponse.redirect(
-                new URL(`/signin?error=${encodeURIComponent(errorDescription || error)}`, req.url)
+                new URL(`/signin?error=${encodeURIComponent(errorDescription || error)}`, baseUrl)
             );
         }
 
         if (!code || !state) {
             return NextResponse.redirect(
-                new URL('/signin?error=missing_code_or_state', req.url)
+                new URL('/signin?error=missing_code_or_state', baseUrl)
             );
         }
 
@@ -40,14 +41,14 @@ export async function GET(req: NextRequest) {
         if (!savedState || savedState !== state) {
             console.error('State mismatch:', { savedState, receivedState: state });
             return NextResponse.redirect(
-                new URL('/signin?error=invalid_state', req.url)
+                new URL('/signin?error=invalid_state', baseUrl)
             );
         }
 
         if (!codeVerifier) {
             console.error('Code verifier not found');
             return NextResponse.redirect(
-                new URL('/signin?error=missing_code_verifier', req.url)
+                new URL('/signin?error=missing_code_verifier', baseUrl)
             );
         }
 
