@@ -363,16 +363,16 @@ export async function POST(req: NextRequest) {
                     ), ins AS (
                 INSERT
                 INTO peta_jabatan
-                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id, created_by, updated_by)
+                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id)
                 VALUES
-                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid, $9, $9)
+                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid)
                     RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id
                     )
                 SELECT *
                 FROM ins
             `,
-            //         $1         $2                 $3           $4          $5           $6        $7              $8               $9
-            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id, creator]
+            //         $1         $2                 $3           $4          $5           $6        $7              $8
+            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id]
         );
 
         const newNode = rows[0];
@@ -417,6 +417,7 @@ export async function POST(req: NextRequest) {
             const response = NextResponse.json({error: "parent_id harus UUID"}, {status: 400});
             return addCorsHeaders(response, origin);
         }
+        console.error("POST /api/peta-jabatan ERROR:", e);
         const response = NextResponse.json({error: "Internal error"}, {status: 500});
         return addCorsHeaders(response, origin);
     }

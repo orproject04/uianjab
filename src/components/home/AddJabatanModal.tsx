@@ -231,7 +231,7 @@ export default function AddJabatanModal({ isOpen, onClose }: AddJabatanModalProp
     setLoading(true);
 
     try {
-      const payload = {
+      const payload: any = {
         nama_jabatan: namaJabatan.trim(),
         slug: slug.trim(),
         parent_id: parentId || null,

@@ -13,16 +13,16 @@ export async function PATCH(
 ) {
     const client = await pool.connect();
     try {
-        // ✅ admin & admin-akk only
+        // ✅ admin only
         const user = getUserFromReq(req);
-        if (!user || !hasRole(user, ["admin", "admin-akk"])) {
+        if (!user || !hasRole(user, ["admin"])) {
             return NextResponse.json(
                 {error: "Forbidden, Anda tidak berhak mengakses fitur ini"},
                 {status: 403}
             );
         }
 
-        const isAdmin = hasRole(user, ["admin"]);
+        const isAdmin = hasRole(user, ["admin", "admin-jf", "admin-akk"]);
         const updatedBy = user.full_name || user.email || user.id;
 
         const {id} = await ctx.params;
