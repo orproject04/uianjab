@@ -41,6 +41,7 @@ ENV SOFFICE_DIR=/usr/bin
 WORKDIR /app
 
 # Install deps Node (postinstall Puppeteer akan download Chromium)
+ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
 COPY package*.json ./
 RUN npm install
 
