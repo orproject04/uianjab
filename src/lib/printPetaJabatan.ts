@@ -67,10 +67,13 @@ function getBezetting(row: PrintAPIRow, displayMode: "ST" | "SK"): number {
 
 function buildPrintTree(rows: PrintAPIRow[], flags: PrintSyntheticFlags): PrintNode[] {
   const byParent = new Map<string | null, PrintAPIRow[]>();
+  const allIds = new Set(rows.map(r => r.id));
+
   for (const r of rows) {
-    const arr = byParent.get(r.parent_id) || [];
+    const effectiveParent = (r.parent_id && allIds.has(r.parent_id)) ? r.parent_id : null;
+    const arr = byParent.get(effectiveParent) || [];
     arr.push(r);
-    byParent.set(r.parent_id, arr);
+    byParent.set(effectiveParent, arr);
   }
   for (const [k, arr] of byParent.entries()) {
     arr.sort((a, b) =>
@@ -541,13 +544,13 @@ body {
 .biro-kjf-side { display: flex; flex-direction: column; align-items: center; padding-top: 16px; padding-left: 20px; }
 `;
 
-export function printPetaJabatan(
+export function generatePetaJabatanHtml(
   rows: PrintAPIRow[],
   flags: PrintSyntheticFlags,
   unitName: string | null,
   orgName: string,
   displayMode: "ST" | "SK"
-): void {
+): string {
   const tree = buildPrintTree(rows, flags);
   const treeHtml = tree.map(n => renderNode(n, displayMode)).join('');
   const summaryHtml = buildSummary(rows, displayMode);
@@ -561,7 +564,7 @@ export function printPetaJabatan(
   }
   const fileTitle = `ANALISIS BEBAN KERJA (ABK) - ${rawName}`;
 
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -569,20 +572,39 @@ export function printPetaJabatan(
   <style>${PRINT_CSS}</style>
 </head>
 <body>
-  <div class="page-header" style="position: relative; text-align: center;">
-    <div style="position: absolute; top: 50%; right: 50%; transform: translateY(-50%); margin-right: 300px;">
-      ${summaryHtml}
+  <div class="page-container" style="width:100%;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:20px;">
+    
+    <div class="page-header-container" style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; width: 100%; max-width: 1600px; padding: 0 40px; box-sizing: border-box;">
+      <div class="header-left" style="flex: 1; display: flex; justify-content: flex-start; min-width: max-content;">
+        ${summaryHtml}
+      </div>
+      <div class="header-center" style="flex: 2; text-align: center; padding: 0 20px;">
+        <div style="font-size:9pt;font-weight:bold;color:#333;margin-bottom:4px;">Pandawa - Ortala</div>
+        <div class="page-title" style="margin-top: 0; line-height: 1.4;">${titleHtml}</div>
+      </div>
+      <div class="header-right" style="flex: 1;"></div>
     </div>
-    <div style="font-size:9pt;font-weight:bold;color:#333;margin-bottom:4px;">Pandawa - Ortala</div>
-    <div class="page-title" style="margin-top: 0; line-height: 1.4;">${titleHtml}</div>
-  </div>
-  <div class="org-wrap">
-    <div class="org-root">
-      <div class="tree-center">${treeHtml}</div>
+
+    <div class="org-wrap">
+      <div class="org-root">
+        <div class="tree-center">${treeHtml}</div>
+      </div>
     </div>
   </div>
 </body>
 </html>`;
+}
+
+export function printPetaJabatan(
+  rows: PrintAPIRow[],
+  flags: PrintSyntheticFlags,
+  unitName: string | null,
+  orgName: string,
+  displayMode: "ST" | "SK"
+): void {
+  const html = generatePetaJabatanHtml(rows, flags, unitName, orgName, displayMode);
+  const rawName = (unitName || orgName).toUpperCase();
+  const fileTitle = `ANALISIS BEBAN KERJA (ABK) - ${rawName}`;
 
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);

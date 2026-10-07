@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import { getPetaJabatan } from '@/lib/getPetaJabatan';
-import { printPetaJabatan } from '@/lib/printPetaJabatan';
+import { printPetaJabatan, generatePetaJabatanHtml } from '@/lib/printPetaJabatan';
 import type { RawNodeDatum, CustomNodeElementProps } from "react-d3-tree";
 import { useMe } from "@/context/MeContext";
 
@@ -305,6 +305,8 @@ export default function PetaJabatanClient() {
   // Unit / Biro filter
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
   const [unitSearch, setUnitSearch] = useState("");
   const unitDropdownRef = useRef<HTMLDivElement | null>(null);
   const [refDropdownOpen, setRefDropdownOpen] = useState(false);
@@ -837,7 +839,7 @@ export default function PetaJabatanClient() {
     const pusat = scope === "PUSAT";
     const byId = new Map<string, APIRow>(allRows.map(r => [r.id, r]));
 
-    let baseRows: APIRow[];
+    let printRows: APIRow[];
     if (pusat) {
       // Ambil semua baris is_pusat=true beserta ancestor-nya
       const keep = new Set<string>();
@@ -847,7 +849,7 @@ export default function PetaJabatanClient() {
           while (cur) { keep.add(cur); cur = byId.get(cur)?.parent_id || null; }
         }
       }
-      baseRows = allRows.filter(r => keep.has(r.id));
+      printRows = allRows.filter(r => keep.has(r.id));
     } else {
       // Ambil semua baris is_pusat=false + setjen sebagai root
       const setjenNode = allRows.find(r => (r.slug || '').toLowerCase() === 'setjen') || null;
@@ -867,23 +869,23 @@ export default function PetaJabatanClient() {
           if (setjenId) keep.add(setjenId);
         }
       }
-      baseRows = allRows.filter(r => keep.has(r.id));
+      printRows = allRows.filter(r => keep.has(r.id));
     }
 
     // Unit filter (sama seperti unitFilteredRows)
-    if (!selectedUnit) return baseRows;
+    if (!selectedUnit) return printRows;
 
     let headNode: APIRow | null = null;
     let headRank = 99;
-    for (const r of baseRows) {
+    for (const r of printRows) {
       if ((r.unit_kerja || '').trim() !== selectedUnit) continue;
       const rank = rankJenis(r.jenis_jabatan);
       if (rank < headRank) { headRank = rank; headNode = r; }
     }
-    if (!headNode) return baseRows;
+    if (!headNode) return printRows;
 
     const byParentId = new Map<string, string[]>();
-    for (const r of baseRows) {
+    for (const r of printRows) {
       if (r.parent_id) {
         const arr = byParentId.get(r.parent_id) || [];
         arr.push(r.id);
@@ -896,7 +898,7 @@ export default function PetaJabatanClient() {
       for (const childId of (byParentId.get(id) || [])) addSubtree(childId);
     };
     addSubtree(headNode.id);
-    return baseRows
+    return printRows
       .filter(r => keep.has(r.id))
       .map(r => r.id === headNode!.id ? { ...r, parent_id: null } : r);
   }, [allRows, scope, selectedUnit]);
@@ -918,6 +920,87 @@ export default function PetaJabatanClient() {
       displayMode
     );
   }, [printRows, printSyntheticFlags, selectedUnit, displayMode]);
+
+  const handleBulkPrintSemuaDaerah = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      // Hanya ambil unit daerah (Kantor DPD RI)
+      const daerahUnits = new Set<string>();
+      for (const r of allRows) {
+        if (r.is_pusat === false && r.unit_kerja && rankJenis(r.jenis_jabatan) === 3) {
+          daerahUnits.add(r.unit_kerja.trim());
+        }
+      }
+      const daerahUnitList = Array.from(daerahUnits).sort();
+
+      const payloads = daerahUnitList.map(unitName => {
+        // Find head node
+        let headNode = null;
+        let headRank = 99;
+        for (const r of printRows) {
+          if ((r.unit_kerja || '').trim() !== unitName) continue;
+          const rank = rankJenis(r.jenis_jabatan);
+          if (rank < headRank) { headRank = rank; headNode = r; }
+        }
+        
+        let rowsToPrint = printRows;
+        if (headNode) {
+          // Bangun index parent→children untuk efisiensi
+          const byParentId = new Map();
+          for (const r of printRows) {
+            if (r.parent_id) {
+              const arr = byParentId.get(r.parent_id) || [];
+              arr.push(r.id);
+              byParentId.set(r.parent_id, arr);
+            }
+          }
+
+          // Kumpulkan semua descendant head node
+          const keep = new Set();
+          const addSubtree = (id: string) => {
+            keep.add(id);
+            for (const childId of (byParentId.get(id) || [])) addSubtree(childId);
+          };
+          addSubtree(headNode.id);
+
+          rowsToPrint = printRows.filter(r => keep.has(r.id));
+        }
+
+        const html = generatePetaJabatanHtml(
+          rowsToPrint,
+          printSyntheticFlags,
+          unitName,
+          "DPD RI",
+          displayMode
+        );
+        
+        return { unitName: unitName, paper: "A4", html };
+      });
+      
+      const res = await fetch("/api/peta-jabatan/print-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobs: payloads })
+      });
+      
+      if (!res.ok) throw new Error("Gagal generate PDF");
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "Peta_Jabatan_Seluruh_Daerah.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal mencetak PDF Semua Daerah. Pastikan koneksi stabil.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
 
   // Reset collapse state when scope or unit filter changes
   useEffect(() => {
@@ -963,8 +1046,8 @@ export default function PetaJabatanClient() {
       // Find all matching nodes with detailed info
       for (const row of unitFilteredRows) {
         const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
-        const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
-        const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
+        const slugMatch = isAdmin ? (row.slug || "").toLowerCase().includes(lcFilter) : false;
+        const unitMatch = isAdmin ? (row.unit_kerja || "").toLowerCase().includes(lcFilter) : false;
 
         // Check which pejabat names match in the ACTIVE pejabat list
         const matchedNameIndices: number[] = [];
@@ -1009,11 +1092,11 @@ export default function PetaJabatanClient() {
         const eselonId = key ? unitKeyToEselonId.get(key) : undefined;
         if (!eselonId) continue; // orphan fungsional (no matching eselon in this scope) — skip
         const list = fungsionalByUnit.get(key) ?? [];
-        const idxInList = list.findIndex(x => x.id === f.id);
+        const idxInList = list.findIndex((x: any) => x.id === f.id);
         if (idxInList < 0) continue;
 
         const fNameMatch = (f.nama_jabatan || "").toLowerCase().includes(lcFilter);
-        const fSlugMatch = (f.slug || "").toLowerCase().includes(lcFilter);
+        const fSlugMatch = isAdmin ? (f.slug || "").toLowerCase().includes(lcFilter) : false;
         const activePejabat = (displayMode === "SK" ? f.pejabat_sk : f.pejabat_st) ?? [];
         const fPejabatIndices: number[] = [];
         if (isAdmin) {
@@ -2721,18 +2804,26 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             Reset
           </button>
           
-          {selectedUnit !== null && isAdmin && (
+          {isAdmin && (selectedUnit !== null || scope === "DAERAH") && (
             <button
-              onClick={handlePrint}
+              onClick={selectedUnit ? handlePrint : handleBulkPrintSemuaDaerah}
+              disabled={isGeneratingPDF}
               title="Cetak peta jabatan sesuai filter aktif"
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-blue-300 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-blue-300 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
             >
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              Cetak
+              {isGeneratingPDF && !selectedUnit ? (
+                <div className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+              )}
+              {selectedUnit ? "Cetak" : "Cetak Semua Daerah (38)"}
             </button>
           )}
+
+
+
           
           <button 
             onClick={isFullscreen ? exitFullscreen : enterFullscreen} 
@@ -3159,7 +3250,8 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             </div>
           )
         )}
-      </div>
+      
+</div>
     </div>
   );
 }
