@@ -44,7 +44,7 @@ WORKDIR /app
 ENV PUPPETEER_CACHE_DIR=/usr/local/share/puppeteer-cache
 COPY package*.json ./
 RUN npm install
-RUN npx puppeteer browsers clear && npx puppeteer browsers install chrome
+RUN rm -rf /usr/local/share/puppeteer-cache && npx puppeteer browsers install chrome
 
 # Python deps untuk extractor
 COPY requirements.txt ./requirements.txt
