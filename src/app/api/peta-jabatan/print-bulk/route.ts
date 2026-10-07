@@ -19,8 +19,8 @@ export async function POST(req: Request) {
     // Create an empty PDFDocument for merging
     const mergedPdf = await PDFDocument.create();
 
+    const page = await browser.newPage();
     for (const job of jobs) {
-      const page = await browser.newPage();
       
       // We set the viewport roughly to A4 landscape size just for initial layout
       await page.setViewport({ width: 1122, height: 793, deviceScaleFactor: 1 });
@@ -83,9 +83,9 @@ export async function POST(req: Request) {
       const copiedPages = await mergedPdf.copyPages(singlePdf, singlePdf.getPageIndices());
       copiedPages.forEach((p) => mergedPdf.addPage(p));
 
-      await page.close();
     }
-
+    
+    await page.close();
     await browser.close();
 
     // Save the merged document to bytes
