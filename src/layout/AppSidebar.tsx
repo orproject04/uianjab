@@ -610,7 +610,7 @@ const AppSidebar: React.FC = () => {
         setAddName("");
         setAddSlug("");
         setAddOrder("");
-        setAddUnitKerja("");
+        setAddUnitKerja(parent.unit_kerja || "");
         setAddIsPusat("true");
         setAddJenisJabatan("");
         setSlugTouched(false);
