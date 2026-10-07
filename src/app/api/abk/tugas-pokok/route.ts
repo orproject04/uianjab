@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
         const result = await pool.query(
             `SELECT 
                 tpa.id,
-                tpa.peta_jabatan_id,
-                tpa.tugas_pokok_id,
+                $1 as peta_jabatan_id,
+                tp.id as tugas_pokok_id,
                 tpa.jumlah_hasil,
                 tpa.waktu_penyelesaian_jam,
                 tpa.waktu_efektif,
@@ -28,9 +28,10 @@ export async function GET(req: NextRequest) {
                 NULL as tp_jumlah_hasil,
                 null as satuan_hasil,
                 NULL as tp_waktu_penyelesaian
-             FROM tugas_pokok_abk tpa
-             INNER JOIN tugas_pokok tp ON tp.id = tpa.tugas_pokok_id
-             WHERE tpa.peta_jabatan_id = $1
+             FROM tugas_pokok tp
+             LEFT JOIN tugas_pokok_abk tpa 
+                ON tpa.tugas_pokok_id = tp.id AND tpa.peta_jabatan_id = $1
+             WHERE tp.jabatan_id = (SELECT jabatan_id FROM peta_jabatan WHERE id = $1)
              ORDER BY tp.nomor_tugas`,
             [petaJabatanId]
         );

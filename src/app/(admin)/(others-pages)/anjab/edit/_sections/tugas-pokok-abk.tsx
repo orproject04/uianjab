@@ -36,6 +36,8 @@ export default function TugasPokokABKSection({
     const [tugasList, setTugasList] = useState<TugasPokokABK[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [jabatanId, setJabatanId] = useState<string>("");
+    const [hasAbkData, setHasAbkData] = useState<boolean>(true);
+    const [activeTab, setActiveTab] = useState<'manual' | 'upload'>('manual');
 
     // 1. Resolve peta_jabatan_id dari slug path atau fallback ke jabatan_id
     useEffect(() => {
@@ -113,12 +115,18 @@ export default function TugasPokokABKSection({
                         
                         return {
                             ...item,
+                            id: item.id || "",
                             jumlah_hasil: jumlahHasil,
                             waktu_penyelesaian_jam: waktuPenyelesaian,
                             waktu_efektif: waktuEfektif,
                             kebutuhan_pegawai: calculated // Gunakan hasil perhitungan, bukan dari DB
                         };
                     });
+                    
+                    // Cek apakah ada satupun row yang memiliki ID (artinya pernah disimpan)
+                    const hasSavedData = dataWithCalculation.some((item: any) => item.id && item.id.trim() !== "");
+                    setHasAbkData(hasSavedData);
+                    
                     setTugasList(dataWithCalculation);
                 } else {
                     setError(res.error || "Gagal load data");
@@ -131,7 +139,7 @@ export default function TugasPokokABKSection({
         };
 
         loadData();
-    }, [petaJabatanId]);
+    }, [petaJabatanId, jabatanId]);
 
     // 3. Hitung kebutuhan pegawai otomatis
     function computeKebutuhanPegawai(jumlah_hasil: number | null, waktu_penyelesaian_jam: number | null, waktu_efektif: number | null): number {
@@ -303,7 +311,135 @@ export default function TugasPokokABKSection({
         );
     }
 
-    if (tugasList.length === 0) {
+    const renderManualForm = () => (
+        <div className="space-y-6">
+            {/* Summary - Total Kebutuhan Pegawai */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-bold mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
+                    <input
+                        type="number"
+                        value={Number.isFinite(totalKebutuhan) ? totalKebutuhan.toFixed(4) : 0}
+                        readOnly
+                        disabled
+                        className="w-full rounded border px-3 py-2 bg-gray-100 dark:bg-gray-800"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-bold mb-1">Pembulatan</label>
+                    <input
+                        type="number"
+                        value={pembulatan}
+                        readOnly
+                        disabled
+                        className="w-full rounded border px-3 py-2 bg-gray-100 dark:bg-gray-800"
+                    />
+                </div>
+            </div>
+
+            {/* List Tugas Pokok */}
+            <div className="space-y-6">
+                {tugasList.map((tugas, idx) => (
+                    <FormSection key={tugas.tugas_pokok_id} title={`Tugas Pokok ${idx + 1}`}>
+                        <div className="space-y-4">
+                            {/* Uraian Tugas - Read Only */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Uraian Tugas</label>
+                                <div className="w-full px-3 py-2 border rounded bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
+                                    {tugas.uraian || "-"}
+                                </div>
+                            </div>
+
+                            {/* Field ABK - Editable */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold mb-1" title="Jumlah Hasil">Jumlah Hasil</label>
+                                    <input
+                                        type="number"
+                                        value={tugas.jumlah_hasil ?? ""}
+                                        onChange={(e) => updateABK(idx, "jumlah_hasil", e.target.value === "" ? null : Number(e.target.value))}
+                                        className="w-full rounded border px-3 py-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-xs font-bold mb-1" title="Waktu Penyelesaian (jam)">Waktu (jam)</label>
+                                    <input
+                                        type="number"
+                                        value={tugas.waktu_penyelesaian_jam ?? ""}
+                                        onChange={(e) => updateABK(idx, "waktu_penyelesaian_jam", e.target.value === "" ? null : Number(e.target.value))}
+                                        className="w-full rounded border px-3 py-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-xs font-bold mb-1" title="Waktu Efektif">Waktu Efektif</label>
+                                    <input
+                                        type="number"
+                                        value={tugas.waktu_efektif ?? ""}
+                                        onChange={(e) => updateABK(idx, "waktu_efektif", e.target.value === "" ? null : Number(e.target.value))}
+                                        className="w-full rounded border px-3 py-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-xs font-bold mb-1" title="Kebutuhan Pegawai">Kebutuhan</label>
+                                    <input
+                                        type="text"
+                                        value={tugas.kebutuhan_pegawai != null && typeof tugas.kebutuhan_pegawai === 'number' ? tugas.kebutuhan_pegawai.toFixed(4) : '0.0000'}
+                                        readOnly
+                                        disabled
+                                        className="w-full rounded border px-3 py-2 bg-gray-100 dark:bg-gray-800"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Save Button */}
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => saveABK(idx)}
+                                    disabled={saving}
+                                    className="px-4 py-2 bg-brand-500 text-white rounded-lg disabled:opacity-50"
+                                >
+                                    {saving ? "Menyimpan..." : "Simpan"}
+                                </button>
+                            </div>
+                        </div>
+                    </FormSection>
+                ))}
+                {tugasList.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                        Belum ada tugas pokok yang terdaftar untuk jabatan ini.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    const renderUploadForm = () => (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <div className="flex items-start gap-3 mb-4">
+                <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <div className="flex-1">
+                    <h4 className="font-medium text-yellow-800 dark:text-yellow-200">
+                        Opsi Unggah Dokumen ABK
+                    </h4>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
+                        Anda dapat mengunggah dokumen ABK (format .docx) untuk melengkapi data secara otomatis.
+                    </p>
+                </div>
+            </div>
+            <WordAbk id={jabatanId} petaJabatanId={petaJabatanId} viewerPath={viewerPath} />
+        </div>
+    );
+
+    if (!hasAbkData) {
         return (
             <EditSectionWrapper
                 icon={
@@ -312,24 +448,26 @@ export default function TugasPokokABKSection({
                     </svg>
                 }
                 title="Beban Kerja"
-                description="Belum ada data ABK untuk jabatan ini"
+                description="Pilih metode pengisian Analisis Beban Kerja"
             >
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                    <div className="flex items-start gap-3 mb-4">
-                        <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.864-.833-2.634 0L4.168 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                        <div className="flex-1">
-                            <h4 className="font-medium text-yellow-800 dark:text-yellow-200">
-                                Sebagian kolom pada Tugas Pokok belum terisi
-                            </h4>
-                            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
-                                Unggah dokumen ABK untuk melengkapi secara otomatis.
-                            </p>
-                        </div>
-                    </div>
-                    <WordAbk id={jabatanId} petaJabatanId={petaJabatanId} viewerPath={viewerPath} />
+                <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+                    <nav className="-mb-px flex space-x-8">
+                        <button
+                            onClick={() => setActiveTab('manual')}
+                            className={`${activeTab === 'manual' ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                        >
+                            Isi Manual
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('upload')}
+                            className={`${activeTab === 'upload' ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                        >
+                            Upload Otomatis
+                        </button>
+                    </nav>
                 </div>
+
+                {activeTab === 'manual' ? renderManualForm() : renderUploadForm()}
             </EditSectionWrapper>
         );
     }
@@ -344,107 +482,7 @@ export default function TugasPokokABKSection({
             title="Beban Kerja"
             description="Kelola data Analisis Beban Kerja untuk setiap tugas pokok"
         >
-            <div className="space-y-6">
-                {/* Summary - Total Kebutuhan Pegawai */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-bold mb-1">Jumlah Pegawai Yang Dibutuhkan</label>
-                        <input
-                            type="number"
-                            value={Number.isFinite(totalKebutuhan) ? totalKebutuhan.toFixed(4) : 0}
-                            readOnly
-                            disabled
-                            className="w-full rounded border px-3 py-2 bg-gray-100 dark:bg-gray-800"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-1">Pembulatan</label>
-                        <input
-                            type="number"
-                            value={pembulatan}
-                            readOnly
-                            disabled
-                            className="w-full rounded border px-3 py-2 bg-gray-100 dark:bg-gray-800"
-                        />
-                    </div>
-                </div>
-
-                {/* List Tugas Pokok */}
-                <div className="space-y-6">
-                    {tugasList.map((tugas, idx) => (
-                        <FormSection key={tugas.tugas_pokok_id} title={`Tugas Pokok ${idx + 1}`}>
-                            <div className="space-y-4">
-                                {/* Uraian Tugas - Read Only */}
-                                <div>
-                                    <label className="block text-sm font-medium mb-2">Uraian Tugas</label>
-                                    <div className="w-full px-3 py-2 border rounded bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
-                                        {tugas.uraian || "-"}
-                                    </div>
-                                </div>
-
-                                {/* Field ABK - Editable */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold mb-1" title="Jumlah Hasil">Jumlah Hasil</label>
-                                        <input
-                                            type="number"
-                                            value={tugas.jumlah_hasil ?? ""}
-                                            onChange={(e) => updateABK(idx, "jumlah_hasil", e.target.value === "" ? null : Number(e.target.value))}
-                                            className="w-full rounded border px-3 py-2"
-                                            inputMode="numeric"
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-bold mb-1" title="Waktu Penyelesaian (jam)">Waktu (jam)</label>
-                                        <input
-                                            type="number"
-                                            value={tugas.waktu_penyelesaian_jam ?? ""}
-                                            onChange={(e) => updateABK(idx, "waktu_penyelesaian_jam", e.target.value === "" ? null : Number(e.target.value))}
-                                            className="w-full rounded border px-3 py-2"
-                                            inputMode="numeric"
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-bold mb-1" title="Waktu Efektif">Waktu Efektif</label>
-                                        <input
-                                            type="number"
-                                            value={tugas.waktu_efektif ?? ""}
-                                            onChange={(e) => updateABK(idx, "waktu_efektif", e.target.value === "" ? null : Number(e.target.value))}
-                                            className="w-full rounded border px-3 py-2"
-                                            inputMode="numeric"
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-bold mb-1" title="Kebutuhan Pegawai">Kebutuhan</label>
-                                        <input
-                                            type="text"
-                                            value={tugas.kebutuhan_pegawai != null && typeof tugas.kebutuhan_pegawai === 'number' ? tugas.kebutuhan_pegawai.toFixed(4) : '0.0000'}
-                                            readOnly
-                                            disabled
-                                            className="w-full rounded border px-3 py-2 bg-gray-100 dark:bg-gray-800"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Save Button */}
-                                <div className="flex gap-3 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => saveABK(idx)}
-                                        disabled={saving}
-                                        className="px-4 py-2 bg-brand-500 text-white rounded-lg disabled:opacity-50"
-                                    >
-                                        {saving ? "Menyimpan..." : "Simpan"}
-                                    </button>
-                                </div>
-                            </div>
-                        </FormSection>
-                    ))}
-                </div>
-            </div>
+            {renderManualForm()}
         </EditSectionWrapper>
     );
 }
