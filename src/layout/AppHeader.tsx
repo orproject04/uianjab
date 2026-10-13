@@ -6,6 +6,9 @@ import {useRouter, usePathname} from "next/navigation";
 import {apiFetch} from "@/lib/apiFetch";
 import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import React, {useState, useEffect, useRef, useCallback} from "react";
+import {useMe} from "@/context/MeContext";
+import {useSotk} from "@/context/SotkContext";
+import {VersionSwitcher} from "@/components/peta-jabatan/VersionSwitcher";
 
 /** ====== TIPE API (flat) ====== */
 import { APIRow, SearchItem, buildItemsFromFlat } from "@/lib/search";
@@ -15,6 +18,9 @@ const AppHeader: React.FC = () => {
     const router = useRouter();
     const pathname = usePathname();
     const isHomePage = pathname === "/";
+    const {me} = useMe();
+    const {activeVersion, setActiveVersion} = useSotk();
+    const isAdmin = me?.role === "admin";
 
     // Toggle sidebar
     const handleToggle = () => {
@@ -77,19 +83,23 @@ const AppHeader: React.FC = () => {
 
     // use buildItemsFromFlat imported from src/lib/search
 
+    useEffect(() => {
+        setAllItems([]);
+    }, [activeVersion]);
+
     const ensureLoaded = useCallback(async () => {
         if (allItems.length) return;
         setLoading(true);
         setErr(null);
         try {
-            const flat: APIRow[] = await getPetaJabatan();
+            const flat: APIRow[] = await getPetaJabatan(false, activeVersion);
             setAllItems(buildItemsFromFlat(flat));
         } catch (e: any) {
             setErr(e?.message || "Failed to load data");
         } finally {
             setLoading(false);
         }
-    }, [allItems.length]);
+    }, [allItems.length, activeVersion]);
 
     useEffect(() => {
         void ensureLoaded();
@@ -311,7 +321,10 @@ const AppHeader: React.FC = () => {
                             </div>
                         )}
 
-                        <div className={!isHomePage ? "ml-auto" : "w-full flex justify-end"}>
+                        <div className={!isHomePage ? "ml-auto flex items-center gap-2" : "w-full flex justify-end items-center gap-2"}>
+                            {isHomePage && (
+                                <VersionSwitcher activeVersion={activeVersion} setActiveVersion={setActiveVersion} isAdmin={isAdmin} layout="horizontal" />
+                            )}
                             <UserDropdown />
                         </div>
                     </div>
@@ -395,7 +408,10 @@ const AppHeader: React.FC = () => {
                             </div>
                         )}
 
-                        <div className={!isHomePage ? "ml-auto" : "w-full flex justify-end"}>
+                        <div className={!isHomePage ? "ml-auto flex items-center gap-3" : "w-full flex justify-end items-center gap-3"}>
+                            {isHomePage && (
+                                <VersionSwitcher activeVersion={activeVersion} setActiveVersion={setActiveVersion} isAdmin={isAdmin} layout="horizontal" />
+                            )}
                             <UserDropdown />
                         </div>
                     </div>

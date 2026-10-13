@@ -4,6 +4,7 @@ import './globals.css';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { MeProvider } from '@/context/MeContext';
+import { SotkProvider } from '@/context/SotkContext';
 import { icons } from 'lucide-react';
 
 export const metadata = {
@@ -43,7 +44,9 @@ export default function RootLayout({
         <ThemeProvider>
           <SidebarProvider>
             <MeProvider>
-              {children}
+              <SotkProvider>
+                {children}
+              </SotkProvider>
             </MeProvider>
           </SidebarProvider>
         </ThemeProvider>

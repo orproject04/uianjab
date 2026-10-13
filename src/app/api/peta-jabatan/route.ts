@@ -4,6 +4,7 @@ import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth";
 import {z} from "zod";
 import { handleCorsOptions, addCorsHeaders } from "@/lib/cors";
+import { resolveVersiId } from "@/lib/versi";
 
 // --- UPDATE tipe Row (letakkan di atas, menggantikan tipe Row lama)
 type PegawaiInfo = {
@@ -27,6 +28,7 @@ type Row = {
     pejabat_st: PegawaiInfo[];
     pejabat_sk: PegawaiInfo[];
     jabatan_id: string | null;
+    versi_id: string;
 };
 
 const UUID_RE =
@@ -42,6 +44,7 @@ const CreateSchema = z.object({
     is_pusat: z.boolean().optional(),
     jenis_jabatan: z.string().trim().optional().nullable(),
     jabatan_id: z.string().uuid().optional().nullable(), // Manual override
+    versi_id: z.string().optional().default('AKTIF'),
 });
 
 // Handle preflight OPTIONS request
@@ -64,6 +67,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const root_id = searchParams.get("root_id");
         const jabatan_id = searchParams.get("jabatan_id");
+        const versi_id = await resolveVersiId(searchParams.get("versi_id"));
 
         // Query by jabatan_id (simple query, tidak recursive)
         if (jabatan_id) {
@@ -85,14 +89,15 @@ export async function GET(req: NextRequest) {
                     pj.is_pusat,
                     pj.jenis_jabatan,
                     pj.jabatan_id,
+                    pj.versi_id,
                     j.kelas_jabatan,
                     COALESCE(pj.pejabat_st, '[]'::jsonb) AS pejabat_st,
                     COALESCE(pj.pejabat_sk, '[]'::jsonb) AS pejabat_sk
                  FROM peta_jabatan pj
                  LEFT JOIN jabatan j ON pj.jabatan_id = j.id
-                 WHERE pj.jabatan_id = $1::uuid AND pj.deleted_at IS NULL
+                 WHERE pj.jabatan_id = $1::uuid AND pj.deleted_at IS NULL AND pj.versi_id = $2
                  ORDER BY pj.order_index`,
-                [jabatan_id]
+                [jabatan_id, versi_id]
             );
             const response = NextResponse.json({ success: true, data: rows });
             return addCorsHeaders(response, origin);
@@ -112,6 +117,7 @@ export async function GET(req: NextRequest) {
         t.is_pusat,
         t.jenis_jabatan,
         t.jabatan_id,
+        t.versi_id,
         j.kelas_jabatan,
         t.pejabat_st,
         t.pejabat_sk
@@ -143,13 +149,14 @@ export async function GET(req: NextRequest) {
             is_pusat,
             jenis_jabatan,
             jabatan_id,
+            versi_id,
             COALESCE(pejabat_st, '[]'::jsonb) AS pejabat_st,
             COALESCE(pejabat_sk, '[]'::jsonb) AS pejabat_sk,
             ARRAY[
               lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
             ]::text[] AS sort_path
           FROM peta_jabatan
-          WHERE id = $1::uuid AND deleted_at IS NULL
+          WHERE id = $1::uuid AND deleted_at IS NULL AND versi_id = $2
 
           UNION ALL
 
@@ -165,18 +172,19 @@ export async function GET(req: NextRequest) {
             c.is_pusat,
             c.jenis_jabatan,
             c.jabatan_id,
+            c.versi_id,
             COALESCE(c.pejabat_st, '[]'::jsonb),
             COALESCE(c.pejabat_sk, '[]'::jsonb),
             t.sort_path || (
               lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
             )
           FROM peta_jabatan c
-          JOIN tree t ON c.parent_id = t.id
-          WHERE c.deleted_at IS NULL
+          JOIN tree t ON c.parent_id = t.id AND c.versi_id = t.versi_id
+          WHERE c.deleted_at IS NULL AND c.versi_id = $2
         )
         ${FINAL_SELECT}
         `,
-                [root_id]
+                [root_id, versi_id]
             );
             const response = NextResponse.json(rows);
             return addCorsHeaders(response, origin);
@@ -198,13 +206,14 @@ export async function GET(req: NextRequest) {
           is_pusat,
           jenis_jabatan,
           jabatan_id,
+          versi_id,
           COALESCE(pejabat_st, '[]'::jsonb) AS pejabat_st,
           COALESCE(pejabat_sk, '[]'::jsonb) AS pejabat_sk,
           ARRAY[
             lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
           ]::text[] AS sort_path
         FROM peta_jabatan
-        WHERE parent_id IS NULL AND deleted_at IS NULL
+        WHERE parent_id IS NULL AND deleted_at IS NULL AND versi_id = $1
 
         UNION ALL
 
@@ -220,17 +229,19 @@ export async function GET(req: NextRequest) {
           c.is_pusat,
           c.jenis_jabatan,
           c.jabatan_id,
+          c.versi_id,
           COALESCE(c.pejabat_st, '[]'::jsonb),
           COALESCE(c.pejabat_sk, '[]'::jsonb),
           t.sort_path || (
             lpad(COALESCE(c.order_index, 2147483647)::text, 10, '0') || '-' || c.id::text
           )
         FROM peta_jabatan c
-        JOIN tree t ON c.parent_id = t.id
-        WHERE c.deleted_at IS NULL
+        JOIN tree t ON c.parent_id = t.id AND c.versi_id = t.versi_id
+        WHERE c.deleted_at IS NULL AND c.versi_id = $1
       )
       ${FINAL_SELECT}
-      `
+      `,
+            [versi_id]
         );
 
         const response = NextResponse.json(rows);
@@ -274,13 +285,16 @@ export async function POST(req: NextRequest) {
             is_pusat,
             jenis_jabatan,
             jabatan_id: manual_jabatan_id = null,
+            versi_id: raw_versi_id,
         } = parsed.data;
+
+        const versi_id = await resolveVersiId(raw_versi_id);
 
         // Jika parent_id ada, pastikan parent eksis
         if (parent_id) {
             const p = await pool.query<{slug: string}>(
-                `SELECT slug FROM peta_jabatan WHERE id = $1::uuid LIMIT 1`,
-                [parent_id]
+                `SELECT slug FROM peta_jabatan WHERE id = $1::uuid AND versi_id = $2 LIMIT 1`,
+                [parent_id, versi_id]
             );
             if (p.rowCount === 0) {
                 const response = NextResponse.json(
@@ -300,9 +314,9 @@ export async function POST(req: NextRequest) {
                 SELECT EXISTS(SELECT 1
                               FROM peta_jabatan
                               WHERE parent_id IS NOT DISTINCT FROM $1::uuid
-                    AND slug = $2) AS exists
+                    AND slug = $2 AND versi_id = $3) AS exists
             `,
-            [parent_id, finalSlug]
+            [parent_id, finalSlug, versi_id]
         );
         if (dup.rows[0]?.exists) {
             const response = NextResponse.json(
@@ -347,8 +361,7 @@ export async function POST(req: NextRequest) {
             `
                 WITH parent AS (SELECT id, level
                                 FROM peta_jabatan
-                                WHERE id = $1
-                    ::uuid
+                                WHERE id = $1::uuid AND versi_id = $9
                     )
                    , defaults AS (
                 SELECT
@@ -358,21 +371,21 @@ export async function POST(req: NextRequest) {
                     END AS lvl, COALESCE (
                               $5:: int, (SELECT COALESCE (MAX (order_index) + 1, 0)
                     FROM peta_jabatan
-                    WHERE parent_id IS NOT DISTINCT FROM (SELECT id FROM parent))
+                    WHERE parent_id IS NOT DISTINCT FROM (SELECT id FROM parent) AND versi_id = $9)
                     ) AS ord
                     ), ins AS (
                 INSERT
                 INTO peta_jabatan
-                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id)
+                (parent_id, nama_jabatan, slug, unit_kerja, level, order_index, is_pusat, jenis_jabatan, jabatan_id, versi_id)
                 VALUES
-                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid)
-                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id
+                    ((SELECT id FROM parent), $2, $3, $4, (SELECT lvl FROM defaults), (SELECT ord FROM defaults), COALESCE ($6, true), COALESCE ($7, 'JABATAN PELAKSANA'), $8::uuid, $9)
+                    RETURNING id, parent_id, nama_jabatan, slug, unit_kerja, level, order_index, kebutuhan_pegawai, is_pusat, jenis_jabatan, jabatan_id, versi_id
                     )
                 SELECT *
                 FROM ins
             `,
-            //         $1         $2                 $3           $4          $5           $6        $7              $8
-            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id]
+            //         $1         $2                 $3           $4          $5           $6        $7              $8                  $9
+            [parent_id, nama_jabatan.trim(), finalSlug, unit_kerja, order_index, is_pusat, jenis_jabatan, matched_jabatan_id, versi_id]
         );
 
         const newNode = rows[0];

@@ -8,6 +8,7 @@ import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import { printPetaJabatan, generatePetaJabatanHtml } from '@/lib/printPetaJabatan';
 import type { RawNodeDatum, CustomNodeElementProps } from "react-d3-tree";
 import { useMe } from "@/context/MeContext";
+import { useSotk } from "@/context/SotkContext";
 
 const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), { ssr: false });
 
@@ -252,6 +253,7 @@ type ScopeOpt = "PUSAT" | "DAERAH";
 export default function PetaJabatanClient() {
   const router = useRouter();
   const { isAdmin: isSuperAdmin, isAdminJf, isAdminAKK } = useMe();
+  const { activeVersion } = useSotk();
   const isAdmin = isSuperAdmin || isAdminJf || isAdminAKK;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -370,7 +372,7 @@ export default function PetaJabatanClient() {
         if (!res.ok) return;
         const json = await res.json();
         const data = json?.data || [];
-        
+
         // Get latest Peta Jabatan
         const petaJabatan = data
           .filter((d: any) => d.jenis_peraturan === "Peta Jabatan" && d.file_path)
@@ -512,7 +514,7 @@ export default function PetaJabatanClient() {
     setUnitSearch("");
     setExpandedKjfIds(new Set());
     hasFocusedOnce.current = false;
-    
+
     // Collapse all nodes to initial state
     const initialCollapseMap: Record<string, boolean> = {};
     for (const r of allRows) {
@@ -528,7 +530,7 @@ export default function PetaJabatanClient() {
     setLoading(true);
     setErr(null);
     try {
-      const data: APIRow[] = await getPetaJabatan();
+      const data: APIRow[] = await getPetaJabatan(true, activeVersion);
       setAllRows(data);
 
       // Restore state from sessionStorage after data loaded
@@ -573,7 +575,7 @@ export default function PetaJabatanClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeVersion]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -612,7 +614,7 @@ export default function PetaJabatanClient() {
 
   const enterFullscreen = async () => {
     if (!containerRef.current) return;
-    
+
     // For iOS devices, use alternative approach (expand to full viewport)
     if (isIOS) {
       setIsFullscreen(true);
@@ -629,7 +631,7 @@ export default function PetaJabatanClient() {
       }
       return;
     }
-    
+
     try {
       // Try standard Fullscreen API
       if (containerRef.current.requestFullscreen) {
@@ -676,7 +678,7 @@ export default function PetaJabatanClient() {
       }
       return;
     }
-    
+
     try {
       if (document.exitFullscreen && document.fullscreenElement) {
         await document.exitFullscreen();
@@ -942,7 +944,7 @@ export default function PetaJabatanClient() {
           const rank = rankJenis(r.jenis_jabatan);
           if (rank < headRank) { headRank = rank; headNode = r; }
         }
-        
+
         let rowsToPrint = printRows;
         if (headNode) {
           // Bangun index parent→children untuk efisiensi
@@ -973,18 +975,18 @@ export default function PetaJabatanClient() {
           "DPD RI",
           displayMode
         );
-        
+
         return { unitName: unitName, paper: "A4", html };
       });
-      
+
       const res = await fetch("/api/peta-jabatan/print-bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobs: payloads })
       });
-      
+
       if (!res.ok) throw new Error("Gagal generate PDF");
-      
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1141,7 +1143,7 @@ export default function PetaJabatanClient() {
   // ==== Show only current match (collapse all others) ====
   useEffect(() => {
     if (searchMatches.length === 0) return;
-    
+
     const currentMatch = searchMatches[currentMatchIndex];
     if (!currentMatch) return;
 
@@ -1262,17 +1264,17 @@ export default function PetaJabatanClient() {
           fungsionalByUnit.get(normalizeUnitKey(n.unit_kerja)) ??
           fungsionalByUnit.get(normalizeUnitKey(n.nama_jabatan)) ??
           [];
-          
+
         const syntheticId = `synthetic-kjf:${n.id}`;
         let kjfChildren: D3Node[] = [];
-        
+
         if (expandedKjfIds.has(syntheticId)) {
           const avgItemHeight = 160;
           const kjfBaseHeight = 100;
           const totalHeight = kjfBaseHeight + (kjfList.length * avgItemHeight);
           const nodeY = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
           const layersToAdd = Math.floor(totalHeight / nodeY);
-          
+
           if (layersToAdd > 0) {
             let lastGhost: D3Node | null = null;
             for (let i = layersToAdd; i >= 1; i--) {
@@ -1342,17 +1344,17 @@ export default function PetaJabatanClient() {
           fungsionalByUnit.get(normalizeUnitKey(n.unit_kerja)) ??
           fungsionalByUnit.get(normalizeUnitKey(n.nama_jabatan)) ??
           [];
-          
+
         const syntheticId = `synthetic-kjf-e3:${n.id}`;
         let kjfChildren: D3Node[] = [];
-        
+
         if (expandedKjfIds.has(syntheticId)) {
           const avgItemHeight = 160;
           const kjfBaseHeight = 100;
           const totalHeight = kjfBaseHeight + (kjfList.length * avgItemHeight);
           const nodeY = bp.isMobile ? 300 : bp.isTablet ? 300 : 380;
           const layersToAdd = Math.floor(totalHeight / nodeY);
-          
+
           if (layersToAdd > 0) {
             let lastGhost: D3Node | null = null;
             for (let i = layersToAdd; i >= 1; i--) {
@@ -1419,11 +1421,11 @@ export default function PetaJabatanClient() {
   const lcFilter = filterText.trim().toLowerCase();
   const filteredRoots: D3Node[] = useMemo(() => {
     if (!lcFilter) return roots;
-    
+
     // If we have search matches and a valid currentMatchIndex, show only the path to that node
     if (searchMatches.length > 0 && currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
       const currentMatch = searchMatches[currentMatchIndex];
-      
+
       // Build path set from root to current match (using unitFilteredRows for real nodes)
       const pathIds = new Set<string>();
       // For fungsional matches, walk from the real parent Eselon (realParentId).
@@ -1461,7 +1463,7 @@ export default function PetaJabatanClient() {
 
       return roots.map(walkPath).filter(Boolean) as D3Node[];
     }
-    
+
     // Original filter logic when no specific match is selected
     // Searches in BOTH pejabat_st and pejabat_sk so cross-mode search always works
     const match = (n: D3Node) =>
@@ -1533,14 +1535,14 @@ export default function PetaJabatanClient() {
     const kelasHLocal = bp.isMobile ? 16 : bp.isTablet ? 18 : 20;
     const headerH = Math.max(bp.isMobile ? 36 : bp.isTablet ? 40 : 44, titleLines.length * lineH + 8) + kelasHLocal + 10;
 
-    const namesArrLocal: string[] = Array.isArray(n.pejabat) 
+    const namesArrLocal: string[] = Array.isArray(n.pejabat)
       ? (n.pejabat as PegawaiInfo[]).map(p => {
-          // Only show role for JABATAN FUNGSIONAL (rank 5) and JABATAN PELAKSANA (rank 6)
-          const jenisRank = rankJenis(n.jenis_jabatan);
-          const showRole = jenisRank === 5 || jenisRank === 6;
-          const role = showRole && p.role ? ` (${p.role})` : '';
-          return `${p.name}${role}`;
-        }) 
+        // Only show role for JABATAN FUNGSIONAL (rank 5) and JABATAN PELAKSANA (rank 6)
+        const jenisRank = rankJenis(n.jenis_jabatan);
+        const showRole = jenisRank === 5 || jenisRank === 6;
+        const role = showRole && p.role ? ` (${p.role})` : '';
+        return `${p.name}${role}`;
+      })
       : [];
     const namesCountLocal = namesArrLocal.length;
     const boxGapVerticalLocal = bp.isMobile ? 6 : 8;
@@ -1663,12 +1665,12 @@ export default function PetaJabatanClient() {
         // Calculate total width of all children
         let totalWidth = 0;
         const childWidths: number[] = [];
-        
+
         for (let i = 0; i < node.children.length; i++) {
           const childWidth = calculateSubtreeWidth(node.children[i]);
           childWidths.push(childWidth);
           totalWidth += childWidth;
-          
+
           // Add spacing between siblings (except after the last one)
           if (i < node.children.length - 1) {
             totalWidth += nodeSize.x * separation.siblings;
@@ -1712,25 +1714,25 @@ export default function PetaJabatanClient() {
     if (searchMatches.length === 0) {
       return;
     }
-    
+
     // Skip if already centered this index (and it's a valid index)
     if (currentMatchIndex === lastCenteredIndexRef.current) {
       return;
     }
-    
+
     if (!containerRef.current || !containerSize.w) return;
-    
+
     const currentMatch = searchMatches[currentMatchIndex];
     if (!currentMatch) return;
-    
-    
+
+
     // Use longer timeout to ensure tree is fully rendered after collapse changes
     const timeoutId = setTimeout(() => {
       // Re-check after timeout
       if (!containerRef.current || !containerSize.w || rd3Data.length === 0 || rows.length === 0) {
         return;
       }
-      
+
       // Find the matching row to get path. Fungsional matches use the real parent
       // Eselon II/III as the anchor; append "/kjf" so we scroll to the KJF box itself.
       const anchorRowId = currentMatch.realParentId ?? currentMatch.nodeId;
@@ -1739,111 +1741,111 @@ export default function PetaJabatanClient() {
         return;
       }
 
-const baseMatchPath = buildPathForRow(matchRow, rows);
+      const baseMatchPath = buildPathForRow(matchRow, rows);
       const matchPath = currentMatch.realParentId ? `${baseMatchPath}/kjf` : baseMatchPath;
 
       // Find node position in tree coordinates (starting from x=0 center)
       const nodePos = findNodePosition(matchPath, rd3Data);
-      
+
       if (nodePos) {
-        
+
         let targetY = nodePos.y;
 
         // If the match is a functional role inside a KJF box, calculate its Y offset
         if (currentMatch.fungsionalIdx !== undefined && currentMatch.realParentId) {
           const kjfList = fungsionalByUnit.get(normalizeUnitKey(matchRow.unit_kerja)) ??
-                          fungsionalByUnit.get(normalizeUnitKey(matchRow.nama_jabatan)) ?? [];
-          
+            fungsionalByUnit.get(normalizeUnitKey(matchRow.nama_jabatan)) ?? [];
+
           if (kjfList.length > 0) {
-              const maxCharsPerLine = bp.isMobile ? 25 : bp.isTablet ? 35 : 45;
-              const labelLines = wrapText("KELOMPOK JABATAN FUNGSIONAL", maxCharsPerLine);
-              const lineHeight = bp.isMobile ? 18 : 20;
-              const headerH = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
-              
-              const titleCharsPerLine = bp.isMobile ? 18 : bp.isTablet ? 25 : 30;
-              const titleLineHKjf = bp.isMobile ? 12 : 14;
-              const metricsBlockH = bp.isMobile ? 32 : 36;
-              const headerRowToKelasGap = 8;
-              const kelasLineH = 12;
-              const kelasToNamesGap = 6;
-              const nameFieldH = bp.isMobile ? 18 : 22;
-              const nameGap = 2;
-              const sectionTopPad = 12;
-              const sectionBottomPad = 12;
-              const innerPadY = 16;
-              const interSectionGap = 16;
+            const maxCharsPerLine = bp.isMobile ? 25 : bp.isTablet ? 35 : 45;
+            const labelLines = wrapText("KELOMPOK JABATAN FUNGSIONAL", maxCharsPerLine);
+            const lineHeight = bp.isMobile ? 18 : 20;
+            const headerH = Math.max(bp.isMobile ? 60 : bp.isTablet ? 70 : 80, labelLines.length * lineHeight + 30);
 
-              const yHeaderTop = -headerH / 2; // approximation since we don't know siblingMaxBaseCardH here
-              const bodyGapFromHeader = 8;
-              const yBodyTop = yHeaderTop + headerH + bodyGapFromHeader;
+            const titleCharsPerLine = bp.isMobile ? 18 : bp.isTablet ? 25 : 30;
+            const titleLineHKjf = bp.isMobile ? 12 : 14;
+            const metricsBlockH = bp.isMobile ? 32 : 36;
+            const headerRowToKelasGap = 8;
+            const kelasLineH = 12;
+            const kelasToNamesGap = 6;
+            const nameFieldH = bp.isMobile ? 18 : 22;
+            const nameGap = 2;
+            const sectionTopPad = 12;
+            const sectionBottomPad = 12;
+            const innerPadY = 16;
+            const interSectionGap = 16;
 
-              let cumulativeY = yBodyTop + innerPadY;
+            const yHeaderTop = -headerH / 2; // approximation since we don't know siblingMaxBaseCardH here
+            const bodyGapFromHeader = 8;
+            const yBodyTop = yHeaderTop + headerH + bodyGapFromHeader;
 
-              for (let i = 0; i <= currentMatch.fungsionalIdx; i++) {
-                  const f = kjfList[i];
-                  const tLines = wrapText(String(f.nama_jabatan || "").toUpperCase(), titleCharsPerLine);
-                  const namesArr = (f.pejabat || []).map(p => p.name);
-                  
-                  const titleRows = tLines.length;
-                  const titleH = titleRows * titleLineHKjf;
-                  const headerBlockH = titleRows === 1
-                      ? metricsBlockH
-                      : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH;
-                  const namesBlockH = namesArr.length > 0
-                      ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap
-                      : nameFieldH;
-                  
-                  const h = sectionTopPad + headerBlockH + kelasToNamesGap + namesBlockH + sectionBottomPad;
+            let cumulativeY = yBodyTop + innerPadY;
 
-                  if (i === currentMatch.fungsionalIdx) {
-                      cumulativeY += h / 2; // Center on this specific item
-                  } else {
-                      cumulativeY += h + interSectionGap;
-                  }
+            for (let i = 0; i <= currentMatch.fungsionalIdx; i++) {
+              const f = kjfList[i];
+              const tLines = wrapText(String(f.nama_jabatan || "").toUpperCase(), titleCharsPerLine);
+              const namesArr = (f.pejabat || []).map(p => p.name);
+
+              const titleRows = tLines.length;
+              const titleH = titleRows * titleLineHKjf;
+              const headerBlockH = titleRows === 1
+                ? metricsBlockH
+                : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH;
+              const namesBlockH = namesArr.length > 0
+                ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap
+                : nameFieldH;
+
+              const h = sectionTopPad + headerBlockH + kelasToNamesGap + namesBlockH + sectionBottomPad;
+
+              if (i === currentMatch.fungsionalIdx) {
+                cumulativeY += h / 2; // Center on this specific item
+              } else {
+                cumulativeY += h + interSectionGap;
               }
-              targetY += cumulativeY;
+            }
+            targetY += cumulativeY;
           }
         }
 
         // Calculate distance from center to determine if we need to adjust zoom
         const distanceFromCenter = Math.abs(nodePos.x);
         const containerHalfWidth = containerSize.w / 2;
-        
+
         // If node is far from center, we might need to zoom out
         // Calculate required zoom to fit the node
         let zoom = initialZoom;
         const maxDistance = containerHalfWidth * 0.7; // Use 70% of half width as comfort zone
-        
+
         if ((distanceFromCenter * zoom) > maxDistance) {
           // Node is too far, adjust zoom
           zoom = maxDistance / distanceFromCenter;
           zoom = Math.max(zoom, 0.3); // Minimum zoom 0.3
           zoom = Math.min(zoom, initialZoom); // Don't zoom in more than initial
         }
-        
+
         // Calculate new translate to center the node
         const centerX = containerSize.w / 2;
         const centerY = containerRef.current.clientHeight / 2;
-        
+
         const newTranslate = {
           x: centerX - (nodePos.x * zoom),
           y: centerY - (targetY * zoom)
         };
-        
-        
+
+
         // Mark this index as centered BEFORE updating state
         lastCenteredIndexRef.current = currentMatchIndex;
-        
+
         // Update both translate and zoom together
         setTranslate(newTranslate);
         setCurrentZoom(zoom);
-        
+
       } else {
         if (rd3Data.length > 0 && rd3Data[0].attributes) {
         }
       }
     }, 800); // Longer timeout for tree rendering after collapse changes
-    
+
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMatchIndex, searchMatches, rd3Data, collapseMap]); // Trigger when rd3Data or collapseMap changes
@@ -1852,27 +1854,27 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
   useEffect(() => {
     // Only run if there's no search and container is ready
     if (searchMatches.length > 0 || !containerRef.current || !containerSize.w) return;
-    
+
     // If filterText is empty and we haven't focused on root yet, center on root
     if (!filterText && !hasFocusedOnce.current && translate) {
-      
+
       const timeoutId = setTimeout(() => {
         if (!containerRef.current || !containerSize.w) return;
-        
+
         // Center on root at x=0, y=0
         const centerX = containerSize.w / 2;
         const centerY = containerRef.current.clientHeight / 2;
-        
+
         const newTranslate = {
           x: centerX,
           y: centerY - 100 // Slight offset to show root better
         };
-        
+
         setTranslate(newTranslate);
         setCurrentZoom(null); // Reset to initial zoom
         hasFocusedOnce.current = true;
       }, 300);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [searchMatches, filterText, containerSize.w, translate]);
@@ -1880,31 +1882,31 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
   // Re-center when entering/exiting fullscreen
   useEffect(() => {
     if (!containerRef.current || !containerSize.w) return;
-    
-    
+
+
     // Auto-open panel when entering fullscreen (only on desktop)
     if (isFullscreen && window.innerWidth >= 640) {
       setIsFullscreenPanelOpen(true);
     }
-    
+
     // Re-center on root when entering/exiting fullscreen
     const timeoutId = setTimeout(() => {
       if (!containerRef.current || !containerSize.w) return;
-      
+
       const centerX = containerSize.w / 2;
-      const centerY = isFullscreen 
+      const centerY = isFullscreen
         ? window.innerHeight / 2  // Use full viewport height in fullscreen
         : containerRef.current.clientHeight / 2;
-      
+
       const newTranslate = {
         x: centerX,
         y: centerY - 100
       };
-      
+
       setTranslate(newTranslate);
       setCurrentZoom(null);
     }, 300);
-    
+
     return () => clearTimeout(timeoutId);
   }, [isFullscreen, containerSize.w]);
 
@@ -1927,10 +1929,10 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
   const handleCopyName = useCallback((name: string, nodeId: string, idx: number, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Remove role suffix if present (text in parentheses)
     const cleanName = name.replace(/\s*\([^)]*\)\s*$/, '').trim();
-    
+
     // Try to copy to clipboard
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(cleanName)
@@ -2112,10 +2114,10 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
         const titleH = titleRows * titleLineHKjf;
         // Header block height = height from top of row 1 to bottom of the taller of the
         // metrics block or the title, plus kelas if it sits below the block.
-        const headerBlockH = isAdmin 
+        const headerBlockH = isAdmin
           ? (titleRows === 1 ? metricsBlockH : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH)
           : (titleH + headerRowToKelasGap + kelasLineH);
-        const namesBlockH = isAdmin 
+        const namesBlockH = isAdmin
           ? (namesArr.length > 0 ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap : nameFieldH)
           : 0;
         const h =
@@ -2206,7 +2208,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             //   1-line title → aligned with the box vertical center (drawn with alignmentBaseline="central")
             //   multi-line  → sits below the taller of the title stack or the metric block
             const yBoxCenter = yBoxes + boxH / 2;
-            const yKelas = isAdmin 
+            const yKelas = isAdmin
               ? (titleRows === 1 ? yBoxCenter : Math.max(yTitleTop + titleH, yBoxes + boxH) + headerRowToKelasGap)
               : (yTitleTop + titleH + headerRowToKelasGap);
             const yNamesTop = titleRows === 1
@@ -2226,7 +2228,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                 try {
                   await exitFullscreen();
                   await new Promise(resolve => setTimeout(resolve, 100));
-                } catch {}
+                } catch { }
               }
               sessionStorage.setItem('petaJabatan_lastClickedPath', jabatanPath);
               window.open(jabatanHref, '_blank', 'noopener,noreferrer');
@@ -2463,12 +2465,12 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
 
     const namesArr: string[] = Array.isArray(attrs.pejabat)
       ? (attrs.pejabat as PegawaiInfo[]).map(p => {
-          // Only show role for JABATAN FUNGSIONAL (rank 5) and JABATAN PELAKSANA (rank 6)
-          const jenisRank = rankJenis(attrs.jenis);
-          const showRole = jenisRank === 5 || jenisRank === 6;
-          const role = showRole && p.role ? ` (${p.role})` : '';
-          return `${p.name}${role}`;
-        })
+        // Only show role for JABATAN FUNGSIONAL (rank 5) and JABATAN PELAKSANA (rank 6)
+        const jenisRank = rankJenis(attrs.jenis);
+        const showRole = jenisRank === 5 || jenisRank === 6;
+        const role = showRole && p.role ? ` (${p.role})` : '';
+        return `${p.name}${role}`;
+      })
       : [];
     const namaPejabatText = namesArr.join(", ");
 
@@ -2620,149 +2622,149 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
 
         {/* LABEL B K ± */}
         {isAdmin && (<>
-        <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-          fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>B</text>
-        <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-          fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>K</text>
-        <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
-          fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>±</text>
+          <text x={boxesStartX + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+            fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>B</text>
+          <text x={boxesStartX + boxW + boxGap + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+            fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>K</text>
+          <text x={boxesStartX + (boxW + boxGap) * 2 + boxW / 2} y={yLabelBKP} textAnchor="middle" alignmentBaseline="hanging"
+            fill="#111827" strokeWidth={1} style={{ fontSize: bp.isMobile ? "11px" : "12px", fontWeight: 200, pointerEvents: 'none' }}>±</text>
 
-        {/* KOTAK ANGKA */}
-        <g style={{ pointerEvents: 'none' }}>
-          {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
-          {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
-          {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
-        </g>
+          {/* KOTAK ANGKA */}
+          <g style={{ pointerEvents: 'none' }}>
+            {metricBox(boxesStartX + (boxW + boxGap) * 0, yBoxes, String(bez ?? 0))}
+            {metricBox(boxesStartX + (boxW + boxGap) * 1, yBoxes, String(keb ?? 0))}
+            {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
+          </g>
 
-        {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
-        <g>
-          {namesArr.length > 0 ? (
-            namesArr.map((name, idx) => {
-              const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
-              const isEselonCentered = rankJenis(attrs.jenis) <= 4;
-              const textAlign = isEselonCentered ? "middle" : "start";
-              const textX = isEselonCentered ? centerX : xLeft + padX + 10;
-              
-              // ID for tracking copied state
-              const copyId = `${attrs.id}-${idx}`;
-              const isCopied = copiedNameId === copyId;
-              
-              // Check if this specific name is matched in search
-              const isNameMatched = matchType === 'pejabat' && matchedNameIndices.includes(idx);
-              const isCurrentNameMatch = isCurrentSearchMatch && isNameMatched;
-              
-              // Determine border color for this name box
-              let nameBorderColor = "#c4c4c4"; // default gray
-              let nameBorderWidth = 1;
-              
-              if (isCurrentNameMatch) {
-                // This specific name matches current search - bright yellow/gold
-                nameBorderColor = "#F59E0B";
-                nameBorderWidth = 3;
-              } else if (isNameMatched) {
-                // This name matches but not current index - lighter yellow
-                nameBorderColor = "#FBBF24";
-                nameBorderWidth = 2;
-              }
-              
-              // Copy button position (on the right side of the box)
-              const buttonSize = bp.isMobile ? 20 : 22;
-              const buttonX = xLeft + padX + (cardW - padX * 2) - buttonSize - 6;
-              const buttonY = yBoxStart + (textFieldH - buttonSize) / 2;
+          {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
+          <g>
+            {namesArr.length > 0 ? (
+              namesArr.map((name, idx) => {
+                const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
+                const isEselonCentered = rankJenis(attrs.jenis) <= 4;
+                const textAlign = isEselonCentered ? "middle" : "start";
+                const textX = isEselonCentered ? centerX : xLeft + padX + 10;
 
-              return (
-                <g key={idx}>
-                  {/* Kotak untuk setiap nama - with conditional border */}
-                  <rect x={xLeft + padX} y={yBoxStart}
-                    width={cardW - padX * 2} height={textFieldH}
-                    rx={6} ry={6} 
-                    fill={isCurrentNameMatch ? "#FEF3C7" : "#ffffff"} 
-                    stroke={nameBorderColor} 
-                    strokeWidth={nameBorderWidth}
-                    style={{ 
-                      pointerEvents: 'none',
-                      filter: isCurrentNameMatch ? "drop-shadow(0 2px 4px rgba(245,158,11,0.3))" : "none"
-                    }} />
-                  
-                  {/* Text nama - selectable and copyable */}
-                  <text x={textX} y={yBoxStart + textFieldH / 2}
-                    textAnchor={textAlign} alignmentBaseline="central"
-                    fill="#111827" strokeWidth={1}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ 
-                      fontSize: bp.isMobile ? "11px" : "12px", 
-                      fontWeight: 200,
-                      userSelect: 'text',
-                      WebkitUserSelect: 'text',
-                      MozUserSelect: 'text',
-                      msUserSelect: 'text',
-                      cursor: 'text',
-                      pointerEvents: 'auto'
-                    }}>
-                    {name}
-                  </text>
-                  
-                  {/* Copy button */}
-                  <g 
-                    transform={`translate(${buttonX}, ${buttonY})`}
-                    onClick={(e) => handleCopyName(name, attrs.id, idx, e)}
-                    style={{ cursor: 'pointer', pointerEvents: 'auto' }}
-                  >
-                    {/* Button background */}
-                    <rect 
-                      width={buttonSize} 
-                      height={buttonSize} 
-                      rx={4} 
-                      ry={4}
-                      fill={isCopied ? "#10B981" : "#f3f4f6"}
-                      stroke={isCopied ? "#059669" : "#d1d5db"}
-                      strokeWidth={1}
-                      style={{ transition: 'all 0.2s' }}
-                    />
-                    
-                    {isCopied ? (
-                      /* Checkmark icon when copied */
-                      <path
-                        d="M6 11 L9 14 L16 7"
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
+                // ID for tracking copied state
+                const copyId = `${attrs.id}-${idx}`;
+                const isCopied = copiedNameId === copyId;
+
+                // Check if this specific name is matched in search
+                const isNameMatched = matchType === 'pejabat' && matchedNameIndices.includes(idx);
+                const isCurrentNameMatch = isCurrentSearchMatch && isNameMatched;
+
+                // Determine border color for this name box
+                let nameBorderColor = "#c4c4c4"; // default gray
+                let nameBorderWidth = 1;
+
+                if (isCurrentNameMatch) {
+                  // This specific name matches current search - bright yellow/gold
+                  nameBorderColor = "#F59E0B";
+                  nameBorderWidth = 3;
+                } else if (isNameMatched) {
+                  // This name matches but not current index - lighter yellow
+                  nameBorderColor = "#FBBF24";
+                  nameBorderWidth = 2;
+                }
+
+                // Copy button position (on the right side of the box)
+                const buttonSize = bp.isMobile ? 20 : 22;
+                const buttonX = xLeft + padX + (cardW - padX * 2) - buttonSize - 6;
+                const buttonY = yBoxStart + (textFieldH - buttonSize) / 2;
+
+                return (
+                  <g key={idx}>
+                    {/* Kotak untuk setiap nama - with conditional border */}
+                    <rect x={xLeft + padX} y={yBoxStart}
+                      width={cardW - padX * 2} height={textFieldH}
+                      rx={6} ry={6}
+                      fill={isCurrentNameMatch ? "#FEF3C7" : "#ffffff"}
+                      stroke={nameBorderColor}
+                      strokeWidth={nameBorderWidth}
+                      style={{
+                        pointerEvents: 'none',
+                        filter: isCurrentNameMatch ? "drop-shadow(0 2px 4px rgba(245,158,11,0.3))" : "none"
+                      }} />
+
+                    {/* Text nama - selectable and copyable */}
+                    <text x={textX} y={yBoxStart + textFieldH / 2}
+                      textAnchor={textAlign} alignmentBaseline="central"
+                      fill="#111827" strokeWidth={1}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        fontSize: bp.isMobile ? "11px" : "12px",
+                        fontWeight: 200,
+                        userSelect: 'text',
+                        WebkitUserSelect: 'text',
+                        MozUserSelect: 'text',
+                        msUserSelect: 'text',
+                        cursor: 'text',
+                        pointerEvents: 'auto'
+                      }}>
+                      {name}
+                    </text>
+
+                    {/* Copy button */}
+                    <g
+                      transform={`translate(${buttonX}, ${buttonY})`}
+                      onClick={(e) => handleCopyName(name, attrs.id, idx, e)}
+                      style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                    >
+                      {/* Button background */}
+                      <rect
+                        width={buttonSize}
+                        height={buttonSize}
+                        rx={4}
+                        ry={4}
+                        fill={isCopied ? "#10B981" : "#f3f4f6"}
+                        stroke={isCopied ? "#059669" : "#d1d5db"}
+                        strokeWidth={1}
+                        style={{ transition: 'all 0.2s' }}
                       />
-                    ) : (
-                      /* Copy icon */
-                      <g>
-                        <rect
-                          x={5}
-                          y={6}
-                          width={9}
-                          height={11}
-                          rx={1.5}
-                          ry={1.5}
-                          fill="none"
-                          stroke="#6b7280"
-                          strokeWidth={1.5}
-                        />
+
+                      {isCopied ? (
+                        /* Checkmark icon when copied */
                         <path
-                          d="M8 6 V5 Q8 4 9 4 H15 Q16 4 16 5 V14 Q16 15 15 15 H14"
+                          d="M6 11 L9 14 L16 7"
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                           fill="none"
-                          stroke="#6b7280"
-                          strokeWidth={1.5}
                         />
-                      </g>
-                    )}
+                      ) : (
+                        /* Copy icon */
+                        <g>
+                          <rect
+                            x={5}
+                            y={6}
+                            width={9}
+                            height={11}
+                            rx={1.5}
+                            ry={1.5}
+                            fill="none"
+                            stroke="#6b7280"
+                            strokeWidth={1.5}
+                          />
+                          <path
+                            d="M8 6 V5 Q8 4 9 4 H15 Q16 4 16 5 V14 Q16 15 15 15 H14"
+                            fill="none"
+                            stroke="#6b7280"
+                            strokeWidth={1.5}
+                          />
+                        </g>
+                      )}
+                    </g>
                   </g>
-                </g>
-              );
-            })
-          ) : (
-            // Jika tidak ada nama, tampilkan kotak kosong
-            <rect x={xLeft + padX} y={yBoxes + boxH + (bp.isMobile ? 10 : 12)}
-              width={cardW - padX * 2} height={textFieldH}
-              rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
-          )}
-        </g>
+                );
+              })
+            ) : (
+              // Jika tidak ada nama, tampilkan kotak kosong
+              <rect x={xLeft + padX} y={yBoxes + boxH + (bp.isMobile ? 10 : 12)}
+                width={cardW - padX * 2} height={textFieldH}
+                rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
+            )}
+          </g>
         </>)}
 
         {/* Tombol panah/play */}
@@ -2803,7 +2805,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
           >
             Reset
           </button>
-          
+
           {isAdmin && (selectedUnit !== null || scope === "DAERAH") && (
             <button
               onClick={selectedUnit ? handlePrint : handleBulkPrintSemuaDaerah}
@@ -2824,9 +2826,9 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
 
 
 
-          
-          <button 
-            onClick={isFullscreen ? exitFullscreen : enterFullscreen} 
+
+          <button
+            onClick={isFullscreen ? exitFullscreen : enterFullscreen}
             className="flex-1 sm:flex-none px-3 py-2 rounded-md border text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"
           >
             {isFullscreen ? (
@@ -2846,7 +2848,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
 
       {/* ===== FILTER BAR & REFERENCES ===== */}
       <div className="flex flex-col gap-3 bg-gray-50/50 p-2 sm:p-3 rounded-lg border border-gray-100">
-        
+
         {/* Row 1: Advanced Filters */}
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
@@ -2867,11 +2869,10 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             <button
               type="button"
               onClick={() => setUnitDropdownOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                selectedUnit
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedUnit
                   ? 'bg-blue-50 border-blue-300 text-blue-700'
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
+                }`}
             >
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -2910,9 +2911,8 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                         key={unit}
                         type="button"
                         onClick={() => { handleSelectUnit(unit); setUnitDropdownOpen(false); setUnitSearch(""); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                          selectedUnit === unit ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                        }`}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${selectedUnit === unit ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                          }`}
                       >
                         {unit}
                       </button>
@@ -2944,70 +2944,70 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
           </button>
 
           <div className="flex items-center gap-2 ml-auto">
-          {searchMatches.length > 0 && (
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-2 py-1.5">
-              <span className="text-xs text-green-700 font-medium">{searchMatches.length} hasil</span>
-              {searchMatches.length > 1 && (
-                <div className="flex gap-1 items-center">
-                  <span className="text-[10px] text-green-600">({currentMatchIndex + 1}/{searchMatches.length})</span>
-                  <button onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))} className="p-0.5 hover:bg-green-100 rounded">
-                    <svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                  </button>
-                  <button onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))} className="p-0.5 hover:bg-green-100 rounded">
-                    <svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {(petaJabatanDoc || (isAdmin && kelasJabatanDoc) || uraianJabatanDoc) && (
-            <div className="relative z-20" ref={refDropdownRef}>
-              <button
-                onClick={() => setRefDropdownOpen(!refDropdownOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm hover:bg-green-100 transition-colors"
-              >
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span className="font-medium">Peraturan Terkait</span>
-                <svg className={`w-3.5 h-3.5 transition-transform ${refDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {refDropdownOpen && (
-                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-50 w-56 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden py-1">
-                  {petaJabatanDoc && (
-                    <button
-                      onClick={() => { window.open(petaJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors"
-                    >
-                      Peraturan Terkait Peta Jabatan
+            {searchMatches.length > 0 && (
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-2 py-1.5">
+                <span className="text-xs text-green-700 font-medium">{searchMatches.length} hasil</span>
+                {searchMatches.length > 1 && (
+                  <div className="flex gap-1 items-center">
+                    <span className="text-[10px] text-green-600">({currentMatchIndex + 1}/{searchMatches.length})</span>
+                    <button onClick={() => setCurrentMatchIndex((prev) => (prev > 0 ? prev - 1 : searchMatches.length - 1))} className="p-0.5 hover:bg-green-100 rounded">
+                      <svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
-                  )}
-                  {isAdmin && kelasJabatanDoc && (
-                    <button
-                      onClick={() => { window.open(kelasJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
-                    >
-                      Peraturan Terkait Kelas Jabatan
+                    <button onClick={() => setCurrentMatchIndex((prev) => (prev < searchMatches.length - 1 ? prev + 1 : 0))} className="p-0.5 hover:bg-green-100 rounded">
+                      <svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                     </button>
-                  )}
-                  {uraianJabatanDoc && (
-                    <button
-                      onClick={() => { window.open(uraianJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
-                    >
-                      Peraturan Terkait Uraian Jabatan
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* {isAdmin && (
+            {(petaJabatanDoc || (isAdmin && kelasJabatanDoc) || uraianJabatanDoc) && (
+              <div className="relative z-20" ref={refDropdownRef}>
+                <button
+                  onClick={() => setRefDropdownOpen(!refDropdownOpen)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm hover:bg-green-100 transition-colors"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="font-medium">Peraturan Terkait</span>
+                  <svg className={`w-3.5 h-3.5 transition-transform ${refDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {refDropdownOpen && (
+                  <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-50 w-56 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden py-1">
+                    {petaJabatanDoc && (
+                      <button
+                        onClick={() => { window.open(petaJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors"
+                      >
+                        Peraturan Terkait Peta Jabatan
+                      </button>
+                    )}
+                    {isAdmin && kelasJabatanDoc && (
+                      <button
+                        onClick={() => { window.open(kelasJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
+                      >
+                        Peraturan Terkait Kelas Jabatan
+                      </button>
+                    )}
+                    {uraianJabatanDoc && (
+                      <button
+                        onClick={() => { window.open(uraianJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
+                      >
+                        Peraturan Terkait Uraian Jabatan
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* {isAdmin && (
             <div className="relative z-20" ref={fungsionalReportRef}>
               <button
                 onClick={() => setFungsionalReportOpen(v => !v)}
@@ -3067,7 +3067,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
         </div>
       )}
 
-<div
+      <div
         ref={containerRef}
         style={{
           width: "100%",
@@ -3118,7 +3118,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                       </svg>
                     </button>
                   </div>
-                  
+
                   {/* Row 1: Scope and Mode Filters - More compact on mobile */}
                   <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <Segmented
@@ -3173,7 +3173,7 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
                       Reset
                     </button>
                   </div>
-                  
+
                   {/* Row 3: Search Results Navigation - More compact */}
                   {searchMatches.length > 0 && (
                     <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t bg-green-50 -mx-2.5 sm:-mx-3 -mb-2.5 sm:-mb-3 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-b-lg">
@@ -3250,8 +3250,8 @@ const baseMatchPath = buildPathForRow(matchRow, rows);
             </div>
           )
         )}
-      
-</div>
+
+      </div>
     </div>
   );
 }

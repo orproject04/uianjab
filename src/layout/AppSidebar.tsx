@@ -15,6 +15,7 @@ import {apiFetch} from "@/lib/apiFetch";
 import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import {CustomSelect} from "@/components/form/CustomSelect";
 import {sanitizeForAlert} from '@/lib/sanitize';
+import { useSotk } from "@/context/SotkContext";
 
 type PegawaiInfo = {
     name: string;
@@ -96,6 +97,9 @@ const AppSidebar: React.FC = () => {
     const [anjabError, setAnjabError] = useState<string | null>(null);
     const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
     const [openNestedSubmenus, setOpenNestedSubmenus] = useState<Record<string, boolean>>({});
+    
+    // State untuk active version SOTK
+    const {activeVersion} = useSotk();
     
     // State untuk Edit modal
     const [showEdit, setShowEdit] = useState(false);
@@ -222,14 +226,14 @@ const AppSidebar: React.FC = () => {
         setLoadingAnjab(true);
         setAnjabError(null);
             try {
-                const flat: APIRow[] = await getPetaJabatan();
+                const flat: APIRow[] = await getPetaJabatan(false, activeVersion);
                 setAnjabSubs(buildTreeFromFlat(flat));
             } catch (e: any) {
                 setAnjabError(e?.message || "Gagal memuat Anjab");
             } finally {
                 setLoadingAnjab(false);
             }
-    }, []);
+    }, [activeVersion]);
 
     useEffect(() => {
         let cancelled = false;
@@ -357,7 +361,7 @@ const AppSidebar: React.FC = () => {
         });
         if (!resSwal.isConfirmed) return;
 
-        let res = await apiFetch(`/api/peta-jabatan/${encodeURIComponent(node.id)}`, {
+        let res = await apiFetch(`/api/peta-jabatan/${encodeURIComponent(node.id)}?versi_id=${encodeURIComponent(activeVersion)}`, {
             method: "DELETE",
         });
 
@@ -527,7 +531,7 @@ const AppSidebar: React.FC = () => {
             .map(n => n.trim())
             .filter(n => n.length > 0);
 
-        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, pejabat_st, pejabat_sk};
+        const body: any = {name, slug, parent_id, unit_kerja, is_pusat, jenis_jabatan, pejabat_st, pejabat_sk, versi_id: activeVersion};
         if (editOrder.trim() !== "") {
             const parsed = Number(editOrder);
             if (!Number.isFinite(parsed)) {
@@ -602,7 +606,7 @@ const AppSidebar: React.FC = () => {
         } finally {
             setSaving(false);
         }
-    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, editNamaPejabatST, editNamaPejabatSK, loadData, anjabSubs]);
+    }, [editFor, editName, editSlug, editOrder, editParentId, editUnitKerja, editIsPusat, editJenisJabatan, editNamaPejabatST, editNamaPejabatSK, loadData, anjabSubs, activeVersion]);
 
     const openAddModal = (parent: SubNavItem) => {
         setAddParentFor(parent);
@@ -776,7 +780,7 @@ const AppSidebar: React.FC = () => {
         } finally {
             setAdding(false);
         }
-    }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, addIsPusat, addJenisJabatan, selectedAnjabId, matchedAnjab, matchingSuggestions, loadData]);
+    }, [addParentFor, addName, addSlug, addOrder, addUnitKerja, addIsPusat, addJenisJabatan, selectedAnjabId, matchedAnjab, matchingSuggestions, loadData, activeVersion]);
 
     // Auto-scroll to active item in sidebar
     useEffect(() => {

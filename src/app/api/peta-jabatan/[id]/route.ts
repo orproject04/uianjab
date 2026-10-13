@@ -2,6 +2,7 @@
 import {NextRequest, NextResponse} from "next/server";
 import pool from "@/lib/db";
 import {getUserFromReq, hasRole} from "@/lib/auth"; // ✅ [BARU]
+import {resolveVersiId} from "@/lib/versi";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -31,6 +32,7 @@ export async function PATCH(
         }
 
         const body = await req.json().catch(() => ({} as any));
+        const versi_id = await resolveVersiId(body.versi_id);
 
         const name =
             typeof body.name === "string"
@@ -124,8 +126,8 @@ export async function PATCH(
 
         // 1) Ambil node saat ini
         const curRes = await client.query(
-            "SELECT id, parent_id, level, slug FROM peta_jabatan WHERE id = $1::uuid",
-            [id]
+            "SELECT id, parent_id, level, slug FROM peta_jabatan WHERE id = $1::uuid AND versi_id = $2",
+            [id, versi_id]
         );
         if (curRes.rowCount === 0) {
             await client.query("ROLLBACK");
@@ -153,8 +155,8 @@ export async function PATCH(
             }
             if (newParentId) {
                 const p = await client.query(
-                    "SELECT id, level FROM peta_jabatan WHERE id = $1::uuid",
-                    [newParentId]
+                    "SELECT id, level FROM peta_jabatan WHERE id = $1::uuid AND versi_id = $2",
+                    [newParentId, versi_id]
                 );
                 if (p.rowCount === 0) {
                     await client.query("ROLLBACK");
@@ -167,15 +169,15 @@ export async function PATCH(
                     `
                         WITH RECURSIVE subtree AS (SELECT id
                                                    FROM peta_jabatan
-                                                   WHERE id = $1::uuid
+                                                   WHERE id = $1::uuid AND versi_id = $2
                         UNION ALL
                         SELECT c.id
                         FROM peta_jabatan c
-                                 JOIN subtree s ON c.parent_id = s.id )
+                                 JOIN subtree s ON c.parent_id = s.id AND c.versi_id = $2)
                         SELECT id::text AS id
                         FROM subtree
                     `,
-                    [id]
+                    [id, versi_id]
                 );
                 const descendants = new Set<string>(sub.rows.map((r: any) => r.id));
                 if (descendants.has(newParentId)) {
@@ -196,9 +198,9 @@ export async function PATCH(
                                   FROM peta_jabatan
                                   WHERE parent_id IS NOT DISTINCT FROM $1::uuid
                         AND slug = $2
-                        AND id <> $3::uuid) AS exists
+                        AND id <> $3::uuid AND versi_id = $4) AS exists
                 `,
-                [effParent, effSlug, id]
+                [effParent, effSlug, id, versi_id]
             );
             if (dup.rows[0]?.exists) {
                 await client.query("ROLLBACK");
@@ -214,8 +216,8 @@ export async function PATCH(
             let newLevel: number;
             if (newParentId) {
                 const p = await client.query(
-                    "SELECT level FROM peta_jabatan WHERE id = $1::uuid",
-                    [newParentId]
+                    "SELECT level FROM peta_jabatan WHERE id = $1::uuid AND versi_id = $2",
+                    [newParentId, versi_id]
                 );
                 newLevel = Number(p.rows[0].level) + 1;
             } else {
@@ -225,8 +227,8 @@ export async function PATCH(
             const deltaLevel = newLevel - cur.level;
 
             await client.query(
-                "UPDATE peta_jabatan SET parent_id = $1::uuid, level = $2, updated_at = NOW() WHERE id = $3::uuid",
-                [newParentId, newLevel, id]
+                "UPDATE peta_jabatan SET parent_id = $1::uuid, level = $2, updated_at = NOW() WHERE id = $3::uuid AND versi_id = $4",
+                [newParentId, newLevel, id, versi_id]
             );
 
             if (deltaLevel !== 0) {
@@ -234,17 +236,17 @@ export async function PATCH(
                     `
                         WITH RECURSIVE subtree AS (SELECT id
                                                    FROM peta_jabatan
-                                                   WHERE id = $1::uuid
+                                                   WHERE id = $1::uuid AND versi_id = $3
                         UNION ALL
                         SELECT c.id
                         FROM peta_jabatan c
-                                 JOIN subtree s ON c.parent_id = s.id )
+                                 JOIN subtree s ON c.parent_id = s.id AND c.versi_id = $3)
                         UPDATE peta_jabatan t
                         SET level      = t.level + $2,
                             updated_at = NOW()
-                        WHERE t.id IN (SELECT id FROM subtree WHERE id <> $3::uuid)
+                        WHERE t.id IN (SELECT id FROM subtree WHERE id <> $1::uuid) AND t.versi_id = $3
                     `,
-                    [id, deltaLevel, id]
+                    [id, deltaLevel, versi_id]
                 );
             }
         }
@@ -286,9 +288,9 @@ export async function PATCH(
                 UPDATE peta_jabatan
                 SET ${fields.join(", ")},
                     updated_at = NOW()
-                WHERE id = $${fields.length + 1}::uuid
+                WHERE id = $${fields.length + 1}::uuid AND versi_id = $${fields.length + 2}
             `;
-            values.push(id);
+            values.push(id, versi_id);
             await client.query(q, values);
         }
 
@@ -337,19 +339,21 @@ export async function DELETE(
             return NextResponse.json({error: "Invalid, id harus UUID"}, {status: 400});
         }
 
+        const { searchParams } = new URL(_req.url);
+        const versi_id = await resolveVersiId(searchParams.get("versi_id"));
+
         // pastikan ada
         const exists = await pool.query<{ exists: boolean }>(
-            `SELECT EXISTS(SELECT 1 FROM peta_jabatan WHERE id = $1::uuid) AS exists`,
-            [id]
+            `SELECT EXISTS(SELECT 1 FROM peta_jabatan WHERE id = $1::uuid AND versi_id = $2) AS exists`,
+            [id, versi_id]
         );
         if (!exists.rows[0]?.exists) {
             return NextResponse.json({error: "Node tidak ditemukan"}, {status: 404});
         }
 
-        // Cek apakah ada child node yang masih aktif (deleted_at IS NULL)
         const hasActiveChildren = await pool.query<{ exists: boolean }>(
-            `SELECT EXISTS(SELECT 1 FROM peta_jabatan WHERE parent_id = $1::uuid AND deleted_at IS NULL) AS exists`,
-            [id]
+            `SELECT EXISTS(SELECT 1 FROM peta_jabatan WHERE parent_id = $1::uuid AND deleted_at IS NULL AND versi_id = $2) AS exists`,
+            [id, versi_id]
         );
         if (hasActiveChildren.rows[0]?.exists) {
             return NextResponse.json({error: "Tidak bisa menghapus jabatan ini karena masih memiliki jabatan bawahan. Silakan hapus atau pindahkan bawahannya terlebih dahulu."}, {status: 400});
@@ -360,9 +364,9 @@ export async function DELETE(
             `
                 UPDATE peta_jabatan
                 SET deleted_at = NOW(), updated_at = NOW()
-                WHERE id = $1::uuid
+                WHERE id = $1::uuid AND versi_id = $2
             `,
-            [id]
+            [id, versi_id]
         );
 
         return NextResponse.json({ok: true, deleted: rowCount ?? 0});

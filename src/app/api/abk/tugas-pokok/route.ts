@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
+import { resolveVersiId } from "@/lib/versi";
 
 // GET - Ambil data tugas_pokok_abk berdasarkan peta_jabatan_id
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const petaJabatanId = searchParams.get("peta_jabatan_id");
+        const versi_id = await resolveVersiId(searchParams.get("versi_id"));
 
         if (!petaJabatanId) {
             return NextResponse.json({
@@ -30,10 +32,10 @@ export async function GET(req: NextRequest) {
                 NULL as tp_waktu_penyelesaian
              FROM tugas_pokok tp
              LEFT JOIN tugas_pokok_abk tpa 
-                ON tpa.tugas_pokok_id = tp.id AND tpa.peta_jabatan_id = $1
-             WHERE tp.jabatan_id = (SELECT jabatan_id FROM peta_jabatan WHERE id = $1)
+                ON tpa.tugas_pokok_id = tp.id AND tpa.peta_jabatan_id = $1 AND tpa.versi_id = $2
+             WHERE tp.jabatan_id = (SELECT jabatan_id FROM peta_jabatan WHERE id = $1 AND versi_id = $2 LIMIT 1)
              ORDER BY tp.nomor_tugas`,
-            [petaJabatanId]
+            [petaJabatanId, versi_id]
         );
 
         return NextResponse.json({
@@ -58,8 +60,10 @@ export async function POST(req: NextRequest) {
             jumlah_hasil,
             waktu_penyelesaian_jam,
             waktu_efektif,
-            kebutuhan_pegawai
+            kebutuhan_pegawai,
+            versi_id: raw_versi_id
         } = body;
+        const versi_id = await resolveVersiId(raw_versi_id);
 
         if (!peta_jabatan_id || !tugas_pokok_id) {
             return NextResponse.json({
@@ -71,9 +75,9 @@ export async function POST(req: NextRequest) {
         // Upsert: insert atau update jika sudah ada
         const result = await pool.query(
             `INSERT INTO tugas_pokok_abk 
-                (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (peta_jabatan_id, tugas_pokok_id) 
+                (peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, versi_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (peta_jabatan_id, tugas_pokok_id, versi_id) 
              DO UPDATE SET
                 jumlah_hasil = EXCLUDED.jumlah_hasil,
                 waktu_penyelesaian_jam = EXCLUDED.waktu_penyelesaian_jam,
@@ -81,7 +85,7 @@ export async function POST(req: NextRequest) {
                 kebutuhan_pegawai = EXCLUDED.kebutuhan_pegawai,
                 updated_at = now()
              RETURNING *`,
-            [peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai]
+            [peta_jabatan_id, tugas_pokok_id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, versi_id]
         );
 
         return NextResponse.json({
@@ -105,8 +109,10 @@ export async function PUT(req: NextRequest) {
             jumlah_hasil,
             waktu_penyelesaian_jam,
             waktu_efektif,
-            kebutuhan_pegawai
+            kebutuhan_pegawai,
+            versi_id: raw_versi_id
         } = body;
+        const versi_id = await resolveVersiId(raw_versi_id);
 
         if (!id) {
             return NextResponse.json({
@@ -122,9 +128,9 @@ export async function PUT(req: NextRequest) {
                  waktu_efektif = $4,
                  kebutuhan_pegawai = $5,
                  updated_at = now()
-             WHERE id = $1
+             WHERE id = $1 AND versi_id = $6
              RETURNING *`,
-            [id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai]
+            [id, jumlah_hasil, waktu_penyelesaian_jam, waktu_efektif, kebutuhan_pegawai, versi_id]
         );
 
         if (result.rows.length === 0) {
@@ -151,6 +157,7 @@ export async function DELETE(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
+        const versi_id = await resolveVersiId(searchParams.get("versi_id"));
 
         if (!id) {
             return NextResponse.json({
@@ -160,8 +167,8 @@ export async function DELETE(req: NextRequest) {
         }
 
         const result = await pool.query(
-            `DELETE FROM tugas_pokok_abk WHERE id = $1 RETURNING *`,
-            [id]
+            `DELETE FROM tugas_pokok_abk WHERE id = $1 AND versi_id = $2 RETURNING *`,
+            [id, versi_id]
         );
 
         if (result.rows.length === 0) {
