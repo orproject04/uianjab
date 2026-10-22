@@ -60,10 +60,12 @@ export async function POST(req: NextRequest) {
         // Set new tokens sebagai HTTP-only cookies
         const cookieStore = await cookies();
         const isProduction = process.env.NODE_ENV === 'production';
+        const isHttps = req.headers.get('x-forwarded-proto') === 'https' || Boolean(process.env.APP_URL?.startsWith('https://'));
+        const isSecure = isProduction || isHttps;
         
         cookieStore.set('access_token', newAccess, {
             httpOnly: true,
-            secure: isProduction,
+            secure: isSecure,
             sameSite: 'lax',
             maxAge: ACCESS_TOKEN_MAXAGE_SEC,
             path: '/',
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
         
         cookieStore.set('refresh_token', newRefresh, {
             httpOnly: true,
-            secure: isProduction,
+            secure: isSecure,
             sameSite: 'lax',
             maxAge: 60 * 60 * 24 * 30,
             path: '/',

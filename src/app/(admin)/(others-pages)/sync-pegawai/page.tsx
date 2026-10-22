@@ -38,7 +38,7 @@ export default function SyncPegawaiPage() {
   const router = useRouter();
   const [result, setResult] = useState<SyncResult | null>(null);
   const [lastSync, setLastSync] = useState<SyncHistory | null>(null);
-  const [apiConfig, setApiConfig] = useState<{ url: string; perPage: number; skListUrl: string; skProfilUrl: string } | null>(null);
+  const [apiConfig, setApiConfig] = useState<{ syncEnabled: boolean; perPage: number } | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
   const [activeTab, setActiveTab] = useState<'ST' | 'SK'>('SK');
   const [nipManual, setNipManual] = useState('');
@@ -60,17 +60,17 @@ export default function SyncPegawaiPage() {
     }
   };
 
-  // Fetch API config from server
+  // Fetch API config status from server
   useEffect(() => {
     fetch('/api/config')
       .then(res => res.json())
       .then(data => {
-        setApiConfig({
-          url: data.externalPegawaiApiUrl,
-          perPage: data.externalApiPerPage,
-          skListUrl: data.externalSkApiUrlList,
-          skProfilUrl: data.externalSkApiUrlProfil
-        });
+        if (data && !data.error) {
+          setApiConfig({
+            syncEnabled: Boolean(data.syncEnabled),
+            perPage: data.perPage || 100,
+          });
+        }
       })
       .catch(err => console.error('Failed to load API config:', err));
 
@@ -580,22 +580,17 @@ export default function SyncPegawaiPage() {
         {/* API Configuration Info */}
         <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
           <h3 className="mb-2 font-semibold text-blue-light-900 dark:text-blue-light-100">
-            Informasi API Data Pegawai
+            Informasi Sumber Data Pegawai
           </h3>
           <div className="space-y-1 text-sm text-blue-light-800 dark:text-blue-light-200">
             {activeTab === 'ST' ? (
-              <>
-                <p>
-                  <strong>API URL:</strong>{' '}
-                  {apiConfig ? apiConfig.url : 'Memuat...'}
-                </p>
-              </>
+              <p>
+                <strong>Sumber Data:</strong> API Pegawai CMB (Surat Tugas)
+              </p>
             ) : (
-              <>
-                <p>
-                  <strong>API URL:</strong> {apiConfig ? apiConfig.skListUrl : 'Memuat...'}
-                </p>
-              </>
+              <p>
+                <strong>Sumber Data:</strong> API Talenta OKK (Surat Keputusan)
+              </p>
             )}
           </div>
         </div>

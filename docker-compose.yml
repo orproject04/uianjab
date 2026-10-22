@@ -10,13 +10,15 @@ services:
     env_file:
       - .env.docker
     environment:
+      - NODE_ENV=production
       - PYTHON_BIN=/usr/bin/python3
       - SOFFICE_BIN=/usr/bin/soffice
       - SOFFICE_DIR=/usr/bin
       - SYNC_LOGS_DIR=/app/storage/sync-logs
       # - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium   # aktifkan jika perlu
     ports:
-      - "8087:8087"
+      # Bind strictly to localhost (127.0.0.1) so origin is not directly exposed on LAN without TLS
+      - "127.0.0.1:8087:8087"
     volumes:
       - ./storage/pdf-cache:/app/storage/pdf-cache
       - ./storage/sync-logs:/app/storage/sync-logs

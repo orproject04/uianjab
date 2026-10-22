@@ -28,10 +28,23 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // Clear HTTP-only cookies
-    cookieStore.delete('access_token');
-    cookieStore.delete('refresh_token');
-    cookieStore.delete('keycloak_id_token');
+    // Clear HTTP-only cookies dengan flag keamanan lengkap (HttpOnly, Secure, SameSite)
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isHttps = req.headers.get('x-forwarded-proto') === 'https' || Boolean(process.env.APP_URL?.startsWith('https://'));
+    const isSecure = isProduction || isHttps;
+
+    const clearCookieOptions = {
+        httpOnly: true,
+        secure: isSecure,
+        sameSite: 'lax' as const,
+        path: '/',
+        maxAge: 0,
+        expires: new Date(0),
+    };
+
+    cookieStore.set('access_token', '', clearCookieOptions);
+    cookieStore.set('refresh_token', '', clearCookieOptions);
+    cookieStore.set('keycloak_id_token', '', clearCookieOptions);
 
     // Jika user login via Keycloak SSO, redirect ke logout endpoint Keycloak
     if (keycloakIdToken) {

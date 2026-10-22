@@ -150,10 +150,12 @@ export async function GET(req: NextRequest) {
 
         // Set HTTP-only cookies
         const isProduction = process.env.NODE_ENV === 'production';
+        const isHttps = req.headers.get('x-forwarded-proto') === 'https' || Boolean(process.env.APP_URL?.startsWith('https://'));
+        const isSecure = isProduction || isHttps;
         
         cookieStore.set('access_token', accessToken, {
             httpOnly: true,
-            secure: isProduction,
+            secure: isSecure,
             sameSite: 'lax',
             maxAge: ACCESS_TOKEN_MAXAGE_SEC,
             path: '/',
@@ -161,7 +163,7 @@ export async function GET(req: NextRequest) {
         
         cookieStore.set('refresh_token', refreshToken, {
             httpOnly: true,
-            secure: isProduction,
+            secure: isSecure,
             sameSite: 'lax',
             maxAge: 60 * 60 * 24 * 30, // 30 days
             path: '/',
@@ -171,7 +173,7 @@ export async function GET(req: NextRequest) {
         if (tokenSet.id_token) {
             cookieStore.set('keycloak_id_token', tokenSet.id_token, {
                 httpOnly: true,
-                secure: isProduction,
+                secure: isSecure,
                 sameSite: 'lax',
                 maxAge: 60 * 60 * 24 * 30, // 30 days
                 path: '/',
