@@ -1207,7 +1207,7 @@ const AppSidebar: React.FC = () => {
                             </div>
                         </div>
                     </nav>
-                    
+
                     <div className="flex-shrink-0 px-4 pt-4 pb-6 flex justify-start border-t border-gray-200 dark:border-gray-700">
                         <Image
                             src="/images/logo/logosetjen1.png"

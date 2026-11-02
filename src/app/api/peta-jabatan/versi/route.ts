@@ -110,18 +110,35 @@ export async function POST(req: NextRequest) {
 
         if (action === 'PUBLISH') {
             const { draft_id, archive_name } = body;
-            
+
             if (!draft_id) {
                 return addCorsHeaders(NextResponse.json({ error: "draft_id wajib diisi" }, { status: 400 }), origin);
             }
 
+            const targetCheck = await client.query(`SELECT status FROM peta_jabatan_versi WHERE id = $1`, [draft_id]);
+            if (targetCheck.rowCount === 0) {
+                return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
+            }
+            if (targetCheck.rows[0].status === 'AKTIF') {
+                return addCorsHeaders(NextResponse.json({ error: "Versi ini sudah aktif" }, { status: 400 }), origin);
+            }
+
+            const currentAktifRes = await client.query(`SELECT nama_versi FROM peta_jabatan_versi WHERE status = 'AKTIF' LIMIT 1`);
+            const currentAktifName: string | undefined = currentAktifRes.rows[0]?.nama_versi;
+
+            // Nama arsip otomatis dibuat agar proses publish tidak bergantung pada
+            // input manual sesaat (archive_name tetap bisa override jika dikirim).
+            const finalArchiveName = archive_name?.trim() || (currentAktifName
+                ? `${currentAktifName} (Diarsipkan ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })})`
+                : null);
+
             await client.query('BEGIN');
 
             // 1. Ubah versi yang saat ini AKTIF menjadi ARSIP (ID tetap permanen, hanya status yang berubah)
-            if (archive_name) {
+            if (finalArchiveName) {
                 await client.query(
                     `UPDATE peta_jabatan_versi SET status = 'ARSIP', nama_versi = $1, updated_at = now() WHERE status = 'AKTIF'`,
-                    [archive_name]
+                    [finalArchiveName]
                 );
             } else {
                 await client.query(
@@ -129,14 +146,60 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // 2. Sahkan draft_id menjadi AKTIF (ID tetap permanen, status berubah ke 'AKTIF')
+            // 2. Sahkan versi terpilih (draft ATAU arsip) menjadi AKTIF — mendukung
+            //    publish draft baru maupun memulihkan versi arsip lama.
             await client.query(
                 `UPDATE peta_jabatan_versi SET status = 'AKTIF', updated_at = now() WHERE id = $1`,
                 [draft_id]
             );
 
             await client.query('COMMIT');
-            return addCorsHeaders(NextResponse.json({ success: true, message: `Draft berhasil disahkan menjadi Peta Jabatan Aktif.` }), origin);
+            return addCorsHeaders(NextResponse.json({ success: true, message: `Versi berhasil disahkan menjadi Peta Jabatan Aktif.` }), origin);
+        }
+
+        if (action === 'RENAME') {
+            const { id, nama_versi, keterangan } = body;
+
+            if (!id || !nama_versi || !String(nama_versi).trim()) {
+                return addCorsHeaders(NextResponse.json({ error: "id dan nama_versi wajib diisi" }, { status: 400 }), origin);
+            }
+
+            const verCheck = await client.query(`SELECT id FROM peta_jabatan_versi WHERE id = $1`, [id]);
+            if (verCheck.rowCount === 0) {
+                return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
+            }
+
+            await client.query(
+                `UPDATE peta_jabatan_versi SET nama_versi = $1, keterangan = $2, updated_at = now() WHERE id = $3`,
+                [String(nama_versi).trim(), keterangan ?? null, id]
+            );
+
+            return addCorsHeaders(NextResponse.json({ success: true, message: `Versi berhasil diperbarui.` }), origin);
+        }
+
+        if (action === 'DELETE') {
+            const { id } = body;
+
+            if (!id) {
+                return addCorsHeaders(NextResponse.json({ error: "id wajib diisi" }, { status: 400 }), origin);
+            }
+
+            const verCheck = await client.query(`SELECT status, nama_versi FROM peta_jabatan_versi WHERE id = $1`, [id]);
+            if (verCheck.rowCount === 0) {
+                return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
+            }
+            if (verCheck.rows[0].status === 'AKTIF') {
+                return addCorsHeaders(NextResponse.json({ error: "Versi yang sedang aktif tidak dapat dihapus" }, { status: 400 }), origin);
+            }
+
+            await client.query('BEGIN');
+
+            // tugas_pokok_abk ikut terhapus otomatis lewat ON DELETE CASCADE (fk_abk_peta)
+            await client.query(`DELETE FROM peta_jabatan WHERE versi_id = $1`, [id]);
+            await client.query(`DELETE FROM peta_jabatan_versi WHERE id = $1`, [id]);
+
+            await client.query('COMMIT');
+            return addCorsHeaders(NextResponse.json({ success: true, message: `Versi "${verCheck.rows[0].nama_versi}" berhasil dihapus.` }), origin);
         }
 
         return addCorsHeaders(NextResponse.json({ error: "Action tidak valid" }, { status: 400 }), origin);

@@ -8,7 +8,7 @@ import { getPetaJabatan } from '@/lib/getPetaJabatan';
 import React, {useState, useEffect, useRef, useCallback} from "react";
 import {useMe} from "@/context/MeContext";
 import {useSotk} from "@/context/SotkContext";
-import {VersionSwitcher} from "@/components/peta-jabatan/VersionSwitcher";
+import { VersionSwitcher } from "@/components/peta-jabatan/VersionSwitcher";
 
 /** ====== TIPE API (flat) ====== */
 import { APIRow, SearchItem, buildItemsFromFlat } from "@/lib/search";
@@ -256,7 +256,7 @@ const AppHeader: React.FC = () => {
                         ref={containerRefMobile}
                     >
                         {!isHomePage && (
-                            <div className="flex-1 relative">
+                            <div className="flex-1 min-w-[90px] relative">
                                 <span className="absolute -translate-y-1/2 left-3 top-1/2 pointer-events-none">
                                     <svg className="fill-gray-500 dark:fill-gray-400" width="18" height="18" viewBox="0 0 20 20">
                                         <path
@@ -321,18 +321,16 @@ const AppHeader: React.FC = () => {
                             </div>
                         )}
 
-                        <div className={!isHomePage ? "ml-auto flex items-center gap-2" : "w-full flex justify-end items-center gap-2"}>
-                            {isHomePage && (
-                                <VersionSwitcher activeVersion={activeVersion} setActiveVersion={setActiveVersion} isAdmin={isAdmin} layout="horizontal" />
-                            )}
+                        <div className={!isHomePage ? "ml-auto flex-shrink-0 flex items-center gap-2" : "w-full flex justify-end items-center gap-2"}>
+                            <VersionSwitcher activeVersion={activeVersion} setActiveVersion={setActiveVersion} isAdmin={isAdmin} layout="horizontal" />
                             <UserDropdown />
                         </div>
                     </div>
 
                     {/* Desktop: Search left — User right */}
-                    <div className="hidden lg:flex lg:flex-1 items-center justify-between">
+                    <div className="hidden lg:flex lg:flex-1 items-center justify-between gap-4">
                         {!isHomePage && (
-                            <div className="flex-1 max-w-[640px] mx-auto relative z-[60]" ref={containerRefDesktop}>
+                            <div className="flex-1 min-w-[140px] max-w-[300px] relative z-[60]" ref={containerRefDesktop}>
                                 <div className="relative">
                                     <span className="absolute -translate-y-1/2 left-4 top-1/2 pointer-events-none">
                                         <svg className="fill-gray-500 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20">
@@ -408,10 +406,8 @@ const AppHeader: React.FC = () => {
                             </div>
                         )}
 
-                        <div className={!isHomePage ? "ml-auto flex items-center gap-3" : "w-full flex justify-end items-center gap-3"}>
-                            {isHomePage && (
-                                <VersionSwitcher activeVersion={activeVersion} setActiveVersion={setActiveVersion} isAdmin={isAdmin} layout="horizontal" />
-                            )}
+                        <div className={!isHomePage ? "ml-auto flex-shrink-0 flex items-center gap-3" : "w-full flex justify-end items-center gap-3"}>
+                            <VersionSwitcher activeVersion={activeVersion} setActiveVersion={setActiveVersion} isAdmin={isAdmin} layout="horizontal" />
                             <UserDropdown />
                         </div>
                     </div>
