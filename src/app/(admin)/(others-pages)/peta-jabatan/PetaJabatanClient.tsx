@@ -513,7 +513,11 @@ export default function PetaJabatanClient() {
     setSelectedUnit(null);
     setUnitSearch("");
     setExpandedKjfIds(new Set());
-    hasFocusedOnce.current = false;
+    hasFocusedOnce.current = true;
+    lastCenteredIndexRef.current = -1;
+    const w = containerRef.current?.clientWidth || containerSize.w || (typeof window !== "undefined" ? window.innerWidth : 800);
+    setTranslate({ x: Math.max(24, w / 2), y: w < 640 ? 80 : 110 });
+    setHighlightUpdate(prev => prev + 1);
 
     // Collapse all nodes to initial state
     const initialCollapseMap: Record<string, boolean> = {};
@@ -522,8 +526,9 @@ export default function PetaJabatanClient() {
     }
     setCollapseMap(initialCollapseMap);
 
-    // Force reload the data to ensure clean state
-    load();
+    // Only reload from API if data is empty
+
+    if (allRows.length === 0) load();
   }, [allRows]);
 
   const load = useCallback(async () => {
@@ -1011,7 +1016,11 @@ export default function PetaJabatanClient() {
     const map: Record<string, boolean> = {};
     for (const r of unitFilteredRows) map[r.id] = true;
     setCollapseMap(map);
-    hasFocusedOnce.current = false;
+    hasFocusedOnce.current = true;
+    lastCenteredIndexRef.current = -1;
+    const w = containerRef.current?.clientWidth || containerSize.w || (typeof window !== "undefined" ? window.innerWidth : 800);
+    setTranslate({ x: Math.max(24, w / 2), y: w < 640 ? 80 : 110 });
+    setHighlightUpdate(prev => prev + 1);
   }, [scope, selectedUnit]); // Reset when scope or unit filter changes
 
   useEffect(() => {
@@ -1037,6 +1046,7 @@ export default function PetaJabatanClient() {
       setSearchMatches([]);
       setCurrentMatchIndex(0);
       setCurrentZoom(null); // Reset zoom when search cleared
+      lastCenteredIndexRef.current = -1;
       return;
     }
 
@@ -2964,7 +2974,7 @@ export default function PetaJabatanClient() {
               </div>
             )}
 
-            {(petaJabatanDoc || (isAdmin && kelasJabatanDoc) || uraianJabatanDoc) && (
+            {(petaJabatanDoc || kelasJabatanDoc || uraianJabatanDoc) && (
               <div className="relative z-20" ref={refDropdownRef}>
                 <button
                   onClick={() => setRefDropdownOpen(!refDropdownOpen)}
@@ -2989,7 +2999,7 @@ export default function PetaJabatanClient() {
                         Peraturan Terkait Peta Jabatan
                       </button>
                     )}
-                    {isAdmin && kelasJabatanDoc && (
+                    {kelasJabatanDoc && (
                       <button
                         onClick={() => { window.open(kelasJabatanDoc, '_blank'); setRefDropdownOpen(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors border-t border-gray-100"
@@ -3227,6 +3237,7 @@ export default function PetaJabatanClient() {
         {!loading && typeof window !== "undefined" && rd3Data.length > 0 ? (
           <>
             <Tree
+              key={highlightUpdate}
               data={rd3Data}
               orientation="vertical"
               translate={translate || { x: Math.max(24, containerSize.w / 2), y: bp.isMobile ? 80 : 110 }}

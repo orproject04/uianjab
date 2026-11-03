@@ -256,7 +256,7 @@ const AppHeader: React.FC = () => {
                         ref={containerRefMobile}
                     >
                         {!isHomePage && (
-                            <div className="flex-1 min-w-[90px] relative">
+                            <div className={isAdmin ? "flex-1 min-w-[90px] relative" : "flex-1 relative"}>
                                 <span className="absolute -translate-y-1/2 left-3 top-1/2 pointer-events-none">
                                     <svg className="fill-gray-500 dark:fill-gray-400" width="18" height="18" viewBox="0 0 20 20">
                                         <path
@@ -328,9 +328,9 @@ const AppHeader: React.FC = () => {
                     </div>
 
                     {/* Desktop: Search left — User right */}
-                    <div className="hidden lg:flex lg:flex-1 items-center justify-between gap-4">
+                    <div className={`hidden lg:flex lg:flex-1 items-center justify-between ${isAdmin ? 'gap-4' : ''}`}>
                         {!isHomePage && (
-                            <div className="flex-1 min-w-[140px] max-w-[300px] relative z-[60]" ref={containerRefDesktop}>
+                            <div className={isAdmin ? "flex-1 min-w-[140px] max-w-[300px] relative z-[60]" : "flex-1 max-w-[640px] mx-auto relative z-[60]"} ref={containerRefDesktop}>
                                 <div className="relative">
                                     <span className="absolute -translate-y-1/2 left-4 top-1/2 pointer-events-none">
                                         <svg className="fill-gray-500 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20">
