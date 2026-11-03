@@ -1048,12 +1048,12 @@ export default function PetaJabatanClient() {
       // Find all matching nodes with detailed info
       for (const row of unitFilteredRows) {
         const nameMatch = (row.nama_jabatan || "").toLowerCase().includes(lcFilter);
-        const slugMatch = isAdmin ? (row.slug || "").toLowerCase().includes(lcFilter) : false;
-        const unitMatch = isAdmin ? (row.unit_kerja || "").toLowerCase().includes(lcFilter) : false;
+        const slugMatch = (row.slug || "").toLowerCase().includes(lcFilter);
+        const unitMatch = (row.unit_kerja || "").toLowerCase().includes(lcFilter);
 
         // Check which pejabat names match in the ACTIVE pejabat list
         const matchedNameIndices: number[] = [];
-        if (isAdmin) {
+        if (true) {
           (row.pejabat || []).forEach((p, idx) => {
             if ((p.name || "").toLowerCase().includes(lcFilter)) {
               matchedNameIndices.push(idx);
@@ -1098,10 +1098,10 @@ export default function PetaJabatanClient() {
         if (idxInList < 0) continue;
 
         const fNameMatch = (f.nama_jabatan || "").toLowerCase().includes(lcFilter);
-        const fSlugMatch = isAdmin ? (f.slug || "").toLowerCase().includes(lcFilter) : false;
+        const fSlugMatch = (f.slug || "").toLowerCase().includes(lcFilter);
         const activePejabat = (displayMode === "SK" ? f.pejabat_sk : f.pejabat_st) ?? [];
         const fPejabatIndices: number[] = [];
-        if (isAdmin) {
+        if (true) {
           activePejabat.forEach((p, idx) => {
             if ((p.name || "").toLowerCase().includes(lcFilter)) fPejabatIndices.push(idx);
           });
@@ -1469,7 +1469,7 @@ export default function PetaJabatanClient() {
     const match = (n: D3Node) =>
       (n.nama_jabatan || "").toLowerCase().includes(lcFilter) ||
       (n._slug || "").toLowerCase().includes(lcFilter) ||
-      (isAdmin && (
+      ((
         (n.pejabat || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
         (n.pejabat_st || []).some(p => (p.name || "").toLowerCase().includes(lcFilter)) ||
         (n.pejabat_sk || []).some(p => (p.name || "").toLowerCase().includes(lcFilter))
@@ -1550,7 +1550,7 @@ export default function PetaJabatanClient() {
       ? (textFieldH * namesCountLocal) + (boxGapVerticalLocal * (namesCountLocal - 1))
       : textFieldH;
 
-    const baseCardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY) : (headerH + padY);
+    const baseCardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY) : (padY + headerH + gapAfterBoxes + textFieldH + padY);
 
     return {
       name: n.nama_jabatan,
@@ -1606,7 +1606,7 @@ export default function PetaJabatanClient() {
     }
 
     return data;
-  }, [filteredRoots, collapseMap, bp.isMobile, bp.isTablet]);
+  }, [filteredRoots, collapseMap, bp.isMobile, bp.isTablet, isAdmin]);
 
   const toggleByDatum = useCallback((nodeDatum: CustomNodeElementProps["nodeDatum"], e?: React.MouseEvent<SVGGElement>) => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -2117,13 +2117,13 @@ export default function PetaJabatanClient() {
         const headerBlockH = isAdmin
           ? (titleRows === 1 ? metricsBlockH : Math.max(titleH, metricsBlockH) + headerRowToKelasGap + kelasLineH)
           : (titleH + headerRowToKelasGap + kelasLineH);
-        const namesBlockH = isAdmin
+        const namesBlockH = true
           ? (namesArr.length > 0 ? namesArr.length * nameFieldH + Math.max(0, namesArr.length - 1) * nameGap : nameFieldH)
           : 0;
         const h =
           sectionTopPad +
           headerBlockH +
-          (isAdmin ? kelasToNamesGap : 0) +
+          kelasToNamesGap +
           namesBlockH +
           sectionBottomPad;
         return { f, tLines, namesArr, titleRows, titleH, headerBlockH, namesBlockH, h };
@@ -2211,7 +2211,7 @@ export default function PetaJabatanClient() {
             const yKelas = isAdmin
               ? (titleRows === 1 ? yBoxCenter : Math.max(yTitleTop + titleH, yBoxes + boxH) + headerRowToKelasGap)
               : (yTitleTop + titleH + headerRowToKelasGap);
-            const yNamesTop = titleRows === 1
+            const yNamesTop = (isAdmin && titleRows === 1)
               ? yBoxes + boxH + kelasToNamesGap
               : yKelas + kelasLineH + kelasToNamesGap;
 
@@ -2331,7 +2331,7 @@ export default function PetaJabatanClient() {
                   x={xLeft + innerPadX}
                   y={yKelas}
                   textAnchor="start"
-                  alignmentBaseline={titleRows === 1 ? "central" : "hanging"}
+                  alignmentBaseline={isAdmin && titleRows === 1 ? "central" : "hanging"}
                   fill="#9ca3af"
                   style={{ fontSize: `${kelasFont}px`, fontWeight: 600, pointerEvents: 'none' }}
                 >
@@ -2339,7 +2339,7 @@ export default function PetaJabatanClient() {
                 </text>
 
                 {/* Name pills OR empty placeholder */}
-                {isAdmin && (namesArr.length > 0 ? (
+                {(namesArr.length > 0 ? (
                   namesArr.map((nm, ni) => {
                     const yPill = yNamesTop + ni * (nameFieldH + nameGap);
                     const copyId = `${attrs.id}-fung-${si}-${ni}`;
@@ -2486,10 +2486,10 @@ export default function PetaJabatanClient() {
       : textFieldH;
 
     // Hitung tinggi base card (dengan 1 nama field)
-    const baseCardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY) : (headerH + padY);
+    const baseCardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + textFieldH + padY) : (padY + headerH + gapAfterBoxes + textFieldH + padY);
 
     // Hitung tinggi card sebenarnya dengan semua nama
-    const cardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY) : (headerH + padY);
+    const cardH = isAdmin ? (padY + headerH + labelGapTop + 14 + 4 + boxH + gapAfterBoxes + totalNamesHeight + padY) : (padY + headerH + gapAfterBoxes + totalNamesHeight + padY);
 
     const xLeft = -cardW / 2;
     // Use sibling max baseCardH (if available) so sibling top edges align. Fallback to local baseCardH.
@@ -2590,16 +2590,16 @@ export default function PetaJabatanClient() {
         )}
         {/* KARTU - Clickable except toggle button */}
         <rect x={xLeft} y={yTop} width={cardW} height={cardH}
-          rx={8} ry={8} fill={isAdmin ? "#ffffff" : "#E8F5D9"}
+          rx={8} ry={8} fill="#ffffff"
           stroke={borderColor}
           strokeWidth={borderWidth}
           style={{ filter: shadowFilter, cursor: 'pointer' }}
           onClick={handleJabatanClick} />
 
         {/* HEADER*/}
-        {isAdmin && <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
+        <rect x={xLeft + 1} y={yTop} width={cardW - 2} height={headerH + padY}
           rx={10} ry={10} fill="#E8F5D9" strokeOpacity={0.15} strokeWidth={1}
-          style={{ cursor: 'pointer', pointerEvents: 'none' }} />}
+          style={{ cursor: 'pointer', pointerEvents: 'none' }} />
 
         {/* JUDUL */}
         <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
@@ -2636,11 +2636,14 @@ export default function PetaJabatanClient() {
             {metricBox(boxesStartX + (boxW + boxGap) * 2, yBoxes, String(sel ?? 0))}
           </g>
 
+          {/* END BKP */}</>)}
+
           {/* TEXT FIELD NAMA - Setiap nama punya kotak sendiri */}
           <g>
             {namesArr.length > 0 ? (
               namesArr.map((name, idx) => {
-                const yBoxStart = yBoxes + boxH + (bp.isMobile ? 10 : 12) + (idx * (textFieldH + boxGapVertical));
+                const yNamesBase = isAdmin ? (yBoxes + boxH + (bp.isMobile ? 10 : 12)) : (yHeaderTop + headerH + gapAfterBoxes);
+                const yBoxStart = yNamesBase + (idx * (textFieldH + boxGapVertical));
                 const isEselonCentered = rankJenis(attrs.jenis) <= 4;
                 const textAlign = isEselonCentered ? "middle" : "start";
                 const textX = isEselonCentered ? centerX : xLeft + padX + 10;
@@ -2760,12 +2763,12 @@ export default function PetaJabatanClient() {
               })
             ) : (
               // Jika tidak ada nama, tampilkan kotak kosong
-              <rect x={xLeft + padX} y={yBoxes + boxH + (bp.isMobile ? 10 : 12)}
+              <rect x={xLeft + padX} y={isAdmin ? (yBoxes + boxH + (bp.isMobile ? 10 : 12)) : (yHeaderTop + headerH + gapAfterBoxes)}
                 width={cardW - padX * 2} height={textFieldH}
                 rx={6} ry={6} fill="#ffffff" stroke="#c4c4c4" strokeWidth={1} />
             )}
           </g>
-        </>)}
+
 
         {/* Tombol panah/play */}
         {hasChildren && (
@@ -2779,7 +2782,7 @@ export default function PetaJabatanClient() {
         )}
       </g>
     );
-  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen, copiedNameId, handleCopyName, expandedKjfIds, toggleKjfExpanded]);
+  }, [toggleByDatum, bp.isMobile, bp.isTablet, cardW, padX, padY, boxW, boxH, maxTitleChars, titleFontPx, lastClickedPath, searchMatches, currentMatchIndex, router, isFullscreen, exitFullscreen, copiedNameId, handleCopyName, expandedKjfIds, toggleKjfExpanded, isAdmin]);
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
@@ -2790,7 +2793,7 @@ export default function PetaJabatanClient() {
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <input
-            placeholder={isAdmin ? "Cari Jabatan atau Nama Pejabat..." : "Cari Jabatan..."}
+            placeholder="Cari Jabatan atau Nama Pejabat..."
             value={filterText}
             onChange={(e) => {
               const newValue = e.target.value;
@@ -2857,12 +2860,12 @@ export default function PetaJabatanClient() {
             options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
             size={bp.isMobile ? "sm" : "md"}
           />
-          {isAdmin && <Segmented
+          <Segmented
             value={displayMode}
             onChange={setDisplayMode}
             options={[{ label: "Surat Keputusan", value: "SK" }, { label: "Surat Tugas", value: "ST" }]}
             size={bp.isMobile ? "sm" : "md"}
-          />}
+          />
 
           {/* Unit / Biro Filter Dropdown */}
           <div className="relative z-30" ref={unitDropdownRef}>
@@ -3127,12 +3130,12 @@ export default function PetaJabatanClient() {
                       options={[{ label: "Pusat", value: "PUSAT" }, { label: "Daerah", value: "DAERAH" }]}
                       size="sm"
                     />
-                    {isAdmin && <Segmented
+                    <Segmented
                       value={displayMode}
                       onChange={setDisplayMode}
                       options={[{ label: "Surat Keputusan", value: "SK" }, { label: "Surat Tugas", value: "ST" }]}
                       size="sm"
-                    />}
+                    />
                   </div>
 
                   {/* Row 1b: Unit / Biro Filter */}
@@ -3152,7 +3155,7 @@ export default function PetaJabatanClient() {
                   {/* Row 2: Search Input - More compact on mobile */}
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     <input
-                      placeholder="Cari..."
+                      placeholder="Cari Jabatan atau Nama Pejabat..."
                       value={filterText}
                       onChange={(e) => {
                         const newValue = e.target.value;
