@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
+import { resolveVersiId } from "@/lib/versi";
 
 export async function PATCH(
     req: NextRequest,
@@ -13,7 +14,7 @@ export async function PATCH(
         }
 
         const body = await req.json();
-        const { jabatan_id } = body;
+        const { jabatan_id, versi_id: raw_versi_id } = body;
         const { id: petaId } = await params;
 
         if (!jabatan_id) {
@@ -23,13 +24,22 @@ export async function PATCH(
             );
         }
 
-        // Update peta_jabatan
-        await pool.query(
-            `UPDATE peta_jabatan 
-             SET jabatan_id = $1, updated_at = NOW()
-             WHERE id = $2`,
-            [jabatan_id, petaId]
-        );
+        if (raw_versi_id) {
+            const versi_id = await resolveVersiId(raw_versi_id);
+            await pool.query(
+                `UPDATE peta_jabatan 
+                 SET jabatan_id = $1, updated_at = NOW()
+                 WHERE id = $2 AND versi_id = $3`,
+                [jabatan_id, petaId, versi_id]
+            );
+        } else {
+            await pool.query(
+                `UPDATE peta_jabatan 
+                 SET jabatan_id = $1, updated_at = NOW()
+                 WHERE id = $2`,
+                [jabatan_id, petaId]
+            );
+        }
 
         return NextResponse.json({ ok: true });
     } catch (error: any) {

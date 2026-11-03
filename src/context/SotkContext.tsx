@@ -34,8 +34,8 @@ export const SotkProvider: React.FC<{children: React.ReactNode}> = ({children}) 
                 const list: Versi[] = json.data || [];
                 setVersions(list);
                 const currentActive = list.find((v) => v.status === 'AKTIF');
-                if (currentActive && (activeVersion === 'AKTIF' || !activeVersion)) {
-                    setActiveVersion(currentActive.id);
+                if (currentActive) {
+                    setActiveVersion(prev => (prev === 'AKTIF' || !prev) ? currentActive.id : prev);
                 }
             }
         } catch (e) {
@@ -43,11 +43,11 @@ export const SotkProvider: React.FC<{children: React.ReactNode}> = ({children}) 
         } finally {
             setLoadingVersions(false);
         }
-    }, [activeVersion]);
+    }, []);
 
     useEffect(() => {
         fetchVersions();
-    }, []);
+    }, [fetchVersions]);
 
     return (
         <SotkContext.Provider value={{
@@ -68,4 +68,3 @@ export const useSotk = () => {
     if (!context) throw new Error("useSotk must be used within SotkProvider");
     return context;
 };
-

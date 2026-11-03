@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
+import { resolveVersiId } from "@/lib/versi";
 
 export async function POST(req: NextRequest) {
     try {
@@ -14,7 +15,9 @@ export async function POST(req: NextRequest) {
         const edits = Array.isArray(json?.edits) ? json.edits : [];
         if (!edits.length) return NextResponse.json({ ok: true, updated: 0 });
 
-        // For each edit, update peta_jabatan.kebutuhan_pegawai for matching fungsional rows.
+        const versiId = await resolveVersiId(json?.versi_id);
+
+        // For each edit, update peta_jabatan.kebutuhan_pegawai for matching fungsional rows in the specified version.
         let updated = 0;
         for (const e of edits) {
             const nama = String(e.nama_jabatan || "").trim();
@@ -28,13 +31,19 @@ export async function POST(req: NextRequest) {
             const beztVal = Number.isFinite(bezt) ? bezt : null;
 
             const res1 = await pool.query(
-                `UPDATE peta_jabatan SET kebutuhan_pegawai = $1, updated_at = NOW(), updated_by = $4 WHERE lower(trim(coalesce(nama_jabatan,''))) = lower(trim($2)) AND lower(trim(coalesce(unit_kerja,''))) = lower(trim($3)) AND lower(coalesce(jenis_jabatan,'')) LIKE '%fungsional%' RETURNING id`,
-                [kebVal, nama, unit, user.full_name || user.email || 'Unknown']
+                `UPDATE peta_jabatan 
+                 SET kebutuhan_pegawai = $1, updated_at = NOW(), updated_by = $4 
+                 WHERE lower(trim(coalesce(nama_jabatan,''))) = lower(trim($2)) 
+                   AND lower(trim(coalesce(unit_kerja,''))) = lower(trim($3)) 
+                   AND lower(coalesce(jenis_jabatan,'')) LIKE '%fungsional%'
+                   AND versi_id = $5
+                 RETURNING id`,
+                [kebVal, nama, unit, user.full_name || user.email || 'Unknown', versiId]
             );
             updated += (res1.rowCount || 0);
         }
 
-        return NextResponse.json({ ok: true, updated });
+        return NextResponse.json({ ok: true, updated, versi_id: versiId });
     } catch (err: any) {
         console.error('[dashboard.overrides]', err?.message || err);
         return NextResponse.json({ error: 'Server error' }, { status: 500 });

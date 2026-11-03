@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
+import { resolveVersiId } from "@/lib/versi";
 
 /**
  * GET /api/dashboard/jabatan
@@ -8,6 +9,7 @@ import { getUserFromReq, hasRole } from "@/lib/auth";
  * - biro: filter by specific biro (optional)
  * - jenis_jabatan: filter by jenis_jabatan (optional)
  * - lokasi: filter by lokasi "pusat" or "daerah" (optional)
+ * - versi_id: filter by specific version id or "AKTIF" (optional)
  */
 export async function GET(req: NextRequest) {
     try {
@@ -29,6 +31,9 @@ export async function GET(req: NextRequest) {
         }
 
         const { searchParams } = new URL(req.url);
+        const versi_id = await resolveVersiId(searchParams.get("versi_id"));
+        const safeVersiId = versi_id.replace(/'/g, "''");
+
         const biroFilter = searchParams.get("biro");
         const jenisJabatanFilter = searchParams.get("jenis_jabatan");
         const lokasiFilter = searchParams.get("lokasi");
@@ -41,18 +46,26 @@ export async function GET(req: NextRequest) {
         const params: any[] = [];
         let paramIndex = 1;
 
+        // Selalu filter per versi_id aktif / terpilih agar data tidak berlipat ganda
+        whereConditions.push(`versi_id = $${paramIndex}`);
+        params.push(versi_id);
+        paramIndex++;
+
         let effectiveJenisFilter = jenisJabatanFilter;
 
         // Jika ada filter biro, gunakan recursive CTE untuk mendapatkan semua child nodes
         let biroFilterCTE = "";
         if (biroFilter) {
+            const safeBiro = biroFilter.replace(/'/g, "''");
             biroFilterCTE = `
                 WITH RECURSIVE unit_tree AS (
                     -- Base case: node dengan unit_kerja yang match
                     SELECT id, parent_id, unit_kerja, nama_jabatan
                     FROM peta_jabatan
                     -- Use exact, case-insensitive match so "Persidangan I" does not also match "Persidangan II"
-                    WHERE lower(trim(unit_kerja)) = lower(trim($${paramIndex})) AND deleted_at IS NULL
+                    WHERE lower(trim(unit_kerja)) = lower(trim('${safeBiro}')) 
+                      AND deleted_at IS NULL
+                      AND versi_id = '${safeVersiId}'
                     
                     UNION ALL
                     
@@ -61,11 +74,9 @@ export async function GET(req: NextRequest) {
                     FROM peta_jabatan p
                     INNER JOIN unit_tree ut ON p.parent_id = ut.id
                     WHERE p.deleted_at IS NULL
+                      AND p.versi_id = '${safeVersiId}'
                 )
             `;
-            // No wildcard to avoid pulling sibling units with similar names (e.g., I vs II)
-            params.push(biroFilter);
-            paramIndex++;
             whereConditions.push(`id IN (SELECT id FROM unit_tree)`);
         }
 
@@ -224,12 +235,12 @@ export async function GET(req: NextRequest) {
             up AS (
                 SELECT id, parent_id, unit_kerja, jenis_jabatan, id AS orig, 0 AS depth
                 FROM peta_jabatan
-                WHERE deleted_at IS NULL
+                WHERE deleted_at IS NULL AND versi_id = '${safeVersiId}'
                 UNION ALL
                 SELECT p.id, p.parent_id, p.unit_kerja, p.jenis_jabatan, up.orig, up.depth + 1
                 FROM peta_jabatan p
                 JOIN up ON p.id = up.parent_id
-                WHERE p.deleted_at IS NULL
+                WHERE p.deleted_at IS NULL AND p.versi_id = '${safeVersiId}'
             ),
             eselon_match AS (
                 SELECT orig, unit_kerja, depth,
@@ -266,17 +277,12 @@ export async function GET(req: NextRequest) {
 
         // Query untuk breakdown by nama_jabatan di peta_jabatan (tanpa grouping)
         // Use the same sort_path ordering as /api/peta-jabatan for consistency
-        // Build the WHERE clause for the tree CTE - need to filter in the SELECT from tree
         const treeWhereConditions: string[] = [];
-        const treeParams: any[] = [];
         
         if (biroFilter) {
             treeWhereConditions.push(`t.id IN (SELECT id FROM unit_tree)`);
-            // biroFilterCTE uses $1 for biro filter, so we need to pass it
-            treeParams.push(biroFilter);
         }
         if (effectiveJenisFilter) {
-            // Use literal value in WHERE clause to avoid param index mismatch
             treeWhereConditions.push(`t.jenis_jabatan = '${effectiveJenisFilter.replace(/'/g, "''")}'`);
         }
         if (lokasiFilter) {
@@ -310,7 +316,7 @@ export async function GET(req: NextRequest) {
                         lpad(COALESCE(order_index, 2147483647)::text, 10, '0') || '-' || id::text
                     ]::text[] AS sort_path
                 FROM peta_jabatan
-                WHERE parent_id IS NULL AND deleted_at IS NULL
+                WHERE parent_id IS NULL AND deleted_at IS NULL AND versi_id = '${safeVersiId}'
                 
                 UNION ALL
                 
@@ -331,7 +337,7 @@ export async function GET(req: NextRequest) {
                     )
                 FROM peta_jabatan c
                 JOIN tree t ON c.parent_id = t.id
-                WHERE c.deleted_at IS NULL
+                WHERE c.deleted_at IS NULL AND c.versi_id = '${safeVersiId}'
             )
             SELECT 
                 COALESCE(t.nama_jabatan, 'Tidak Ada Nama') as nama_jabatan,
@@ -348,8 +354,7 @@ export async function GET(req: NextRequest) {
             ORDER BY t.sort_path
         `;
 
-        // Use treeParams which includes biroFilter if present
-        const byNamaJabatanResult = await runQuery('byNamaJabatanQuery', byNamaJabatanQuery, treeParams);
+        const byNamaJabatanResult = await runQuery('byNamaJabatanQuery', byNamaJabatanQuery, []);
         const byNamaJabatan = byNamaJabatanResult.rows;
 
         // Also return lists of normalized unique names for verification
@@ -385,20 +390,20 @@ export async function GET(req: NextRequest) {
         const biroListQuery = `
             SELECT DISTINCT unit_kerja 
             FROM peta_jabatan 
-            WHERE unit_kerja IS NOT NULL
+            WHERE unit_kerja IS NOT NULL AND deleted_at IS NULL AND versi_id = $1
             ORDER BY unit_kerja
         `;
-        const biroListResult = await runQuery('biroListQuery', biroListQuery);
+        const biroListResult = await runQuery('biroListQuery', biroListQuery, [versi_id]);
         const biroList = biroListResult.rows.map((r: any) => r.unit_kerja);
 
         // Get jenis_jabatan list for filter dropdown
         const jenisListQuery = `
             SELECT DISTINCT jenis_jabatan 
             FROM peta_jabatan 
-            WHERE jenis_jabatan IS NOT NULL
+            WHERE jenis_jabatan IS NOT NULL AND deleted_at IS NULL AND versi_id = $1
             ORDER BY jenis_jabatan
         `;
-        const jenisListResult = await runQuery('jenisListQuery', jenisListQuery);
+        const jenisListResult = await runQuery('jenisListQuery', jenisListQuery, [versi_id]);
         const jenisList = jenisListResult.rows.map((r: any) => r.jenis_jabatan);
 
         const dataErrorQuery = `
@@ -432,6 +437,7 @@ export async function GET(req: NextRequest) {
         const lastSyncDate = lastSyncResult.rows[0]?.synced_at || null;
 
         return NextResponse.json({
+            versi_id,
             last_sync_date: lastSyncDate,
             summary: {
                 total_jabatan: Number(summary.total_jabatan ?? 0),

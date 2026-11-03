@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getUserFromReq, hasRole } from "@/lib/auth";
+import { resolveVersiId } from "@/lib/versi";
 
 export async function POST(req: NextRequest) {
     try {
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { suggestions } = body;
+        const { suggestions, versi_id: raw_versi_id } = body;
 
         // Filter hanya yang similarity 100%
         const perfectMatches = suggestions.filter((s: any) => s.similarity === 1.0);
@@ -29,14 +30,26 @@ export async function POST(req: NextRequest) {
         try {
             await client.query("BEGIN");
 
+            const defaultVersiId = raw_versi_id && raw_versi_id !== 'ALL' ? await resolveVersiId(raw_versi_id) : null;
+
             for (const sug of perfectMatches) {
-                // Update peta_jabatan dengan jabatan_id
-                await client.query(
-                    `UPDATE peta_jabatan 
-                     SET jabatan_id = $1, updated_at = NOW()
-                     WHERE id = $2 AND jabatan_id IS NULL`,
-                    [sug.anjab_id, sug.peta_id]
-                );
+                const itemVersiId = sug.versi_id ? await resolveVersiId(sug.versi_id) : defaultVersiId;
+
+                if (itemVersiId) {
+                    await client.query(
+                        `UPDATE peta_jabatan 
+                         SET jabatan_id = $1, updated_at = NOW()
+                         WHERE id = $2 AND versi_id = $3 AND jabatan_id IS NULL`,
+                        [sug.anjab_id, sug.peta_id, itemVersiId]
+                    );
+                } else {
+                    await client.query(
+                        `UPDATE peta_jabatan 
+                         SET jabatan_id = $1, updated_at = NOW()
+                         WHERE id = $2 AND jabatan_id IS NULL`,
+                        [sug.anjab_id, sug.peta_id]
+                    );
+                }
                 matchedCount++;
             }
 
@@ -53,6 +66,7 @@ export async function POST(req: NextRequest) {
             client.release();
         }
     } catch (error: any) {
+        console.error("Error auto matching:", error);
         return NextResponse.json(
             { error: error?.message || "Gagal auto matching" },
             { status: 500 }

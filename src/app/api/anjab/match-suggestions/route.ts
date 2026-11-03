@@ -54,28 +54,22 @@ function calculateSimilarity(str1: string, str2: string): number {
             const t1 = tokens1[i];
             const t2 = tokens2[j];
             
-            // Only count as partial match if:
-            // 1. Both tokens are longer than 2 chars (avoid matching "I", "II", etc. as substrings)
-            // 2. One contains the other AND the contained string is at least 3 chars
-            // 3. The length ratio is reasonable (at least 60% of the longer string)
-            if (t1.length > 2 && t2.length > 2) {
-                const minLen = Math.min(t1.length, t2.length);
-                const maxTokenLen = Math.max(t1.length, t2.length);
-                
-                if (minLen >= 3 && minLen / maxTokenLen >= 0.6) {
-                    if (t1.includes(t2) || t2.includes(t1)) {
-                        partialMatches += 0.5; // Partial match counts as half
-                        matched2.add(j);
-                        break;
-                    }
+            // Only consider significant partial match if length is at least 4 chars
+            // and one is contained in the other
+            if (t1.length >= 4 && t2.length >= 4) {
+                if (t1.includes(t2) || t2.includes(t1)) {
+                    partialMatches++;
+                    matched2.add(j);
+                    break;
                 }
             }
         }
     }
     
-    // Calculate base similarity score
-    const totalMatches = exactMatches + partialMatches;
-    const baseSimilarity = totalMatches / maxLen;
+    // Calculate weighted score
+    // Exact matches worth full, partial matches worth 0.5
+    const totalMatchedScore = exactMatches + (partialMatches * 0.5);
+    const baseSimilarity = (2.0 * totalMatchedScore) / (tokens1.length + tokens2.length);
     
     // Apply length penalty (reduce score if lengths differ significantly)
     const finalScore = baseSimilarity * (1 - lengthPenalty * 0.3);
@@ -113,6 +107,8 @@ export async function POST(req: NextRequest) {
                 suggestions.push({
                     peta_id: peta.id,
                     peta_nama: peta.nama,
+                    versi_id: peta.versi_id,
+                    nama_versi: peta.nama_versi,
                     anjab_id: bestMatch.id,
                     anjab_nama: bestMatch.nama,
                     similarity: bestSimilarity,

@@ -43,6 +43,9 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
     const [triggerWidth, setTriggerWidth] = useState(0);
     const [versionMenuPos, setVersionMenuPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number; width: number; maxHeight: number }>({ top: -9999, left: -9999, width: 0, maxHeight: 256 });
 
+    // Versi yang saat ini aktif/terpilih
+    const activeV = versions.find(v => v.id === activeVersion) || versions.find(v => v.status === 'AKTIF') || { id: 'PETA_JABATAN_OKTOBER_2026', nama_versi: 'Peta Jabatan Oktober 2026', status: 'AKTIF' };
+
     // Form states
     const [cloneForm, setCloneForm] = useState({ source_id: "", nama: "", ket: "" });
     const [renameForm, setRenameForm] = useState({ id: "", nama: "", ket: "" });
@@ -138,7 +141,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
         }
 
         // Tentukan versi sumber yang akan disalin
-        const targetSource = cloneForm.source_id || activeVersion;
+        const targetSource = cloneForm.source_id || activeV.id;
         const sourceObj = versions.find(v => v.id === targetSource) || versions.find(v => v.status === 'AKTIF');
         const sourceName = sourceObj ? `${sourceObj.nama_versi} (${sourceObj.status})` : "Peta Jabatan Aktif";
 
@@ -242,7 +245,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "PUBLISH",
-                    draft_id: activeVersion
+                    draft_id: activeV.id
                 })
             });
             const json = await res.json();
@@ -277,7 +280,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
 
         if (!confirmResult.isConfirmed) return;
 
-        const deletedId = activeVersion;
+        const deletedId = activeV.id;
         Swal.fire({ title: "Menghapus Versi...", allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
@@ -305,7 +308,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
 
     const openRenameModal = () => {
         setRenameForm({
-            id: activeVersion,
+            id: activeV.id,
             nama: activeV.nama_versi || "",
             ket: (activeV as any).keterangan || ""
         });
@@ -332,7 +335,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
             });
             const json = await res.json();
             if (res.ok) {
-                setVersions(prev => prev.map(v => v.id === renamedId ? { ...v, nama_versi: nama, keterangan: ket } : v));
+                setVersions(prev => prev.map(v => (v.id === renamedId || (v.status === 'AKTIF' && (renamedId === 'AKTIF' || renamedId === activeV.id))) ? { ...v, nama_versi: nama, keterangan: ket } : v));
                 clearPetaJabatanCache();
                 fetchVersions();
                 Swal.fire("Berhasil", json.message, "success");
@@ -343,8 +346,6 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
             Swal.fire("Gagal", "Terjadi kesalahan sistem", "error");
         }
     };
-
-    const activeV = versions.find(v => v.id === activeVersion) || versions.find(v => v.status === 'AKTIF') || { id: 'PETA_JABATAN_OKTOBER_2026', nama_versi: 'Peta Jabatan Oktober 2026', status: 'AKTIF' };
 
     const isHorizontal = layout === 'horizontal';
 
@@ -374,7 +375,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
                                     <button
                                         onClick={() => {
                                             setShowMenu(false);
-                                            setCloneForm({ source_id: activeVersion, nama: "", ket: "" });
+                                            setCloneForm({ source_id: activeV.id, nama: "", ket: "" });
                                             setShowCloneModal(true);
                                         }}
                                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-slate-50 flex items-center gap-2"
@@ -522,7 +523,7 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
                                     Salin Dari Versi / Sumber <span className="text-red-500">*</span>
                                 </label>
                                 <select 
-                                    value={cloneForm.source_id || activeVersion} 
+                                    value={cloneForm.source_id || activeV.id} 
                                     onChange={e => setCloneForm({ ...cloneForm, source_id: e.target.value })}
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all bg-white text-gray-800"
                                 >
@@ -614,4 +615,4 @@ export const VersionSwitcher: React.FC<VersionSwitcherProps> = ({
 
         </div>
     );
-}
+};

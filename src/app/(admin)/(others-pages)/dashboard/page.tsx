@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import Select from "react-select";
 import { useMe } from "@/context/MeContext";
+import { useSotk } from "@/context/SotkContext";
 import * as XLSX from "xlsx-js-style";
 import {
     BarChart,
@@ -95,6 +96,8 @@ const COLORS = ["#8FC54A", "#80C15D", "#6DB980", "#3CA8CD", "#48ADBC", "#83C7E8"
 
 export default function DashboardPage() {
     const { isAdmin, isAdminJf, isAdminAKK, loading: meLoading } = useMe();
+    const { activeVersion, versions } = useSotk();
+    const currentVersionObj = versions.find(v => v.id === activeVersion) || versions.find(v => v.status === 'AKTIF');
     const router = useRouter();
 
     useEffect(() => {
@@ -183,10 +186,11 @@ export default function DashboardPage() {
         if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
         if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
         if (displayMode) params.append("mode", displayMode);
+        if (activeVersion) params.append("versi_id", activeVersion);
         const url = `/api/dashboard/jabatan?${params.toString()}`;
         if (lastFetchUrlRef.current === url) return; // already fetched this exact URL
         loadData();
-    }, [selectedBiro, selectedJenis, selectedLokasi, selectedKelas, displayMode]);
+    }, [selectedBiro, selectedJenis, selectedLokasi, selectedKelas, displayMode, activeVersion]);
 
     // Initial load after user authentication completes
     const hasLoadedOnce = useRef(false);
@@ -211,6 +215,7 @@ export default function DashboardPage() {
             if (selectedLokasi?.value) params.append("lokasi", selectedLokasi.value);
             if (selectedKelas?.value) params.append("kelas_jabatan", selectedKelas.value);
             if (displayMode) params.append("mode", displayMode);
+        if (activeVersion) params.append("versi_id", activeVersion);
 
             const url = `/api/dashboard/jabatan?${params.toString()}`;
             const res = await apiFetch(url, forceNoCache ? { cache: 'no-store' } : undefined);
@@ -338,7 +343,7 @@ export default function DashboardPage() {
             // send to API
             // Prevent automatic effects from reloading data while we perform a controlled reload
             skipNextLoadRef.current = true;
-            const res = await saveOverridesApi(edits);
+            const res = await saveOverridesApi(edits, activeVersion);
             const j = await res.json().catch(() => ({}));
             if (!res.ok || j?.error) throw new Error(j?.error || `HTTP ${res.status}`);
             const newData = await loadData(true);
@@ -1579,7 +1584,16 @@ export default function DashboardPage() {
                                 </svg>
                             </div>
                             <div>
-                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Rekap Jabatan</h1>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Rekap Jabatan</h1>
+                                    {currentVersionObj && (
+                                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
+                                            currentVersionObj.status === 'AKTIF'
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800'
+                                        }`}>{currentVersionObj.nama_versi} ({currentVersionObj.status})</span>
+                                    )}
+                                </div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
                                     Visualisasi dan analisis data jabatan
                                 </p>
@@ -2930,11 +2944,11 @@ export default function DashboardPage() {
 }
 
 // Save overrides to server
-async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }>) {
+async function saveOverridesApi(payload: Array<{ nama_jabatan: string; unit_kerja: string; kebutuhan_khusus: number; bezetting_input: number }>, versi_id?: string) {
     const res = await apiFetch('/api/dashboard/jabatan/overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ edits: payload })
+        body: JSON.stringify({ edits: payload, versi_id })
     });
     return res;
 }

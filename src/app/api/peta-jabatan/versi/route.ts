@@ -115,6 +115,10 @@ export async function POST(req: NextRequest) {
                 return addCorsHeaders(NextResponse.json({ error: "draft_id wajib diisi" }, { status: 400 }), origin);
             }
 
+            if (draft_id === 'AKTIF') {
+                return addCorsHeaders(NextResponse.json({ error: "Versi ini sudah aktif" }, { status: 400 }), origin);
+            }
+
             const targetCheck = await client.query(`SELECT status FROM peta_jabatan_versi WHERE id = $1`, [draft_id]);
             if (targetCheck.rowCount === 0) {
                 return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
@@ -164,14 +168,24 @@ export async function POST(req: NextRequest) {
                 return addCorsHeaders(NextResponse.json({ error: "id dan nama_versi wajib diisi" }, { status: 400 }), origin);
             }
 
-            const verCheck = await client.query(`SELECT id FROM peta_jabatan_versi WHERE id = $1`, [id]);
+            let targetId = id;
+            if (targetId === 'AKTIF') {
+                const activeRes = await client.query(`SELECT id FROM peta_jabatan_versi WHERE status = 'AKTIF' LIMIT 1`);
+                targetId = activeRes.rows[0]?.id;
+            }
+
+            if (!targetId) {
+                return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
+            }
+
+            const verCheck = await client.query(`SELECT id FROM peta_jabatan_versi WHERE id = $1`, [targetId]);
             if (verCheck.rowCount === 0) {
                 return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
             }
 
             await client.query(
                 `UPDATE peta_jabatan_versi SET nama_versi = $1, keterangan = $2, updated_at = now() WHERE id = $3`,
-                [String(nama_versi).trim(), keterangan ?? null, id]
+                [String(nama_versi).trim(), keterangan ?? null, targetId]
             );
 
             return addCorsHeaders(NextResponse.json({ success: true, message: `Versi berhasil diperbarui.` }), origin);
@@ -184,7 +198,12 @@ export async function POST(req: NextRequest) {
                 return addCorsHeaders(NextResponse.json({ error: "id wajib diisi" }, { status: 400 }), origin);
             }
 
-            const verCheck = await client.query(`SELECT status, nama_versi FROM peta_jabatan_versi WHERE id = $1`, [id]);
+            let targetId = id;
+            if (targetId === 'AKTIF') {
+                return addCorsHeaders(NextResponse.json({ error: "Versi yang sedang aktif tidak dapat dihapus" }, { status: 400 }), origin);
+            }
+
+            const verCheck = await client.query(`SELECT status, nama_versi FROM peta_jabatan_versi WHERE id = $1`, [targetId]);
             if (verCheck.rowCount === 0) {
                 return addCorsHeaders(NextResponse.json({ error: "Versi tidak ditemukan" }, { status: 404 }), origin);
             }
@@ -195,8 +214,8 @@ export async function POST(req: NextRequest) {
             await client.query('BEGIN');
 
             // tugas_pokok_abk ikut terhapus otomatis lewat ON DELETE CASCADE (fk_abk_peta)
-            await client.query(`DELETE FROM peta_jabatan WHERE versi_id = $1`, [id]);
-            await client.query(`DELETE FROM peta_jabatan_versi WHERE id = $1`, [id]);
+            await client.query(`DELETE FROM peta_jabatan WHERE versi_id = $1`, [targetId]);
+            await client.query(`DELETE FROM peta_jabatan_versi WHERE id = $1`, [targetId]);
 
             await client.query('COMMIT');
             return addCorsHeaders(NextResponse.json({ success: true, message: `Versi "${verCheck.rows[0].nama_versi}" berhasil dihapus.` }), origin);
