@@ -308,6 +308,9 @@ export default function PetaJabatanClient() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [printMenuOpen, setPrintMenuOpen] = useState(false);
+  const printMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [unitSearch, setUnitSearch] = useState("");
   const unitDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -426,6 +429,17 @@ export default function PetaJabatanClient() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [unitDropdownOpen]);
+
+  useEffect(() => {
+    if (!printMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (printMenuRef.current && !printMenuRef.current.contains(e.target as Node)) {
+        setPrintMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [printMenuOpen]);
 
   useEffect(() => {
     if (filterText) {
@@ -928,61 +942,66 @@ export default function PetaJabatanClient() {
     );
   }, [printRows, printSyntheticFlags, selectedUnit, displayMode]);
 
+  // Bangun payload {unitName, html} untuk setiap unit daerah (Kantor DPD RI).
+  // Dipakai bersama oleh export PDF bulk dan export gambar (ZIP) bulk.
+  const buildDaerahUnitJobs = useCallback((): { unitName: string; html: string }[] => {
+    const daerahUnits = new Set<string>();
+    for (const r of allRows) {
+      if (r.is_pusat === false && r.unit_kerja && rankJenis(r.jenis_jabatan) === 3) {
+        daerahUnits.add(r.unit_kerja.trim());
+      }
+    }
+    const daerahUnitList = Array.from(daerahUnits).sort();
+
+    return daerahUnitList.map(unitName => {
+      // Find head node
+      let headNode = null;
+      let headRank = 99;
+      for (const r of printRows) {
+        if ((r.unit_kerja || '').trim() !== unitName) continue;
+        const rank = rankJenis(r.jenis_jabatan);
+        if (rank < headRank) { headRank = rank; headNode = r; }
+      }
+
+      let rowsToPrint = printRows;
+      if (headNode) {
+        // Bangun index parent→children untuk efisiensi
+        const byParentId = new Map();
+        for (const r of printRows) {
+          if (r.parent_id) {
+            const arr = byParentId.get(r.parent_id) || [];
+            arr.push(r.id);
+            byParentId.set(r.parent_id, arr);
+          }
+        }
+
+        // Kumpulkan semua descendant head node
+        const keep = new Set();
+        const addSubtree = (id: string) => {
+          keep.add(id);
+          for (const childId of (byParentId.get(id) || [])) addSubtree(childId);
+        };
+        addSubtree(headNode.id);
+
+        rowsToPrint = printRows.filter(r => keep.has(r.id));
+      }
+
+      const html = generatePetaJabatanHtml(
+        rowsToPrint,
+        printSyntheticFlags,
+        unitName,
+        "DPD RI",
+        displayMode
+      );
+
+      return { unitName, html };
+    });
+  }, [allRows, printRows, printSyntheticFlags, displayMode]);
+
   const handleBulkPrintSemuaDaerah = async () => {
     setIsGeneratingPDF(true);
     try {
-      // Hanya ambil unit daerah (Kantor DPD RI)
-      const daerahUnits = new Set<string>();
-      for (const r of allRows) {
-        if (r.is_pusat === false && r.unit_kerja && rankJenis(r.jenis_jabatan) === 3) {
-          daerahUnits.add(r.unit_kerja.trim());
-        }
-      }
-      const daerahUnitList = Array.from(daerahUnits).sort();
-
-      const payloads = daerahUnitList.map(unitName => {
-        // Find head node
-        let headNode = null;
-        let headRank = 99;
-        for (const r of printRows) {
-          if ((r.unit_kerja || '').trim() !== unitName) continue;
-          const rank = rankJenis(r.jenis_jabatan);
-          if (rank < headRank) { headRank = rank; headNode = r; }
-        }
-
-        let rowsToPrint = printRows;
-        if (headNode) {
-          // Bangun index parent→children untuk efisiensi
-          const byParentId = new Map();
-          for (const r of printRows) {
-            if (r.parent_id) {
-              const arr = byParentId.get(r.parent_id) || [];
-              arr.push(r.id);
-              byParentId.set(r.parent_id, arr);
-            }
-          }
-
-          // Kumpulkan semua descendant head node
-          const keep = new Set();
-          const addSubtree = (id: string) => {
-            keep.add(id);
-            for (const childId of (byParentId.get(id) || [])) addSubtree(childId);
-          };
-          addSubtree(headNode.id);
-
-          rowsToPrint = printRows.filter(r => keep.has(r.id));
-        }
-
-        const html = generatePetaJabatanHtml(
-          rowsToPrint,
-          printSyntheticFlags,
-          unitName,
-          "DPD RI",
-          displayMode
-        );
-
-        return { unitName: unitName, paper: "A4", html };
-      });
+      const payloads = buildDaerahUnitJobs().map(j => ({ ...j, paper: "A4" }));
 
       const res = await fetch("/api/peta-jabatan/print-bulk", {
         method: "POST",
@@ -1006,6 +1025,73 @@ export default function PetaJabatanClient() {
       alert("Gagal mencetak PDF Semua Daerah. Pastikan koneksi stabil.");
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleBulkSaveAsImage = async () => {
+    setIsGeneratingImage(true);
+    try {
+      const jobs = buildDaerahUnitJobs();
+
+      const res = await fetch("/api/peta-jabatan/print-image-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobs })
+      });
+
+      if (!res.ok) throw new Error("Gagal generate gambar");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "Peta_Jabatan_Seluruh_Daerah_PNG.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal menyimpan gambar Semua Daerah. Pastikan koneksi stabil.");
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleSaveAsImage = async () => {
+    if (!selectedUnit) return;
+    setIsGeneratingImage(true);
+    try {
+      const html = generatePetaJabatanHtml(
+        printRows as any,
+        printSyntheticFlags,
+        selectedUnit,
+        'DPD RI',
+        displayMode
+      );
+
+      const res = await fetch("/api/peta-jabatan/print-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, unitName: selectedUnit })
+      });
+
+      if (!res.ok) throw new Error("Gagal generate gambar");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Peta_Jabatan_${selectedUnit.replace(/[^a-zA-Z0-9]+/g, '_')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal menyimpan gambar. Pastikan koneksi stabil.");
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -2798,10 +2884,10 @@ export default function PetaJabatanClient() {
     <div className="flex flex-col gap-3 p-3 sm:p-4 peta-jabatan-container">
       {/* ===== HEADER BAR (Title & Search Actions) ===== */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 pt-2 sm:pt-4">
-        <div className="flex-1 shrink-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white leading-none">Peta Jabatan</h1>
+        <div className="shrink-0">
+          <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white leading-none whitespace-nowrap">Peta Jabatan</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-nowrap items-center gap-2 w-full sm:w-auto">
           <input
             placeholder="Cari Jabatan atau Nama Pejabat..."
             value={filterText}
@@ -2810,8 +2896,64 @@ export default function PetaJabatanClient() {
               setFilterText(newValue);
               if (newValue === "") handleReset();
             }}
-            className="px-3 py-2 rounded-md border text-sm w-full sm:w-[280px] focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className={`px-3 py-2 rounded-md border text-sm w-full ${selectedUnit ? 'sm:w-[280px]' : 'sm:w-[240px]'} shrink-0 focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
+
+          {isAdmin && (selectedUnit !== null || scope === "DAERAH") && (
+            <div className="relative flex-1 sm:flex-none" ref={printMenuRef}>
+              <button
+                onClick={() => setPrintMenuOpen((v) => !v)}
+                disabled={isGeneratingPDF || isGeneratingImage}
+                title="Cetak peta jabatan sesuai filter aktif"
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-blue-300 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+              >
+                {(isGeneratingPDF || isGeneratingImage) ? (
+                  <div className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                )}
+                {selectedUnit ? "Cetak" : "Cetak Semua Daerah (38)"}
+                <svg className={`w-3.5 h-3.5 text-blue-400 transition-transform ${printMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {printMenuOpen && (
+                <div className="absolute right-0 sm:left-0 mt-1 w-56 rounded-md border border-gray-200 bg-white shadow-lg z-40 overflow-hidden">
+                  <button
+                    onClick={() => {
+                      setPrintMenuOpen(false);
+                      selectedUnit ? handlePrint() : handleBulkPrintSemuaDaerah();
+                    }}
+                    disabled={isGeneratingPDF}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4 shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    {selectedUnit ? "Cetak / Simpan PDF" : "Cetak Semua Daerah (PDF)"}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setPrintMenuOpen(false);
+                      selectedUnit ? handleSaveAsImage() : handleBulkSaveAsImage();
+                    }}
+                    disabled={isGeneratingImage}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50 border-t border-gray-100"
+                  >
+                    <svg className="w-4 h-4 shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M4 8h.01M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" />
+                    </svg>
+                    {selectedUnit ? "Simpan sebagai Gambar (PNG)" : "Simpan Semua Daerah (ZIP PNG)"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             onClick={handleReset}
             className="px-3 py-2 rounded-md border text-sm hover:bg-gray-50 flex-1 sm:flex-none text-center"
@@ -2819,40 +2961,19 @@ export default function PetaJabatanClient() {
             Reset
           </button>
 
-          {isAdmin && (selectedUnit !== null || scope === "DAERAH") && (
-            <button
-              onClick={selectedUnit ? handlePrint : handleBulkPrintSemuaDaerah}
-              disabled={isGeneratingPDF}
-              title="Cetak peta jabatan sesuai filter aktif"
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-blue-300 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
-            >
-              {isGeneratingPDF && !selectedUnit ? (
-                <div className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-              )}
-              {selectedUnit ? "Cetak" : "Cetak Semua Daerah (38)"}
-            </button>
-          )}
-
-
-
+          
 
           <button
             onClick={isFullscreen ? exitFullscreen : enterFullscreen}
-            className="flex-1 sm:flex-none px-3 py-2 rounded-md border text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"
+            className="flex-1 sm:flex-none px-2 py-2 rounded-md border text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"
           >
             {isFullscreen ? (
               <>
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>
-                <span className="hidden sm:inline">Exit Fullscreen</span>
               </>
             ) : (
               <>
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-                <span className="hidden sm:inline">Fullscreen</span>
               </>
             )}
           </button>
