@@ -97,6 +97,19 @@ export interface UnmatchedRecord {
   statusPegawai?: string;
 }
 
+function getInactiveProfileReason(profileObj: any): string | null {
+  const kedudukanId = String(profileObj?.kedudukanPnsId ?? '').trim();
+  const kedudukanNama = String(profileObj?.kedudukanPnsNama ?? '').trim();
+
+  if (kedudukanNama.toLowerCase().includes('pensiun')) {
+    return `Status Pegawai: ${kedudukanNama} (Inaktif)`;
+  }
+  if (kedudukanId === '72') {
+    return `Status Pegawai: ${kedudukanNama || 'PPPK tidak aktif'} (Inaktif)`;
+  }
+  return null;
+}
+
 // Function to normalize strings for better matching
 function normalizeSearchStr(str: string): string {
   if (!str) return "";
@@ -350,14 +363,15 @@ export async function runSkSync(
 
           const profileObj = pData.data.data || pData.data;
 
-          if (profileObj.kedudukanPnsNama && profileObj.kedudukanPnsNama.toLowerCase().includes('pensiun')) {
+          const inactiveReason = getInactiveProfileReason(profileObj);
+          if (inactiveReason) {
             return {
               nip: t.NIP,
               name: t.nama_gelar || profileObj.nama_gelar || profileObj.nama || "",
               jabatanNama: "", // Kosongkan agar gagal mapping dan masuk ke data_error
               unorNama: "",
               statusPegawai: "INACTIVE",
-              api_error: `Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif)`,
+              api_error: inactiveReason,
               _raw: { listData: t, profileData: pData.data }
             };
           }
@@ -700,14 +714,15 @@ export async function retrySkErrors(
 
           const profileObj = pData.data.data || pData.data;
 
-          if (profileObj.kedudukanPnsNama && profileObj.kedudukanPnsNama.toLowerCase().includes('pensiun')) {
+          const inactiveReason = getInactiveProfileReason(profileObj);
+          if (inactiveReason) {
             return {
               nip: t.NIP,
               name: t.nama_gelar || profileObj.nama_gelar || profileObj.nama || "",
               jabatanNama: "", // Kosongkan agar gagal mapping dan masuk ke data_error
               unorNama: "",
               statusPegawai: "INACTIVE",
-              api_error: `Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif)`,
+              api_error: inactiveReason,
               _raw: { listData: t, profileData: pData.data }
             };
           }
@@ -932,46 +947,17 @@ export async function syncSingleNipSk(nip: string, preview: boolean = false) {
 
   const profileObj = pData.data.data || pData.data;
 
-  if (profileObj.kedudukanPnsNama && profileObj.kedudukanPnsNama.toLowerCase().includes('pensiun')) {
-    if (preview) {
-      return {
-        isPreview: true,
-        oldJabatan: "-",
-        oldUnit: "-",
-        newJabatan: "Pensiun (Inaktif)",
-        newUnit: "-",
-        willFail: true,
-        failReason: `Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif)`
-      };
-    }
-
-    const pName = profileObj.nama_gelar || profileObj.nama || "";
-    const client = await pool.connect();
-    try {
-      const checkErr = await client.query("SELECT id FROM data_error WHERE nip = $1 AND tipe_sync = 'SK'", [nip]);
-      if (checkErr.rows.length > 0) {
-        await client.query(
-          `UPDATE data_error SET nama = $1, jabatan = $2, unit_organisasi = $3, status = $4, saran_perbaikan = $5, synced_at = CURRENT_TIMESTAMP WHERE nip = $6 AND tipe_sync = 'SK'`,
-          [pName, "", "", "INACTIVE", `Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif)`, nip]
-        );
-      } else {
-        await client.query(
-          `INSERT INTO data_error (nip, nama, jabatan, unit_organisasi, status, saran_perbaikan, tipe_sync) VALUES ($1, $2, $3, $4, $5, $6, 'SK')`,
-          [nip, pName, "", "", "INACTIVE", `Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif)`]
-        );
-      }
-    } finally {
-      client.release();
-    }
-    throw new Error(`Status Pegawai: ${profileObj.kedudukanPnsNama} (Inaktif). Masuk ke Data Error.`);
-  }
+  const inactiveReason = getInactiveProfileReason(profileObj);
+  const inactiveNewJabatan = profileObj.kedudukanPnsNama
+    ? `${profileObj.kedudukanPnsNama} (Inaktif)`
+    : "Inaktif";
 
   const p = {
     nip: nip,
     name: profileObj.nama_gelar || profileObj.nama || "",
-    jabatanNama: profileObj.jabatanNama || "",
-    unorNama: profileObj.unorNama || "",
-    statusPegawai: profileObj.statusPegawai || "-",
+    jabatanNama: inactiveReason ? "" : (profileObj.jabatanNama || ""),
+    unorNama: inactiveReason ? "" : (profileObj.unorNama || ""),
+    statusPegawai: inactiveReason ? "INACTIVE" : (profileObj.statusPegawai || "-"),
   };
 
   const client = await pool.connect();
@@ -986,9 +972,11 @@ export async function syncSingleNipSk(nip: string, preview: boolean = false) {
     let oldUnit = "-";
     for (const pj of pjRows) {
       const currentPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
-      if (currentPejabatSk.some((existing: any) => existing.nip === nip)) {
+      const matchedExisting = currentPejabatSk.find((existing: any) => existing.nip === nip);
+      if (matchedExisting) {
         oldJabatan = pj.nama_jabatan;
         oldUnit = pj.unit_kerja;
+        if (!p.name && matchedExisting.name) p.name = matchedExisting.name;
         break;
       }
     }
@@ -1000,15 +988,17 @@ export async function syncSingleNipSk(nip: string, preview: boolean = false) {
     let matchedPejabatSk = null;
     let willFail = true;
 
-    for (const pj of pjRows) {
-      const pjJNameNorm = normalizeSearchStr(pj.nama_jabatan);
-      const pjUNameNorm = normalizeSearchStr(pj.unit_kerja);
+    if (!inactiveReason) {
+      for (const pj of pjRows) {
+        const pjJNameNorm = normalizeSearchStr(pj.nama_jabatan);
+        const pjUNameNorm = normalizeSearchStr(pj.unit_kerja);
 
-      if (pjJNameNorm === jNameNorm && pjUNameNorm === uNameNorm) {
-        matchedPjId = pj.id;
-        matchedPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
-        willFail = false;
-        break;
+        if (pjJNameNorm === jNameNorm && pjUNameNorm === uNameNorm) {
+          matchedPjId = pj.id;
+          matchedPejabatSk = typeof pj.pejabat_sk === 'string' ? JSON.parse(pj.pejabat_sk) : (pj.pejabat_sk || []);
+          willFail = false;
+          break;
+        }
       }
     }
 
@@ -1017,10 +1007,10 @@ export async function syncSingleNipSk(nip: string, preview: boolean = false) {
         isPreview: true,
         oldJabatan,
         oldUnit,
-        newJabatan: p.jabatanNama || "Tidak Ditemukan",
-        newUnit: p.unorNama || "-",
+        newJabatan: inactiveReason ? inactiveNewJabatan : (p.jabatanNama || "Tidak Ditemukan"),
+        newUnit: inactiveReason ? "-" : (p.unorNama || "-"),
         willFail,
-        failReason: willFail ? "Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)" : null,
+        failReason: inactiveReason ?? (willFail ? "Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)" : null),
         name: p.name
       };
     }
@@ -1070,20 +1060,24 @@ export async function syncSingleNipSk(nip: string, preview: boolean = false) {
       return { success: true, message: `Berhasil sinkronisasi NIP ${nip} ke peta jabatan.` };
     } else {
       // Not matched, should insert or update in data_error
+      const errorReason = inactiveReason ?? 'Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)';
       const checkErr = await client.query("SELECT id FROM data_error WHERE nip = $1 AND tipe_sync = 'SK'", [nip]);
       if (checkErr.rows.length > 0) {
         await client.query(
           `UPDATE data_error SET nama = $1, jabatan = $2, unit_organisasi = $3, status = $4, saran_perbaikan = $5, synced_at = CURRENT_TIMESTAMP WHERE nip = $6 AND tipe_sync = 'SK'`,
-          [p.name, p.jabatanNama, p.unorNama, p.statusPegawai, 'Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)', nip]
+          [p.name, p.jabatanNama, p.unorNama, p.statusPegawai, errorReason, nip]
         );
       } else {
         await client.query(
           `INSERT INTO data_error (nip, nama, jabatan, unit_organisasi, status, saran_perbaikan, tipe_sync) VALUES ($1, $2, $3, $4, $5, $6, 'SK')`,
-          [nip, p.name, p.jabatanNama, p.unorNama, p.statusPegawai, 'Tidak ditemukan di peta_jabatan (jabatanNama dan unorNama tidak cocok)']
+          [nip, p.name, p.jabatanNama, p.unorNama, p.statusPegawai, errorReason]
         );
       }
 
       await client.query("COMMIT");
+      if (inactiveReason) {
+        return { success: true, message: `${inactiveReason}. Data dipindahkan dari peta jabatan ke Data Error.` };
+      }
       throw new Error(`Data ditarik tapi gagal dipetakan (Unit/Jabatan tidak cocok). Masuk ke Data Error.`);
     }
   } catch (e: any) {

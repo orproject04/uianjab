@@ -1253,7 +1253,9 @@ export default function PetaJabatanClient() {
     const targetRowId = currentMatch.realParentId ?? currentMatch.nodeId;
     const currentRow = unitFilteredRows.find(r => r.id === targetRowId);
     if (currentRow) {
-      let current: APIRow | undefined = currentRow;
+      let current: APIRow | undefined = currentMatch.realParentId
+        ? currentRow
+        : (currentRow.parent_id ? unitFilteredRows.find(r => r.id === currentRow.parent_id) : undefined);
       while (current) {
         expandMap[current.id] = false; // false = expanded
         current = current.parent_id ? unitFilteredRows.find(r => r.id === current!.parent_id) : undefined;
@@ -1539,6 +1541,9 @@ export default function PetaJabatanClient() {
 
       // Walk tree and keep nodes that are in path OR are ghost/synthetic with children in path
       const walkPath = (n: D3Node): D3Node | null => {
+        if (!currentMatch.realParentId && n._id === targetRowId) {
+          return n;
+        }
         // Check children first
         const kids = n.children.map(walkPath).filter(Boolean) as D3Node[];
 
@@ -1571,8 +1576,9 @@ export default function PetaJabatanClient() {
         (n.pejabat_sk || []).some(p => (p.name || "").toLowerCase().includes(lcFilter))
       ));
     const walk = (n: D3Node): D3Node | null => {
+      if (match(n)) return n;
       const kids = n.children.map(walk).filter(Boolean) as D3Node[];
-      if (match(n) || kids.length) return { ...n, children: kids };
+      if (kids.length) return { ...n, children: kids };
       return null;
     };
     return roots.map(walk).filter(Boolean) as D3Node[];
