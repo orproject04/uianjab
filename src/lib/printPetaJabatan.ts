@@ -444,7 +444,7 @@ function buildSummary(rows: PrintAPIRow[], displayMode: "ST" | "SK"): string {
 // ── Print CSS ─────────────────────────────────────────────────────────────────
 const PRINT_CSS = `
 /* ─── Page setup ─────────────────────────────────────────────── */
-@page { size: landscape; margin: 6mm; }
+@page { size: A3 landscape; margin: 6mm; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; }
 body {
@@ -533,10 +533,10 @@ body {
 .pusat-bidang-row::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: #333; }
 .pusat-bcol { display: flex; flex-direction: column; align-items: center; padding: 0 16px; position: relative; }
 .pusat-bcol::before { content: ''; display: block; width: 1px; height: 25px; background: #333; flex-shrink: 0; }
-.pusat-bcol.left-edge::after { content: ''; position: absolute; top: -1px; left: 0; width: calc(50% - 1px); height: 3px; background: #fff; z-index: 2; }
-.pusat-bcol.right-edge::after { content: ''; position: absolute; top: -1px; right: 0; width: calc(50% - 1px); height: 3px; background: #fff; z-index: 2; }
-.pusat-vpass { width: 72px; flex-shrink: 0; position: relative; min-height: 16px; }
-.pusat-vpass::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; margin-left: -1px; width: 1px; background: #333; }
+.pusat-bcol.left-edge::after { content: ''; position: absolute; top: -1px; left: 0; width: calc(50% - 0.5px); height: 3px; background: #fff; z-index: 2; }
+.pusat-bcol.right-edge::after { content: ''; position: absolute; top: -1px; right: 0; width: calc(50% - 0.5px); height: 3px; background: #fff; z-index: 2; }
+.pusat-vpass { width: 72px; flex-shrink: 0; position: relative; min-height: 16px; display: flex; justify-content: center; }
+.pusat-vpass::before { content: ''; display: block; width: 1px; align-self: stretch; background: #333; }
 .biro-vl-tjunc { position: relative; width: 1px; height: 30px; background: #333; }
 .biro-l-h { position: absolute; top: 50%; left: 1px; height: 1px; background: #333; }
 .biro-l-v { position: absolute; top: 50%; width: 1px; background: #333; }
